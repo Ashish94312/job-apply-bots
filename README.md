@@ -61,6 +61,11 @@ Automating applications may go against these sites' terms of service and can get
 This is for personal use: keep the caps low, keep the filters tight, and only apply to jobs you'd actually take.
 Recruiters read these applications.
 
+## Credits
+
+Built with [Claude Code](https://claude.com/claude-code), Anthropic's AI coding assistant. I set the direction,
+tested every bot against the live sites and made the calls; Claude wrote most of the code and debugged each site's quirks.
+
 ## License
 
 MIT
