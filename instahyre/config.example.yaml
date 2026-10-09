@@ -28,11 +28,32 @@ search:
     - sde
     - full stack developer
     - python
+    - software development engineer
+    - sde 1
+    - sde 2
   min_experience: 1
   max_experience: 2
 
-# Optional: any extra search page to go through as-is.
-search_urls: []
+# Backup: search pages that worked well, gone through after the keyword searches (repeats are skipped).
+search_urls:
+  - https://www.instahyre.com/search-jobs?skills=Machine%20Learning&years=1
+  - https://www.instahyre.com/search-jobs?skills=Machine%20Learning&years=2
+  - https://www.instahyre.com/search-jobs?skills=Artificial%20Intelligence&years=1
+  - https://www.instahyre.com/search-jobs?skills=Artificial%20Intelligence&years=2
+  - https://www.instahyre.com/search-jobs?skills=Generative%20AI&years=1
+  - https://www.instahyre.com/search-jobs?skills=Generative%20AI&years=2
+  - https://www.instahyre.com/search-jobs?skills=LLM&years=1
+  - https://www.instahyre.com/search-jobs?skills=LLM&years=2
+  - https://www.instahyre.com/search-jobs?skills=NLP&years=1
+  - https://www.instahyre.com/search-jobs?skills=NLP&years=2
+  - https://www.instahyre.com/search-jobs?skills=Computer%20Vision&years=1
+  - https://www.instahyre.com/search-jobs?skills=Computer%20Vision&years=2
+  - https://www.instahyre.com/search-jobs?skills=PyTorch&years=1
+  - https://www.instahyre.com/search-jobs?skills=PyTorch&years=2
+  - https://www.instahyre.com/search-jobs?skills=Data%20Science&years=1
+  - https://www.instahyre.com/search-jobs?skills=Data%20Science&years=2
+  - https://www.instahyre.com/search-jobs?skills=Python&years=1
+  - https://www.instahyre.com/search-jobs?skills=Python&years=2
 
 filters:
   # Apply only if the title has at least one of these (whole word, any case). Empty list = any title.
@@ -66,6 +87,18 @@ filters:
     - full stack
     - fullstack
     - full-stack
+    - sde1
+    - sde2
+  # ...and must also be an actual engineering role (skips \"AI Trainer\", \"Data Science SME\", ...).
+  require_role:
+    - engineer
+    - developer
+    - scientist
+    - researcher
+    - sde
+    - sde1
+    - sde2
+    - programmer
   # Junior profile: skip senior titles, internships, testing/support and non-engineering roles.
   exclude_title:
     - senior
@@ -96,6 +129,12 @@ filters:
     - hr
     - content
     - writer
+    - iii
+    - sde3
+    - sde 3
+    - sde-3
+    - engineer 3
+    - developer 3
   exclude_companies: []
   # Skip if the job description mentions any of these.
   exclude_text: []

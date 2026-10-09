@@ -7,7 +7,7 @@ import re
 
 from playwright.sync_api import TimeoutError as PWTimeout
 
-from core import Job, clear_challenge, collect_links, first_visible, text_of
+from core import Job, clear_challenge, collect_links, first_visible, text_of, unique_urls
 
 
 class Hirist:
@@ -34,7 +34,7 @@ class Hirist:
         exp = f"?minexp={lo}&maxexp={hi}" if lo is not None and hi is not None else ""
         slug = lambda k: re.sub(r"[^a-z0-9]+", "-", k.lower()).strip("-")
         urls = [f"https://www.hirist.tech/search/{slug(k)}{exp}" for k in search.get("keywords") or []]
-        return urls + list(cfg.get("search_urls") or [])
+        return unique_urls(urls + list(cfg.get("search_urls") or []))
 
     @staticmethod
     def search_page_url(url, n):

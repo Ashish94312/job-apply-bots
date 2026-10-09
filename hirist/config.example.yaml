@@ -29,11 +29,27 @@ search:
     - sde
     - full stack developer
     - python
+    - software development engineer
+    - sde 1
+    - sde 2
   min_experience: 1
   max_experience: 2
 
-# Optional: any extra search page to go through as-is.
-search_urls: []
+# Backup: search pages that worked well, gone through after the keyword searches (repeats are skipped).
+search_urls:
+  - https://www.hirist.tech/k/machine-learning-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/artificial-intelligence-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/llm-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/generative-ai-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/nlp-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/deep-learning-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/computer-vision-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/langchain-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/rag-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/mlops-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/pytorch-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/data-science-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/python-jobs?minexp=1&maxexp=2
 
 filters:
   # Apply only if the title has at least one of these (whole word, any case). Empty list = any title.
@@ -67,6 +83,18 @@ filters:
     - full stack
     - fullstack
     - full-stack
+    - sde1
+    - sde2
+  # ...and must also be an actual engineering role (skips \"AI Trainer\", \"Data Science SME\", ...).
+  require_role:
+    - engineer
+    - developer
+    - scientist
+    - researcher
+    - sde
+    - sde1
+    - sde2
+    - programmer
   # Junior profile: skip senior titles, internships, testing/support and non-engineering roles.
   exclude_title:
     - senior
@@ -97,6 +125,12 @@ filters:
     - hr
     - content
     - writer
+    - iii
+    - sde3
+    - sde 3
+    - sde-3
+    - engineer 3
+    - developer 3
   exclude_companies: []
   # Skip if the job description mentions any of these.
   exclude_text: []

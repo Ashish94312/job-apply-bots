@@ -18,6 +18,7 @@ from core import (
     click,
     fill_form,
     first_visible,
+    unique_urls,
     visible_dialog,
 )
 
@@ -100,7 +101,7 @@ class Cutshort:
                 urls.append(f"{FEED}?{exp}skills={skills[key]}")
             else:
                 print(f"  Cutshort has no skill called '{keyword}', skipping it.")
-        return urls + list(cfg.get("search_urls") or [])
+        return unique_urls(urls + list(cfg.get("search_urls") or []))
 
     def lookup_skill(self, page, keyword):
         """Pick the keyword in the feed's Skills filter; Cutshort then shows its id in the URL (skills=<id>)."""

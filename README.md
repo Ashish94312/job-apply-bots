@@ -12,8 +12,10 @@ answers the screening questions it has answers for, and applies. It never applie
 
 ## What it handles
 
-- **Filters:** title keywords to include/exclude, companies to skip, and an experience cap. Experience is read
-  from the search results, so senior roles are skipped without even opening them.
+- **Filters:** a title must match one of your topics (AI, ML, software development, SDE1/SDE2, ...) *and* be an
+  actual engineering role (engineer, developer, scientist, SDE, ...), so "AI Trainer" or "Data Science SME" are
+  skipped. Plus titles to exclude, companies to skip, and an experience cap; experience is read from the search
+  results, so senior roles are skipped without even opening them.
 - **Screening questions:** salary, notice period, "are you based in X?", relocation and similar, answered from
   your config. Anything it has no answer for is left for you (`needs_manual` + a screenshot), never guessed.
 - **Logins:** Instahyre logs in with your email + password from `.env`. Cutshort and Hirist sign in with Google /

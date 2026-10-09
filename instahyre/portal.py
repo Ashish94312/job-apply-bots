@@ -5,7 +5,7 @@ from urllib.parse import quote
 
 from playwright.sync_api import TimeoutError as PWTimeout
 
-from core import Job, clear_challenge, click, collect_links, first_visible, text_of
+from core import Job, clear_challenge, click, collect_links, first_visible, text_of, unique_urls
 
 
 
@@ -33,7 +33,7 @@ class Instahyre:
         hi = search.get("max_experience", lo)
         urls = [f"https://www.instahyre.com/search-jobs?skills={quote(k)}&years={y}"
                 for k in search.get("keywords") or [] for y in range(lo, hi + 1)]
-        return urls + list(cfg.get("search_urls") or [])
+        return unique_urls(urls + list(cfg.get("search_urls") or []))
 
     def collect_links(self, page, max_scrolls):
         return collect_links(page, self.job_link_css, self.job_url_re, max_scrolls)

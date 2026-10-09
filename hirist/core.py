@@ -178,6 +178,16 @@ def collect_links(page, link_css, url_re, max_scrolls):
     return found
 
 
+def unique_urls(urls):
+    """Keyword searches first, backup URLs after; drop repeats (ignoring case)."""
+    seen, out = set(), []
+    for url in urls:
+        if url.lower() not in seen:
+            seen.add(url.lower())
+            out.append(url)
+    return out
+
+
 # ---------------------------------------------------------------- filters
 
 EXPERIENCE_RE = re.compile(r"(?<![\d.])(\d+(?:\.\d+)?)\s*(?:-|–|to)\s*\d+(?:\.\d+)?\s*(?:years?|yrs?)", re.I)
@@ -222,6 +232,9 @@ def skip_reason(job, filters):
     include = filters.get("include_title") or []
     if include and not any(has_word(job.title, k) for k in include):
         return "title not in include_title"
+    roles = filters.get("require_role") or []
+    if roles and not any(has_word(job.title, r) for r in roles):
+        return "not an engineering role"
     for k in filters.get("exclude_title") or []:
         if has_word(job.title, k):
             return f"title has '{k}'"
