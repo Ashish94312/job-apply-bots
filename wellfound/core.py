@@ -357,9 +357,12 @@ def fill_form(scope, cfg, job=None):
         if answer is None:
             missing.append(f["label"][:60] or f["name"] or f["tag"])
             continue
-        if f["type"] == "number":  # "15 LPA" -> "15"
-            number = re.search(r"\d+(?:\.\d+)?", answer)
-            answer = number.group(0) if number else answer
+        if f["type"] == "number":  # "15 LPA" -> "15"; "+91 8955247261" -> "918955247261"
+            if re.search(r"[a-z]", answer, re.I):
+                number = re.search(r"\d+(?:\.\d+)?", answer)
+                answer = number.group(0) if number else answer
+            else:
+                answer = re.sub(r"[^\d.]", "", answer)
         inputs.nth(f["i"]).fill(answer)
     for group in radio_groups.values():
         if group["checked"]:
