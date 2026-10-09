@@ -142,10 +142,16 @@ answers:
   "notice period": "30 days"
   "current.*(ctc|salary|compensation)|(ctc|salary|compensation).*current": "8 LPA"
   "expect.*(ctc|salary|compensation)|(ctc|salary|compensation).*expect": "12 LPA"
-  "years? of experi?e?nce|total experi?e?nce|how much experi?e?nce": "2"
+  "years? of (work )?experi?e?nce|total experi?e?nce|how much experi?e?nce": "2"
   "current (city|location)": "Bengaluru"
   # Yes/No questions: the answer must match an option's text. First matching pattern wins.
   "currently (living|located|residing|based) in (bengaluru|bangalore)": "Yes"
   "currently (living|located|residing|based) in": "No"
   "relocat": "Yes"
   "immediate(ly)? join|join immediately": "Yes"
+  # Some companies (mostly on Wellfound) also ask these. Empty = leave the job for you (needs_manual).
+  "phone|mobile": ""
+  "linkedin": ""
+  "undergraduate|college|university|institution": ""
+  "work(ing)? from (the )?office|office \\d+ days|on-?site": ""
+  "high agency|ownership": ""

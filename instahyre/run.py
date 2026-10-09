@@ -176,7 +176,7 @@ def handle_job(page, job, cfg, args):
     status, note = apply_job(page, PORTAL, cfg, job)
     if status == Status.MANUAL and args.assist:
         input(f"  ! {job.label}: {note}\n    Finish it in the browser, then press Enter... ")
-        if is_applied(page):
+        if is_applied(page, PORTAL):
             status, note = Status.APPLIED, "finished by hand"
     return status, job, note
 

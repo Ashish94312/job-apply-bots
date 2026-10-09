@@ -2,54 +2,26 @@
 browser_channel: chrome
 
 # Login: when needed the bot opens a normal Chrome window (Google blocks sign-in in automated browsers).
-# Click "Login" and use OTP, password, Google or Apple, then press Enter in the terminal.
+# Log in with email + password or Google, then press Enter in the terminal.
 
-# What to search for. The bot builds the search pages itself from these.
-# Each keyword becomes https://www.hirist.tech/search/<keyword>?minexp=..&maxexp=.., paged 20 jobs at a time.
+# What to search for. Keywords must be Wellfound role names (as in wellfound.com/role/l/<role>/india);
+# roles Wellfound doesn't have are skipped. "remote" means remote jobs; any other location is a place.
 search:
   keywords:
-    - generative ai
-    - agentic ai
-    - llm
+    - machine learning engineer
     - ai engineer
-    - machine learning
-    - artificial intelligence
-    - nlp
-    - deep learning
-    - computer vision
-    - mlops
-    - rag
-    - langchain
-    - data science
-    - python developer
-    - backend engineer
-    - backend developer
+    - artificial intelligence engineer
+    - data scientist
     - software engineer
-    - software developer
-    - sde
-    - full stack developer
-    - python
-    - software development engineer
-    - sde 1
-    - sde 2
-  min_experience: 1
-  max_experience: 2
+    - backend engineer
+    - full stack engineer
+    - python developer
+  locations:
+    - india
+    - remote
 
-# Backup: search pages that worked well, gone through after the keyword searches (repeats are skipped).
-search_urls:
-  - https://www.hirist.tech/k/machine-learning-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/artificial-intelligence-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/llm-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/generative-ai-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/nlp-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/deep-learning-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/computer-vision-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/langchain-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/rag-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/mlops-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/pytorch-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/data-science-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/python-jobs?minexp=1&maxexp=2
+# Optional: any extra search page to go through as-is (after the role pages, repeats skipped).
+search_urls: []
 
 filters:
   # Apply only if the title has at least one of these (whole word, any case). Empty list = any title.
@@ -141,7 +113,7 @@ limits:
   max_per_run: 10
   max_per_day: 30
   delay_seconds: [20, 45]  # random pause after each application
-  max_pages: 5             # result pages to go through per search URL (20 jobs each)
+  max_pages: 4             # result pages to go through per search (25-30 jobs each)
 
 # Message for "note to recruiter" / "type your message" boxes; {title} and {company} are filled in.
 # Leave empty to apply without a message.

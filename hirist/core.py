@@ -252,15 +252,15 @@ def skip_reason(job, filters):
 FIELDS_JS = """root => {
   const t = s => (s || '').replace(/\\s+/g, ' ').trim();
   // A label like "Enter your answer" says nothing; the question is in the surrounding block then.
-  const GENERIC = /^(enter|type|write|add)?\\s*(your|an?)?\\s*(answer|response|text|here)\\b/i;
+  const GENERIC = /^(enter|type|write|add)?\\s*(your|an?)?\\s*(answer|response|text|here)\\b|^[-–—\\s]*$|^select\\b/i;
   const labelOf = e => {
     const by = e.getAttribute('aria-labelledby') && document.getElementById(e.getAttribute('aria-labelledby'));
     const own = (e.labels && e.labels.length && e.type !== 'radio' && t(e.labels[0].innerText))
       || t(e.getAttribute('aria-label')) || (by && t(by.innerText)) || t(e.placeholder);
     if (own && !GENERIC.test(own)) return own;
-    for (let p = e.parentElement, i = 0; p && i < 3; p = p.parentElement, i++) {
+    for (let p = e.parentElement, i = 0; p && i < 8; p = p.parentElement, i++) {
       const s = t(p.innerText);
-      if (s && s !== own) return s.slice(0, 200);
+      if (s && s !== own && !GENERIC.test(s)) return s.slice(0, 200);
     }
     return own || t(e.name);
   };
@@ -279,10 +279,12 @@ FIELDS_JS = """root => {
     visible: !!(e.offsetWidth || e.offsetHeight || e.getClientRects().length),
     label: e.type === 'radio' ? radioQuestion(e) : labelOf(e),
     option: e.type === 'radio' ? optionOf(e) : '',
+    combo: e.getAttribute('aria-autocomplete') === 'list' || e.getAttribute('role') === 'combobox',
+    chosen: !!(e.closest('[class*=container]') || e.parentElement).querySelector('[class*=singleValue], [class*=single-value]'),
   }));
 }"""
 
-NOTE_RE = re.compile(r"note|cover|message|pitch|recruiter|why|introduc|about (you|yourself)", re.I)
+NOTE_RE = re.compile(r"note|cover|message|pitch|recruiter|why|introduc|about (you|yourself)|interests? you|good fit", re.I)
 IGNORED_TYPES = {"hidden", "submit", "button", "file", "search", "checkbox", "image", "reset"}
 
 
@@ -301,6 +303,28 @@ def cover_note(cfg, job=None):
     return note
 
 
+def choose_option(box, answer):
+    """Searchable dropdown: type the answer, pick the option that matches it. Never picks a mere guess."""
+    if not answer:
+        return False
+    page = box.page
+    box.click(force=True)
+    box.fill(answer)
+    page.wait_for_timeout(900)
+    options = page.locator("[id*='-option-']:visible, [role=option]:visible")
+    texts = [options.nth(i).inner_text().strip() for i in range(options.count())]
+    want = answer.strip().lower()
+    for rule in (lambda t: t.lower() == want, lambda t: t.lower().startswith(want), lambda t: want in t.lower()):
+        for i, text in enumerate(texts):
+            if rule(text):
+                options.nth(i).click()
+                page.wait_for_timeout(300)
+                return True
+    box.fill("")       # no matching option: clear it and move on (Escape would close the whole dialog)
+    box.press("Tab")
+    return False
+
+
 def fill_form(scope, cfg, job=None):
     """Fill what we have answers for. Returns the questions we couldn't answer (empty = ready to submit)."""
     note = cover_note(cfg, job)
@@ -313,6 +337,10 @@ def fill_form(scope, cfg, job=None):
             group = radio_groups.setdefault(f["name"] or f["label"], {"label": f["label"], "checked": False, "options": []})
             group["checked"] |= f["checked"]
             group["options"].append((f["i"], f["option"]))
+            continue
+        if f["combo"]:
+            if not f["chosen"] and not choose_option(inputs.nth(f["i"]), answer_for(f["label"], cfg.get("answers"))):
+                missing.append(f["label"][:60] or "dropdown")
             continue
         if not f["visible"] or f["value"]:
             continue
@@ -355,7 +383,9 @@ APPLIED_TEXT_RE = re.compile(
 )
 
 
-def is_applied(page):
+def is_applied(page, portal=None):
+    if portal is not None and hasattr(portal, "is_applied"):  # a site with its own way of showing it
+        return portal.is_applied(page)
     if first_visible(page, APPLIED_BUTTON_RE):
         return True
     loc = page.get_by_text(APPLIED_TEXT_RE)
@@ -364,7 +394,7 @@ def is_applied(page):
 
 def apply_job(page, portal, cfg, job=None):
     """Click apply and walk through any dialog. Returns (status, note)."""
-    if is_applied(page):
+    if is_applied(page, portal):
         return Status.ALREADY, ""
     button = first_visible(page, portal.apply_re)
     if button is None:
@@ -373,6 +403,10 @@ def apply_job(page, portal, cfg, job=None):
     pages_before = len(page.context.pages)
     click(button)
     page.wait_for_timeout(2500)
+    blocked = getattr(portal, "cannot_apply", lambda page: None)(page)
+    if blocked:
+        page.keyboard.press("Escape")
+        return Status.SKIPPED, blocked
     new_tabs = page.context.pages[pages_before:]
     if new_tabs:
         for tab in new_tabs:
@@ -384,7 +418,7 @@ def apply_job(page, portal, cfg, job=None):
     # Fill what we can, submit, repeat (multi-step forms).
     for _ in range(4):
         portal.dismiss_extras(page)
-        if is_applied(page):
+        if is_applied(page, portal):
             return Status.APPLIED, ""
         form = visible_dialog(page) or portal.question_page(page)
         if form is None:
@@ -399,7 +433,7 @@ def apply_job(page, portal, cfg, job=None):
         page.wait_for_timeout(2500)
 
     portal.dismiss_extras(page)
-    if is_applied(page):
+    if is_applied(page, portal):
         return Status.APPLIED, ""
     return Status.MANUAL, "couldn't confirm the application went through"
 

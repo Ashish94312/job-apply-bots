@@ -1,6 +1,6 @@
 # job-apply-bots
 
-Bots that apply to jobs for you on **Instahyre**, **Cutshort** and **Hirist**, three Indian tech job sites.
+Bots that apply to jobs for you on **Instahyre**, **Cutshort**, **Hirist** and **Wellfound**.
 Each one opens a real Chrome window, searches with your filters (role, experience range), skips what doesn't fit,
 answers the screening questions it has answers for, and applies. It never applies to the same job twice.
 
@@ -18,7 +18,7 @@ answers the screening questions it has answers for, and applies. It never applie
   results, so senior roles are skipped without even opening them.
 - **Screening questions:** salary, notice period, "are you based in X?", relocation and similar, answered from
   your config. Anything it has no answer for is left for you (`needs_manual` + a screenshot), never guessed.
-- **Logins:** Instahyre logs in with your email + password from `.env`. Cutshort and Hirist sign in with Google /
+- **Logins:** Instahyre and Wellfound log in with your email + password from `.env`. Cutshort and Hirist sign in with Google /
   OTP, which Google blocks in automated browsers, so the bot opens a *normal* Chrome window once for you to log
   in and reuses that session afterwards.
 - **Safety:** daily and per-run caps, random pauses between applications, `--dry-run` and `--confirm` modes,
@@ -32,8 +32,8 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 .venv/bin/playwright install chromium   # only needed if you set browser_channel: ""
 
-cp .env.example .env                     # Instahyre email + password
-for bot in instahyre cutshort hirist; do cp $bot/config.example.yaml $bot/config.yaml; done
+cp .env.example .env                     # Instahyre / Wellfound email + password
+for bot in instahyre cutshort hirist wellfound; do cp $bot/config.example.yaml $bot/config.yaml; done
 ```
 
 Edit each `config.yaml`: what to search for (`search.keywords` and your experience range), title filters and
@@ -42,8 +42,17 @@ Google Chrome must be installed (the bots drive it); macOS is what it's been tes
 
 ## Run
 
+**From the browser:** double-click `start-ui.command` in Finder (or run `.venv/bin/python ui/server.py`). A page
+opens at `http://127.0.0.1:8765` with an **Apply** button per site, plus Dry run, Log in and Stop. You see what the
+bot is doing as it goes, and when it needs you (a login, a captcha, "Apply to this one?", a question it can't
+answer) the question shows up there with buttons to answer it. A History table below lists what it applied to and
+what still needs you, with screenshots. Keep the Terminal window it opens running while you use the page; closing
+it stops the bots.
+
+**From the terminal:**
+
 ```bash
-cd hirist                                # or instahyre / cutshort
+cd hirist                                # or instahyre / cutshort / wellfound
 ../.venv/bin/python run.py --dry-run     # list what it would apply to
 ../.venv/bin/python run.py --confirm     # ask y/n before each application
 ../.venv/bin/python run.py               # apply
@@ -55,6 +64,7 @@ cd hirist                                # or instahyre / cutshort
 | [instahyre](instahyre/README.md) | `skills=<keyword>&years=N` searches | job page "Apply now" | email + password from `.env` |
 | [cutshort](cutshort/README.md) | logged-in job feed; keywords looked up as Cutshort skills | feed card "Apply now" → Send | by hand once (Google / OTP) |
 | [hirist](hirist/README.md) | `/search/<keyword>?minexp=..&maxexp=..`, paged | job page "Apply" → screening questions | by hand once (OTP / password / Google) |
+| [wellfound](wellfound/README.md) | role pages `/role/l/<role>/<place>`, paged | job page "Apply Now" → dialog → Send | email + password from `.env` |
 
 Each bot folder is self-contained: its own `config.yaml`, login session, history (`data/jobs.db`) and screenshots.
 
