@@ -6,3 +6,5 @@ __pycache__/
 data/
 # Your personal settings (salary, notice period, ...). config.example.yaml is the template.
 config.yaml
+# macOS Finder files
+.DS_Store
