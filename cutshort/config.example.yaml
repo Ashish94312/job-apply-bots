@@ -4,20 +4,31 @@ browser_channel: chrome
 # Login: Cutshort only offers Google / phone OTP, and Google blocks sign-in in automated browsers. When a login
 # is needed the bot opens a normal Chrome window: Candidate login -> tick "I agree" -> sign in -> press Enter.
 
-# Logged-in job feed pages. Filters live in the URL:
-#   minexp / maxexp = experience range in years, skills = skill id (several: join with "-").
-# To find a skill id: open cutshort.io/profile/all-jobs, pick it under Filters > Skills, copy the URL.
-search_urls:
-  - https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=00268   # Machine Learning
-  - https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=06768   # Large Language Models (LLM)
-  - https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=06851   # Generative AI
-  - https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=00301   # Natural Language Processing
-  - https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=00543   # Deep Learning
-  - https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=06726   # Computer Vision
-  - https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=06694   # PyTorch
-  - https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=06790   # MLOps
-  - https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=00121   # Data Science
-  - https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=00360   # Python
+# What to search for. The bot builds the search pages itself from these.
+# Keywords must be Cutshort skill names (as in the feed's Filters > Skills). The bot looks up each one
+# once and remembers it in data/skill_ids.json; keywords Cutshort has no skill for are skipped.
+search:
+  keywords:
+    - generative ai
+    - agentic ai
+    - large language models
+    - machine learning
+    - artificial intelligence
+    - natural language processing
+    - deep learning
+    - computer vision
+    - mlops
+    - langchain
+    - data science
+    - python
+    - django
+    - fastapi
+    - software development
+  min_experience: 1
+  max_experience: 2
+
+# Optional: any extra search page to go through as-is.
+search_urls: []
 
 filters:
   # Apply only if the title has at least one of these (whole word, any case). Empty list = any title.
@@ -35,9 +46,23 @@ filters:
     - genai
     - gen ai
     - generative ai
+    - agentic
     - mlops
+    - rag
+    - langchain
     - python
-  # Junior profile: skip senior titles, internships, and non-engineering roles.
+    - django
+    - fastapi
+    - backend
+    - back end
+    - software engineer
+    - software developer
+    - software development engineer
+    - sde
+    - full stack
+    - fullstack
+    - full-stack
+  # Junior profile: skip senior titles, internships, testing/support and non-engineering roles.
   exclude_title:
     - senior
     - sr
@@ -60,6 +85,13 @@ filters:
     - tutor
     - teacher
     - faculty
+    - qa
+    - sdet
+    - tester
+    - support
+    - hr
+    - content
+    - writer
   exclude_companies: []
   # Skip if the job description mentions any of these.
   exclude_text: []

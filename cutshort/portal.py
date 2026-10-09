@@ -4,11 +4,14 @@ When logged in, Cutshort applies from its job feed (/profile/all-jobs), not from
 each card has "Apply now", which opens a dialog with your resume, a message box and "Send".
 The feed takes its filters from the URL: minexp / maxexp (years) and skills (ids joined with "-").
 """
+import json
 import re
+from urllib.parse import parse_qs, urlsplit
 
 from playwright.sync_api import TimeoutError as PWTimeout
 
 from core import (
+    DATA,
     Job,
     Status,
     clear_challenge,
@@ -32,6 +35,15 @@ FEED_CARDS_JS = """() => [...document.querySelectorAll('button')]
             (card || c).innerText.replace(/\\s+/g, ' ').slice(0, 1500)];
   })
   .filter(Boolean)"""
+
+FEED = "https://cutshort.io/profile/all-jobs"
+# Cutshort skill ids found so far; other keywords are looked up once in the feed's Skills filter and cached.
+KNOWN_SKILLS = {
+    "machine learning": "00268", "natural language processing": "00301", "nlp": "00301", "deep learning": "00543",
+    "computer vision": "06726", "large language models": "06768", "llm": "06768", "generative ai": "06851",
+    "genai": "06851", "python": "00360", "pytorch": "06694", "data science": "00121", "mlops": "06790",
+}
+SKILLS_CACHE = DATA / "skill_ids.json"
 
 APPLY_NOW_RE = re.compile(r"^\s*apply now\s*$", re.I)
 APPLIED_CARD_RE = re.compile(r"^\s*(view conversation|applied)\s*$", re.I)
@@ -67,6 +79,54 @@ class Cutshort:
         return False  # Cutshort only offers Google / phone-OTP login, so the user logs in by hand once.
 
     # ------------------------------------------------------------ feed
+
+    def search_urls(self, page, cfg):
+        """One feed per keyword (as a Cutshort skill) with the experience range, plus any extra URLs."""
+        search = cfg.get("search") or {}
+        lo, hi = search.get("min_experience"), search.get("max_experience")
+        exp = f"minexp={lo}&maxexp={hi}&" if lo is not None and hi is not None else ""
+        cached = json.loads(SKILLS_CACHE.read_text()) if SKILLS_CACHE.exists() else {}
+        skills = {**KNOWN_SKILLS, **cached}
+        urls = []
+        for keyword in search.get("keywords") or []:
+            key = keyword.strip().lower()
+            if key not in skills:
+                skills[key] = self.lookup_skill(page, keyword)
+                if skills[key]:  # remember finds only, so a failed lookup is retried next run
+                    cached[key] = skills[key]
+                    SKILLS_CACHE.parent.mkdir(parents=True, exist_ok=True)
+                    SKILLS_CACHE.write_text(json.dumps(cached, indent=1))
+            if skills[key]:
+                urls.append(f"{FEED}?{exp}skills={skills[key]}")
+            else:
+                print(f"  Cutshort has no skill called '{keyword}', skipping it.")
+        return urls + list(cfg.get("search_urls") or [])
+
+    def lookup_skill(self, page, keyword):
+        """Pick the keyword in the feed's Skills filter; Cutshort then shows its id in the URL (skills=<id>)."""
+        page.goto(FEED, wait_until="domcontentloaded")
+        clear_challenge(page)
+        page.wait_for_timeout(4000)
+        self.close_popups(page)
+        page.get_by_text("Skills", exact=True).first.click()
+        page.wait_for_timeout(800)
+        box = page.locator("input[type=text]:visible, input:not([type]):visible").first
+        box.fill(keyword)
+        page.wait_for_timeout(2000)
+        under = box.bounding_box()
+        # "Machine Learning" should match the option "Machine Learning (ML)", but not "Machine Learning Ops".
+        options = page.get_by_text(re.compile(rf"^\s*{re.escape(keyword.strip())}(\s*\(.*\))?\s*$", re.I))
+        # The dropdown option sits right under the search box; job cards further down show skill tags with the same name.
+        below = []
+        for i in range(options.count()):
+            where = options.nth(i).bounding_box() if options.nth(i).is_visible() else None
+            if where and where["y"] > under["y"] and abs(where["x"] - under["x"]) < under["width"]:
+                below.append((where["y"], i))
+        if not below:
+            return None
+        click(options.nth(min(below)[1]))
+        page.wait_for_timeout(2500)
+        return parse_qs(urlsplit(page.url).query).get("skills", [""])[0].split("-")[-1] or None
 
     def close_popups(self, page):
         survey = page.get_by_role("button", name="Close survey")

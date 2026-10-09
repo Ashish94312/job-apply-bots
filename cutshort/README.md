@@ -20,9 +20,11 @@ cp config.example.yaml config.yaml                # first time: then edit it
 its own profile: click "Candidate login", tick "I agree to the Terms", sign in, then press Enter in the terminal.
 The bot closes that window and carries on with the saved session (`data/profile/`), so later runs skip this.
 
-**Where jobs come from:** the feed at `cutshort.io/profile/all-jobs`, filtered by URL:
-`minexp` / `maxexp` (years) and `skills` (ids; several joined with `-`). To add a skill, pick it under
-Filters > Skills on that page and copy the URL into `search_urls`. The bot pages through each feed (`&page=N`).
+**Where jobs come from:** the logged-in feed at `cutshort.io/profile/all-jobs`, one feed per keyword in
+`search.keywords`, filtered to your experience range (`minexp` / `maxexp`). Keywords must be Cutshort *skill names*
+(e.g. "large language models", "software development", "django"): the bot looks up each skill's id once in the
+feed's Skills filter and remembers it in `data/skill_ids.json`. Keywords Cutshort has no skill for are skipped with
+a message. The bot pages through each feed (`&page=N`). Any URL in `search_urls` is used as well.
 
 **Applying:** "Apply now" on a card opens a dialog with your resume and a message box. The bot fills the message
 from `cover_note` (empty = no message), clicks Send, and counts it as applied when the card switches to

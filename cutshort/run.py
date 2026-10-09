@@ -91,7 +91,7 @@ def run(page, cfg, store, args):
             return
 
     done = 0
-    for feed_url in cfg["search_urls"]:
+    for feed_url in PORTAL.search_urls(page, cfg):
         listed = set()
         for n in range(1, limits["max_pages"] + 1):
             if done >= budget:

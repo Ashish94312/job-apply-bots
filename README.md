@@ -34,7 +34,8 @@ cp .env.example .env                     # Instahyre email + password
 for bot in instahyre cutshort hirist; do cp $bot/config.example.yaml $bot/config.yaml; done
 ```
 
-Edit each `config.yaml`: search URLs, filters and your answers (salary, notice period, city).
+Edit each `config.yaml`: what to search for (`search.keywords` and your experience range), title filters and
+your answers (salary, notice period, city). The bots build the search pages themselves.
 Google Chrome must be installed (the bots drive it); macOS is what it's been tested on.
 
 ## Run
@@ -49,9 +50,9 @@ cd hirist                                # or instahyre / cutshort
 
 | bot | finds jobs via | applies by | login |
 |---|---|---|---|
-| [instahyre](instahyre/README.md) | search pages with `years=N` | job page "Apply now" | email + password from `.env` |
-| [cutshort](cutshort/README.md) | logged-in job feed, `minexp`/`maxexp`/`skills` in the URL | feed card "Apply now" → Send | by hand once (Google / OTP) |
-| [hirist](hirist/README.md) | keyword pages with `minexp`/`maxexp`, paged | job page "Apply" → screening questions | by hand once (OTP / password / Google) |
+| [instahyre](instahyre/README.md) | `skills=<keyword>&years=N` searches | job page "Apply now" | email + password from `.env` |
+| [cutshort](cutshort/README.md) | logged-in job feed; keywords looked up as Cutshort skills | feed card "Apply now" → Send | by hand once (Google / OTP) |
+| [hirist](hirist/README.md) | `/search/<keyword>?minexp=..&maxexp=..`, paged | job page "Apply" → screening questions | by hand once (OTP / password / Google) |
 
 Each bot folder is self-contained: its own `config.yaml`, login session, history (`data/jobs.db`) and screenshots.
 

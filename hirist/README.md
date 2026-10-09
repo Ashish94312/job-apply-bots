@@ -19,8 +19,8 @@ cp config.example.yaml config.yaml                # first time: then edit it
 when a login is needed the bot opens a *normal* Chrome window on its own profile: click "Login", sign in any way,
 then press Enter in the terminal. The bot carries on with the saved session (`data/profile/`); later runs skip this.
 
-**Where jobs come from:** keyword search pages with the experience range in the URL,
-`https://www.hirist.tech/k/<keyword>-jobs?minexp=1&maxexp=2`, 20 jobs per page; the bot pages through
+**Where jobs come from:** one search per keyword in `search.keywords`, with your experience range in the URL:
+`https://www.hirist.tech/search/<keyword>?minexp=1&maxexp=2`, 20 jobs per page; the bot pages through
 them (`&page=N`, up to `max_pages`). Each card shows "X - Y yrs", so out-of-range jobs are skipped unopened.
 
 **Results** are stored in `data/jobs.db`, so no job is applied to twice. `needs_manual` / `failed` jobs get a

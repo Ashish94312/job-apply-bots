@@ -4,22 +4,36 @@ browser_channel: chrome
 # Login: when needed the bot opens a normal Chrome window (Google blocks sign-in in automated browsers).
 # Click "Login" and use OTP, password, Google or Apple, then press Enter in the terminal.
 
-# Search pages, 20 jobs each; the bot pages through them (&page=N).
-# minexp / maxexp = experience range in years. Pattern: https://www.hirist.tech/k/<keyword>-jobs?minexp=1&maxexp=2
-search_urls:
-  - https://www.hirist.tech/k/machine-learning-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/artificial-intelligence-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/llm-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/generative-ai-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/nlp-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/deep-learning-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/computer-vision-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/langchain-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/rag-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/mlops-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/pytorch-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/data-science-jobs?minexp=1&maxexp=2
-  - https://www.hirist.tech/k/python-jobs?minexp=1&maxexp=2
+# What to search for. The bot builds the search pages itself from these.
+# Each keyword becomes https://www.hirist.tech/search/<keyword>?minexp=..&maxexp=.., paged 20 jobs at a time.
+search:
+  keywords:
+    - generative ai
+    - agentic ai
+    - llm
+    - ai engineer
+    - machine learning
+    - artificial intelligence
+    - nlp
+    - deep learning
+    - computer vision
+    - mlops
+    - rag
+    - langchain
+    - data science
+    - python developer
+    - backend engineer
+    - backend developer
+    - software engineer
+    - software developer
+    - sde
+    - full stack developer
+    - python
+  min_experience: 1
+  max_experience: 2
+
+# Optional: any extra search page to go through as-is.
+search_urls: []
 
 filters:
   # Apply only if the title has at least one of these (whole word, any case). Empty list = any title.
@@ -37,9 +51,23 @@ filters:
     - genai
     - gen ai
     - generative ai
+    - agentic
     - mlops
+    - rag
+    - langchain
     - python
-  # Junior profile: skip senior titles, internships, and non-engineering roles.
+    - django
+    - fastapi
+    - backend
+    - back end
+    - software engineer
+    - software developer
+    - software development engineer
+    - sde
+    - full stack
+    - fullstack
+    - full-stack
+  # Junior profile: skip senior titles, internships, testing/support and non-engineering roles.
   exclude_title:
     - senior
     - sr
@@ -62,6 +90,13 @@ filters:
     - tutor
     - teacher
     - faculty
+    - qa
+    - sdet
+    - tester
+    - support
+    - hr
+    - content
+    - writer
   exclude_companies: []
   # Skip if the job description mentions any of these.
   exclude_text: []

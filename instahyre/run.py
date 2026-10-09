@@ -103,7 +103,7 @@ def run(page, cfg, store, args):
             return
 
     done = 0
-    for search_url in cfg["search_urls"]:
+    for search_url in PORTAL.search_urls(page, cfg):
         if done >= budget:
             break
         print(f"\n{search_url}")

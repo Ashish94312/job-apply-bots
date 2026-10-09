@@ -1,6 +1,6 @@
 """Hirist: where its jobs are, how to read them, logging in, and its page quirks.
 
-Search pages take filters in the URL: /k/<keyword>-jobs?minexp=1&maxexp=2, and later pages are &page=N.
+Search pages take filters in the URL: /search/<keyword>?minexp=1&maxexp=2, and later pages are &page=N.
 Each job card shows "X - Y yrs", so jobs outside the experience range are skipped without opening them.
 """
 import re
@@ -26,6 +26,15 @@ class Hirist:
 
     def job_id(self, url):
         return self.job_url_re.search(url).group(1)
+
+    def search_urls(self, page, cfg):
+        """One search per keyword with the experience range, plus any extra URLs."""
+        search = cfg.get("search") or {}
+        lo, hi = search.get("min_experience"), search.get("max_experience")
+        exp = f"?minexp={lo}&maxexp={hi}" if lo is not None and hi is not None else ""
+        slug = lambda k: re.sub(r"[^a-z0-9]+", "-", k.lower()).strip("-")
+        urls = [f"https://www.hirist.tech/search/{slug(k)}{exp}" for k in search.get("keywords") or []]
+        return urls + list(cfg.get("search_urls") or [])
 
     @staticmethod
     def search_page_url(url, n):

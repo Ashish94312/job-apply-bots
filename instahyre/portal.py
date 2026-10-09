@@ -1,6 +1,7 @@
 """Instahyre: where its jobs are, how to read them, logging in, and its page quirks."""
 import os
 import re
+from urllib.parse import quote
 
 from playwright.sync_api import TimeoutError as PWTimeout
 
@@ -24,6 +25,15 @@ class Instahyre:
 
     def job_id(self, url):
         return self.job_url_re.search(url).group(1)
+
+    def search_urls(self, page, cfg):
+        """One search per keyword and experience year (years=N means "minimum N years"), plus any extra URLs."""
+        search = cfg.get("search") or {}
+        lo = search.get("min_experience", 0)
+        hi = search.get("max_experience", lo)
+        urls = [f"https://www.instahyre.com/search-jobs?skills={quote(k)}&years={y}"
+                for k in search.get("keywords") or [] for y in range(lo, hi + 1)]
+        return urls + list(cfg.get("search_urls") or [])
 
     def collect_links(self, page, max_scrolls):
         return collect_links(page, self.job_link_css, self.job_url_re, max_scrolls)

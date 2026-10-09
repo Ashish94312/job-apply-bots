@@ -3,28 +3,36 @@ browser_channel: chrome
 
 # Login: INSTAHYRE_EMAIL / INSTAHYRE_PASSWORD from the .env file in the repo root (see .env.example).
 
-# Search pages (~20 jobs each). years=N returns jobs whose MINIMUM experience is N,
-# so each skill is listed with years=1 and years=2 to cover a 1-2 year profile.
-# Pattern: https://www.instahyre.com/search-jobs?skills=<skill>&years=<N>  (add &locations=<city> to narrow)
-search_urls:
-  - https://www.instahyre.com/search-jobs?skills=Machine%20Learning&years=1
-  - https://www.instahyre.com/search-jobs?skills=Machine%20Learning&years=2
-  - https://www.instahyre.com/search-jobs?skills=Artificial%20Intelligence&years=1
-  - https://www.instahyre.com/search-jobs?skills=Artificial%20Intelligence&years=2
-  - https://www.instahyre.com/search-jobs?skills=Generative%20AI&years=1
-  - https://www.instahyre.com/search-jobs?skills=Generative%20AI&years=2
-  - https://www.instahyre.com/search-jobs?skills=LLM&years=1
-  - https://www.instahyre.com/search-jobs?skills=LLM&years=2
-  - https://www.instahyre.com/search-jobs?skills=NLP&years=1
-  - https://www.instahyre.com/search-jobs?skills=NLP&years=2
-  - https://www.instahyre.com/search-jobs?skills=Computer%20Vision&years=1
-  - https://www.instahyre.com/search-jobs?skills=Computer%20Vision&years=2
-  - https://www.instahyre.com/search-jobs?skills=PyTorch&years=1
-  - https://www.instahyre.com/search-jobs?skills=PyTorch&years=2
-  - https://www.instahyre.com/search-jobs?skills=Data%20Science&years=1
-  - https://www.instahyre.com/search-jobs?skills=Data%20Science&years=2
-  - https://www.instahyre.com/search-jobs?skills=Python&years=1
-  - https://www.instahyre.com/search-jobs?skills=Python&years=2
+# What to search for. The bot builds the search pages itself from these.
+# Each keyword is searched for every experience year in the range (Instahyre's years=N means "minimum N years").
+search:
+  keywords:
+    - generative ai
+    - agentic ai
+    - llm
+    - ai engineer
+    - machine learning
+    - artificial intelligence
+    - nlp
+    - deep learning
+    - computer vision
+    - mlops
+    - rag
+    - langchain
+    - data science
+    - python developer
+    - backend engineer
+    - backend developer
+    - software engineer
+    - software developer
+    - sde
+    - full stack developer
+    - python
+  min_experience: 1
+  max_experience: 2
+
+# Optional: any extra search page to go through as-is.
+search_urls: []
 
 filters:
   # Apply only if the title has at least one of these (whole word, any case). Empty list = any title.
@@ -42,9 +50,23 @@ filters:
     - genai
     - gen ai
     - generative ai
+    - agentic
     - mlops
+    - rag
+    - langchain
     - python
-  # Junior profile: skip senior titles, internships, and non-engineering roles.
+    - django
+    - fastapi
+    - backend
+    - back end
+    - software engineer
+    - software developer
+    - software development engineer
+    - sde
+    - full stack
+    - fullstack
+    - full-stack
+  # Junior profile: skip senior titles, internships, testing/support and non-engineering roles.
   exclude_title:
     - senior
     - sr
@@ -67,6 +89,13 @@ filters:
     - tutor
     - teacher
     - faculty
+    - qa
+    - sdet
+    - tester
+    - support
+    - hr
+    - content
+    - writer
   exclude_companies: []
   # Skip if the job description mentions any of these.
   exclude_text: []

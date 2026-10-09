@@ -18,8 +18,10 @@ cp config.example.yaml config.yaml                # first time: then edit it
 **Login:** saved session first; else `INSTAHYRE_EMAIL` / `INSTAHYRE_PASSWORD` from the `.env` file in the repo
 root (copy `.env.example`); else it pauses so you can log in by hand. The session is kept in `data/profile/`.
 
-**Experience:** search URLs use `years=1` / `years=2` (Instahyre returns jobs whose minimum experience is exactly N),
-and each job page is checked against `max_experience_required` as well.
+**Where jobs come from:** list keywords (roles or skills) and your experience range under `search:` in
+`config.yaml`. The bot searches each keyword for every year in the range (`skills=<keyword>&years=N`; Instahyre's
+`years=N` means "minimum N years"), and checks each job page against `max_experience_required` as well.
+Any URL in `search_urls` is used too.
 
 **Results** are stored in `data/jobs.db`, so no job is applied to twice. `needs_manual` / `failed` jobs get a
 screenshot in `data/screenshots/`. Failed jobs are retried next run.
