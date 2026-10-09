@@ -312,11 +312,12 @@ def choose_option(box, answer):
     box.fill(answer)
     page.wait_for_timeout(900)
     options = page.locator("[id*='-option-']:visible, [role=option]:visible")
-    texts = [options.nth(i).inner_text().strip() for i in range(options.count())]
-    want = answer.strip().lower()
-    for rule in (lambda t: t.lower() == want, lambda t: t.lower().startswith(want), lambda t: want in t.lower()):
+    plain = lambda t: re.sub(r"[^a-z0-9]+", "", t.lower())   # "Institute Of Technology, Jodhpur" == "institute of technology jodhpur"
+    texts = [plain(options.nth(i).inner_text()) for i in range(options.count())]
+    want = plain(answer)
+    for rule in (lambda t: t == want, lambda t: t.startswith(want), lambda t: want in t):
         for i, text in enumerate(texts):
-            if rule(text):
+            if text and rule(text):
                 options.nth(i).click()
                 page.wait_for_timeout(300)
                 return True
