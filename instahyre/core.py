@@ -238,17 +238,18 @@ def skip_reason(job, filters):
 
 FIELDS_JS = """root => {
   const t = s => (s || '').replace(/\\s+/g, ' ').trim();
+  // A label like "Enter your answer" says nothing; the question is in the surrounding block then.
+  const GENERIC = /^(enter|type|write|add)?\\s*(your|an?)?\\s*(answer|response|text|here)\\b/i;
   const labelOf = e => {
-    if (e.labels && e.labels.length && e.type !== 'radio') return t(e.labels[0].innerText);
-    if (e.getAttribute('aria-label')) return t(e.getAttribute('aria-label'));
     const by = e.getAttribute('aria-labelledby') && document.getElementById(e.getAttribute('aria-labelledby'));
-    if (by) return t(by.innerText);
-    if (e.placeholder) return t(e.placeholder);
+    const own = (e.labels && e.labels.length && e.type !== 'radio' && t(e.labels[0].innerText))
+      || t(e.getAttribute('aria-label')) || (by && t(by.innerText)) || t(e.placeholder);
+    if (own && !GENERIC.test(own)) return own;
     for (let p = e.parentElement, i = 0; p && i < 3; p = p.parentElement, i++) {
       const s = t(p.innerText);
-      if (s) return s.slice(0, 200);
+      if (s && s !== own) return s.slice(0, 200);
     }
-    return t(e.name);
+    return own || t(e.name);
   };
   const radioQuestion = e => {  // climb past the block holding just the options to reach the question text
     const same = [...root.querySelectorAll('input[type=radio]')].filter(r => r.name === e.name);

@@ -82,7 +82,7 @@ answers:
   "notice period": "30 days"
   "current.*(ctc|salary|compensation)|(ctc|salary|compensation).*current": "8 LPA"
   "expect.*(ctc|salary|compensation)|(ctc|salary|compensation).*expect": "12 LPA"
-  "years? of experience|total experience": "2"
+  "years? of experi?e?nce|total experi?e?nce|how much experi?e?nce": "2"
   "current (city|location)": "Bengaluru"
   # Yes/No questions: the answer must match an option's text. First matching pattern wins.
   "currently (living|located|residing|based) in (bengaluru|bangalore)": "Yes"
