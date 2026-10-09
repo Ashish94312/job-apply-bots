@@ -131,7 +131,7 @@ def click(locator, timeout=5000):
 
 
 DIALOG_CSS = ", ".join(
-    f"{sel}:visible" for sel in ("[role=dialog]", "[aria-modal=true]", ".modal", ".ReactModal__Content")
+    f"{sel}:visible" for sel in ("[role=dialog]", "dialog[open]", "[aria-modal=true]", ".modal", ".ReactModal__Content")
 )
 
 

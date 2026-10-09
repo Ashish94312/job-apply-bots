@@ -31,7 +31,7 @@ import yaml
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
-ACTIONS = ("apply", "dry-run", "login")
+ACTIONS = ("apply", "dry-run", "login", "refer")
 STATUSES = ("applied", "already_applied", "skipped", "needs_manual", "external", "failed")
 PYTHON = ROOT / ".venv" / "bin" / "python"
 SHOT_RE = re.compile(r"\[([\w.-]+\.png)\]")
@@ -141,6 +141,8 @@ def start(bot, action, confirm=False, assist=False, max_apply=None):
         raise ValueError(f"{bot}/config.yaml is missing: copy {bot}/config.example.yaml to it and edit it.")
     if action == "login":
         argv = ["login"]
+    elif action == "refer":
+        argv = ["refer", *(["--confirm"] if confirm else []), *(["--max", str(int(max_apply))] if max_apply else [])]
     else:
         argv = ["run"]
         if action == "dry-run":
@@ -183,6 +185,9 @@ def bot_state(bot, since):
     today = {status: n_today for status, _, n_today in counts}
     state = {
         "config_ok": cfg_path.exists(),
+        "can_refer": bool(cfg.get("referral")),  # the bot has a referral: section (LinkedIn)
+        "referral_text": {"note": (cfg.get("referral") or {}).get("connect_note") or "",
+                          "message": (cfg.get("referral") or {}).get("message") or ""} if cfg.get("referral") else None,
         "applied_today": today.get("applied") or 0,
         "applied_total": total.get("applied", 0),
         "needs_manual": total.get("needs_manual", 0),
@@ -221,6 +226,63 @@ def history(bot=None, status=None, limit=200):
     return rows[:limit]
 
 
+def referrals(limit=200):
+    """Everyone a bot asked for a referral (LinkedIn's contacts table), newest first."""
+    rows = []
+    for b in bots():
+        sql = """SELECT updated, status, name, headline, company, profile, title, job_url, note
+                 FROM contacts ORDER BY updated DESC LIMIT ?"""
+        for ts, st, name, headline, company, profile, title, job_url, note in query(b, sql, (limit,)):
+            rows.append({"bot": b, "ts": ts, "status": st, "name": name, "headline": headline, "company": company,
+                         "profile": profile, "title": title, "job_url": job_url, "note": note})
+    rows.sort(key=lambda r: r["ts"] or "", reverse=True)
+    return rows[:limit]
+
+
+def save_referral_text(bot, note, message):
+    """Write referral.connect_note and referral.message into the bot's config.yaml, leaving the rest of the
+    file (and its comments) as it is. Checks the result reads back as exactly that, else leaves the file alone."""
+    path = ROOT / bot / "config.yaml"
+    original = path.read_text()
+    lines = original.split("\n")
+    start = next((i for i, line in enumerate(lines) if re.match(r"^referral:\s*(#.*)?$", line)), None)
+    if start is None:
+        raise ValueError(f"{bot}/config.yaml has no referral: section.")
+    end = next((i for i in range(start + 1, len(lines)) if re.match(r"^[^\s#]", lines[i])), len(lines))
+    section = lines[start:end]
+
+    def key_line(key):
+        return next((i for i, line in enumerate(section) if re.match(rf"^\s+{key}:", line)), None)
+
+    k = key_line("connect_note")
+    if k is None:
+        raise ValueError("couldn't find referral.connect_note in config.yaml.")
+    indent = re.match(r"^(\s+)", section[k]).group(1)
+    section[k] = f"{indent}connect_note: {json.dumps(note, ensure_ascii=False)}"  # a JSON string is a YAML string
+
+    k = key_line("message")
+    if k is None:
+        raise ValueError("couldn't find referral.message in config.yaml.")
+    indent = re.match(r"^(\s+)", section[k]).group(1)
+    stop = k + 1
+    if re.match(r"^\s+message:\s*[|>]", section[k]):  # a block: the lines indented deeper than the key
+        while stop < len(section) and (not section[stop].strip() or len(section[stop]) - len(section[stop].lstrip()) > len(indent)):
+            stop += 1
+        while stop > k + 1 and not section[stop - 1].strip():
+            stop -= 1  # keep the blank lines between this and whatever follows
+    body = [f"{indent}  {line}".rstrip() for line in message.split("\n")]
+    section[k:stop] = [f"{indent}message: |", *body]
+
+    updated = "\n".join(lines[:start] + section + lines[end:])
+    try:
+        rc = (yaml.safe_load(updated) or {}).get("referral") or {}
+    except yaml.YAMLError as e:
+        raise ValueError(f"couldn't save: {e}")
+    if (rc.get("connect_note") or "") != note or (rc.get("message") or "").strip() != message.strip():
+        raise ValueError("couldn't save the text without changing its meaning; edit config.yaml by hand.")
+    path.write_text(updated)
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
@@ -250,6 +312,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, (HERE / "index.html").read_bytes(), "text/html; charset=utf-8")
         if url.path == "/api/state":
             return self._send(200, {bot: bot_state(bot, params.get(bot, "")) for bot in bots()})
+        if url.path == "/api/referrals":
+            return self._send(200, referrals())
         if url.path == "/api/history":
             bot = params.get("bot") if params.get("bot") in bots() else None
             status = params.get("status") if params.get("status") in STATUSES else None
@@ -288,6 +352,13 @@ class Handler(BaseHTTPRequestHandler):
             elif self.path == "/api/stop":
                 if run:
                     run.stop()
+            elif self.path == "/api/referral-text":
+                note, message = str(body.get("note", "")).strip(), str(body.get("message", "")).strip()
+                if len(note) > 300 or len(message) > 3000:
+                    return self._send(400, {"error": "the note can be 300 characters, the message 3000"})
+                if not message:
+                    return self._send(400, {"error": "the message can't be empty"})
+                save_referral_text(bot, note, message)
             else:
                 return self._send(404, {"error": "not found"})
         except (ValueError, OSError) as e:

@@ -119,6 +119,19 @@
     width: 4.5em; padding: 2px 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--sunk);
   }
 
+  /* ---------- referral message editor */
+  .refer-text .opts-body label { display: grid; gap: 4px; }
+  .refer-text small { color: var(--muted); font-weight: 400; }
+  .refer-text textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--sunk);
+    font: inherit; color: inherit; resize: vertical;
+  }
+  .refer-text .hint { margin: 0; color: var(--muted); }
+  .refer-text .warn { margin: 0; color: var(--wait); font-weight: 500; }
+  .refer-text .saved { align-self: center; color: var(--muted); }
+  .refer-text .saved.err { color: var(--bad); }
+  .refer-text .row .btn { flex: 0 0 auto; }
+
   /* ---------- the bot is waiting for you */
   .prompt {
     background: var(--wait-bg);
@@ -130,7 +143,7 @@
     animation: nudge 1.6s ease-in-out 3;
   }
   .prompt[hidden] { display: none; }
-  .prompt-q { margin: 0; font-weight: 500; overflow-wrap: anywhere; }
+  .prompt-q { margin: 0; font-weight: 500; overflow-wrap: anywhere; white-space: pre-line; }
   .prompt-q small { display: block; color: var(--wait); font-weight: 600; font-size: 13px; margin-bottom: 2px; }
   .prompt input[type="text"] {
     flex: 1 1 8em; min-width: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface);
@@ -188,6 +201,9 @@
   .s-failed { color: var(--bad); }
   .s-skipped, .s-already_applied { color: var(--skip); }
   .s-external { color: var(--ext); }
+  .s-messaged { color: var(--ok); }
+  .s-invited { color: var(--wait); }
+  .s-not_accepted { color: var(--skip); }
   .history .empty { padding: 28px 14px; color: var(--muted); text-align: center; }
 
   @media (max-width: 960px) {
@@ -229,6 +245,18 @@
       </table>
     </div>
   </section>
+
+  <section class="history" id="referrals" hidden aria-labelledby="referrals-title">
+    <div class="history-head">
+      <h2 id="referrals-title">Referrals</h2>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>When</th><th>Person</th><th>Asked about</th><th>Status</th><th>Note</th></tr></thead>
+        <tbody id="referral-rows"></tbody>
+      </table>
+    </div>
+  </section>
 </div>
 
 <template id="bot-tpl">
@@ -242,6 +270,7 @@
     <div class="row">
       <button class="btn" data-act="dry-run" title="List the jobs it would apply to, without applying">Dry run</button>
       <button class="btn" data-act="login" title="Only log in and save the session">Log in</button>
+      <button class="btn" data-act="refer" hidden title="Message people at the companies it applied to, asking for a referral">Ask for referrals</button>
       <button class="btn stop" data-act="stop" hidden>Stop</button>
     </div>
     <details class="opts">
@@ -250,6 +279,18 @@
         <label><input type="checkbox" name="confirm"> Ask me before each application</label>
         <label><input type="checkbox" name="assist"> Pause on questions it can't answer, so I can fill them in</label>
         <label>Stop after <input type="number" name="max" min="1" step="1"> applications</label>
+      </div>
+    </details>
+    <details class="opts refer-text" hidden>
+      <summary>Referral message</summary>
+      <div class="opts-body">
+        <label>Invite note <small>To people you're not connected with yet. Up to 300 characters.</small>
+          <textarea name="note" rows="3" maxlength="300"></textarea></label>
+        <label>Message <small>To people you're connected with, and to the others once they accept.</small>
+          <textarea name="message" rows="9"></textarea></label>
+        <p class="hint">{first_name}, {company}, {title} and {job_url} are filled in for each person.</p>
+        <p class="warn" hidden>Write the &lt;…&gt; part in your own words. Until then the bot won't send referrals.</p>
+        <div class="row"><button class="btn primary" data-act="save-text">Save</button><span class="saved" aria-live="polite"></span></div>
       </div>
     </details>
     <div class="prompt" role="alert" hidden>
@@ -267,6 +308,7 @@ const KNOWN = {
   cutshort: { name: "Cutshort", how: "First time: click Log in and sign in (Google or phone OTP). It stays logged in." },
   hirist: { name: "Hirist", how: "First time: click Log in and sign in (OTP, password or Google). It stays logged in." },
   wellfound: { name: "Wellfound", how: "Logs in by itself with the email and password in .env." },
+  linkedin: { name: "LinkedIn", how: "First time: click Log in and sign in. Applies through Easy Apply; Ask for referrals messages people at those companies." },
 };
 const BOTS = {};  // filled from the server: every bot folder it finds
 const STATUS = {
@@ -277,7 +319,7 @@ const STATUS = {
   already_applied: "Already applied",
   external: "External site",
 };
-const BUSY = { apply: "Applying…", "dry-run": "Checking jobs…", login: "Logging in…" };
+const BUSY = { apply: "Applying…", "dry-run": "Checking jobs…", login: "Logging in…", refer: "Asking for referrals…" };
 const CHIPS = [["applied", "Applied"], ["needs_manual", "Needs you"], ["failed", "Failed"], ["skipped", "Skipped"], ["", "All"]];
 
 const view = {};       // bot -> what the page knows about it
@@ -323,8 +365,12 @@ function build(names) {
     el.addEventListener("click", e => {
       const act = e.target.closest("[data-act]")?.dataset.act;
       if (act === "stop") stop(bot);
+      else if (act === "save-text") saveText(bot);
       else if (act) start(bot, act);
     });
+    for (const area of el.querySelectorAll(".refer-text textarea")) {
+      area.addEventListener("input", () => { area.dataset.dirty = "1"; showPlaceholderWarning(bot); setSaved(bot, ""); });
+    }
     grid.append(el);
     view[bot] = { el, runId: "", size: 0, text: "", answered: -1, state: null, error: "" };
     renderLog(bot);
@@ -360,6 +406,48 @@ async function answer(bot, text) {
   renderPrompt(bot);
   try { await post("/api/send", { bot, text }); } catch (e) { setStatus(bot, e.message, true); }
   poll(true);
+}
+
+// ---------------------------------------------------------------- referral message
+
+const PLACEHOLDER = /<[^<>\n]+>/;
+
+function referralText(bot) {
+  const q = name => view[bot].el.querySelector(`.refer-text [name="${name}"]`);
+  return { note: q("note"), message: q("message") };
+}
+
+function showPlaceholderWarning(bot) {
+  const { message } = referralText(bot);
+  view[bot].el.querySelector(".refer-text .warn").hidden = !PLACEHOLDER.test(message.value);
+}
+
+function setSaved(bot, text, isError = false) {
+  const el = view[bot].el.querySelector(".refer-text .saved");
+  el.textContent = text;
+  el.classList.toggle("err", isError);
+}
+
+function renderReferralText(bot, s) {
+  const box = view[bot].el.querySelector(".refer-text");
+  box.hidden = !s.referral_text;
+  if (!s.referral_text) return;
+  for (const [key, area] of Object.entries(referralText(bot))) {
+    if (area.dataset.dirty !== "1" && document.activeElement !== area) area.value = s.referral_text[key];  // don't overwrite your edits
+  }
+  showPlaceholderWarning(bot);
+}
+
+async function saveText(bot) {
+  const { note, message } = referralText(bot);
+  setSaved(bot, "Saving…");
+  try {
+    await post("/api/referral-text", { bot, note: note.value, message: message.value });
+    note.dataset.dirty = message.dataset.dirty = "";
+    setSaved(bot, "Saved to config.yaml.");
+  } catch (e) {
+    setSaved(bot, e.message, true);
+  }
 }
 
 function setStatus(bot, text, isError = false) {
@@ -412,6 +500,12 @@ function promptOf(text) {
   if (!tail.trim()) return null;
   if (/^\s{4}/.test(tail)) tail = `${(all.pop() || "").trim()}. ${tail.trim()}`;  // "  ! <job>: <why>\n    Finish it..."
   const yn = tail.match(/^\s*\?\s*(.*?)\s*\[y\/N\/q\]\s*$/);
+  if (yn && /^(Message|Invite) /.test(yn[1])) {  // a referral; what it would send is printed just above, indented
+    const text = [];
+    for (let i = all.length - 1; i >= 0 && /^ {6}/.test(all[i]); i--) text.unshift(all[i].trim());
+    const q = text.length ? `${yn[1]}\n\n${text.join("\n")}` : yn[1];
+    return { title: "Send this?", q, buttons: [["Send", "y", "primary"], ["Skip", "n"], ["Stop run", "q", "stop"]] };
+  }
   if (yn) return { title: "Apply to this one?", q: yn[1], buttons: [["Apply", "y", "primary"], ["Skip", "n"], ["Stop run", "q", "stop"]] };
   if (/press Enter/i.test(tail)) {
     const q = tail.trim().replace(/^!\s*/, "").replace(/,?\s*then press Enter( here)?\s*\.*$/i, ".");
@@ -483,9 +577,11 @@ function renderBot(bot, s) {
   const apply = v.el.querySelector('[data-act="apply"]');
   apply.textContent = running ? BUSY[run.action] : "Apply";
   apply.classList.toggle("busy", running);
-  for (const btn of v.el.querySelectorAll('[data-act="apply"], [data-act="dry-run"], [data-act="login"]')) {
+  for (const btn of v.el.querySelectorAll('[data-act="apply"], [data-act="dry-run"], [data-act="login"], [data-act="refer"]')) {
     btn.disabled = running || !s.config_ok;
   }
+  v.el.querySelector('[data-act="refer"]').hidden = !s.can_refer;
+  renderReferralText(bot, s);
   v.el.querySelector('[data-act="stop"]').hidden = !running;
   const max = v.el.querySelector('.opts [name="max"]');
   max.placeholder = s.max_per_run ?? "";
@@ -530,7 +626,8 @@ async function poll(soon = false) {
   document.title = waiting.length ? `Needs you: ${waiting.map(b => BOTS[b].name).join(", ")}` : running ? "Running – Job bots" : "Job bots";
   document.getElementById("apply-all").disabled = Object.values(data).every(s => s.run?.running || !s.config_ok);
 
-  if (running || wasRunning) loadHistory();  // new results, or the final ones after a run ends
+  if (running || wasRunning) { loadHistory(); loadReferrals(); }  // new results, or the final ones after a run ends
+  document.getElementById("referrals").hidden = !Object.values(data).some(s => s.can_refer);
   wasRunning = running;
   timer = setTimeout(poll, running ? 800 : 4000);
 }
@@ -591,6 +688,37 @@ async function loadHistory() {
   }
 }
 
+const REFERRAL_STATUS = { messaged: "Asked", invited: "Invite sent", not_accepted: "Didn't accept", failed: "Failed" };
+
+async function loadReferrals() {
+  let rows;
+  try { rows = await (await fetch("/api/referrals")).json(); } catch { return; }
+  const body = document.getElementById("referral-rows");
+  body.replaceChildren();
+  if (!rows.length) {
+    const td = Object.assign(document.createElement("td"), { colSpan: 5, className: "empty" });
+    td.textContent = "Nobody asked yet. Click Ask for referrals on the LinkedIn card.";
+    body.append(document.createElement("tr"));
+    body.lastChild.append(td);
+  }
+  for (const r of rows) {
+    const tr = document.createElement("tr");
+    const cell = (cls, ...kids) => { const td = Object.assign(document.createElement("td"), { className: cls }); td.append(...kids); tr.append(td); };
+    const link = (href, text) => {
+      const a = Object.assign(document.createElement("a"), { target: "_blank", rel: "noopener", textContent: text });
+      if (/^https?:\/\//.test(href || "")) a.href = href;
+      return a;
+    };
+    cell("when", when(r.ts));
+    cell("job", link(r.profile, r.name || "?"), Object.assign(document.createElement("span"), { textContent: r.headline || "" }));
+    cell("job", link(r.job_url, r.title || "Job"), Object.assign(document.createElement("span"), { textContent: r.company || "" }));
+    cell("", Object.assign(document.createElement("span"), { className: `badge s-${r.status}`, textContent: REFERRAL_STATUS[r.status] || r.status }));
+    const note = r.status === "invited" ? "Gets your message once they accept" : r.note || "";
+    cell("note", note);
+    body.append(tr);
+  }
+}
+
 function buildHistory() {
   const chips = document.getElementById("chips");
   for (const [status, label] of CHIPS) {
@@ -618,6 +746,7 @@ async function init() {
   }
   buildHistory();
   loadHistory();
+  loadReferrals();
   poll();
 }
 

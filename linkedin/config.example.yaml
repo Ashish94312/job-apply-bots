@@ -1,0 +1,199 @@
+# Browser to drive. "chrome" = your installed Google Chrome.
+browser_channel: chrome
+
+# Login: the first time, a normal Chrome window opens for you to sign in to LinkedIn (password, Google, and
+# any security check). Then press Enter in the terminal. The session is kept in data/profile.
+
+# What to search for: one LinkedIn job search per keyword and location (free text, as in LinkedIn's search box).
+search:
+  keywords:
+    - machine learning engineer
+    - ai engineer
+    - data scientist
+    - software engineer
+    - backend developer
+    - python developer
+    - sde
+  locations:
+    - India
+  easy_apply_only: true       # the bot can only apply through Easy Apply; others are recorded as external
+  # LinkedIn's own filters: internship, entry level, associate, mid-senior level, director, executive
+  experience_levels:
+    - entry level
+    - associate
+  work_types: []              # on-site, remote, hybrid; empty = any
+  posted_within: week         # day, week or month; empty = any time
+
+# Optional: any extra LinkedIn job search page to go through as-is (after the keyword searches).
+search_urls: []
+
+filters:
+  # Apply only if the title has at least one of these (whole word, any case). Empty list = any title.
+  include_title:
+    - machine learning
+    - ml
+    - ai
+    - artificial intelligence
+    - deep learning
+    - data scientist
+    - data science
+    - nlp
+    - computer vision
+    - llm
+    - genai
+    - gen ai
+    - generative ai
+    - agentic
+    - mlops
+    - rag
+    - langchain
+    - python
+    - django
+    - fastapi
+    - backend
+    - back end
+    - software engineer
+    - software developer
+    - software development engineer
+    - sde
+    - full stack
+    - fullstack
+    - full-stack
+    - sde1
+    - sde2
+  # ...and must also be an actual engineering role (skips \"AI Trainer\", \"Data Science SME\", ...).
+  require_role:
+    - engineer
+    - developer
+    - scientist
+    - researcher
+    - sde
+    - sde1
+    - sde2
+    - programmer
+  # Junior profile: skip senior titles, internships, testing/support and non-engineering roles.
+  exclude_title:
+    - senior
+    - sr
+    - lead
+    - staff
+    - principal
+    - manager
+    - director
+    - head
+    - architect
+    - vp
+    - chief
+    - intern
+    - internship
+    - sales
+    - marketing
+    - recruiter
+    - business development
+    - trainer
+    - tutor
+    - teacher
+    - faculty
+    - qa
+    - sdet
+    - tester
+    - support
+    - hr
+    - content
+    - writer
+    - iii
+    - sde3
+    - sde 3
+    - sde-3
+    - engineer 3
+    - developer 3
+  exclude_companies: []
+  # Skip if the job description mentions any of these.
+  exclude_text: []
+  # Skip jobs whose minimum required experience (e.g. "3 - 6 years" -> 3) is above this.
+  max_experience_required: 2
+
+limits:
+  max_per_run: 10
+  max_per_day: 25
+  delay_seconds: [30, 60]  # random pause after each application
+  max_pages: 3             # result pages to go through per search (25 jobs each)
+
+# LinkedIn ticks "Follow <company>" on every application; false unticks it.
+follow_companies: false
+
+# Message for "cover letter" / "message to the hiring manager" boxes; {title} and {company} are filled in.
+# Leave empty to leave optional ones blank.
+cover_note: ""
+
+# "How many years of work experience do you have with <skill>?" - LinkedIn asks this a lot.
+# Matched by skill name (whole word, any case); the first one the question mentions wins.
+skill_years:
+  python: 2
+  machine learning: 1
+  deep learning: 1
+  sql: 1
+# ...and for skills not listed above (0 is honest for ones you haven't used). Empty = leave those for you.
+other_skill_years: 0
+
+# Answers to screening questions (sample values: put in your own). Key = regex matched against the question text (any case).
+# A required question with no answer marks the job needs_manual; the bot never guesses.
+# Some questions are number boxes, so salaries are plain rupee amounts here.
+answers:
+  "notice period": "30 days"
+  "current.*(ctc|salary|compensation)|(ctc|salary|compensation).*current": "800000"
+  "expect.*(ctc|salary|compensation)|(ctc|salary|compensation).*expect": "1200000"
+  # Total experience only; "experience with <skill>" questions use skill_years above.
+  "years of (work |professional |relevant |total |it |information technology |industry |software (development |engineering )?)?experience( do you (currently )?have)?\\??$|total (years of )?experience|overall experience": "2"
+  "current (city|location)|^city$|location \\(city\\)": "Bengaluru"
+  # Yes/No questions: the answer must match an option's text. First matching pattern wins.
+  "currently (living|located|residing|based) in (bengaluru|bangalore)": "Yes"
+  "currently (living|located|residing|based) in": "No"
+  "relocat": "Yes"
+  "commut": "Yes"
+  "(onsite|on-site|hybrid|remote) (setting|work)|work(ing)? from (the )?office": "Yes"
+  "authori[sz]ed to work|legally (allowed|eligible)": "Yes"
+  "sponsorship|visa": "No"
+  "bachelor'?s|degree": "Yes"
+  "immediate(ly)? join|join immediately|start immediately": "Yes"
+  # Lone "I agree to the terms / privacy policy" boxes: "Yes" ticks them.
+  "terms|agree|consent|privacy|acknowledge": "Yes"
+  "proficiency in english|english proficiency": "Professional"
+  # Fill these in, or the jobs that ask stay needs_manual.
+  "country code": "India (+91)"   # LinkedIn preselects the first country in the list
+  "phone|mobile": ""   # without +91: the country code is its own dropdown
+  "linkedin": ""
+  "undergraduate|college|university|institution": ""
+
+# Asking for referrals: `python run.py refer` (or "Ask for referrals" on the dashboard).
+referral:
+  # Which jobs to ask about: applied (Easy Apply went through) and/or external (the job applies on the
+  # company's website, where a referral helps most). Only jobs from the last `within_days` days.
+  for_jobs: [applied, external]
+  within_days: 14
+  # More jobs to ask about, e.g. ones you applied to on another site: paste their LinkedIn job links.
+  jobs: []
+  # Who: employees found by these searches among your 1st and 2nd-degree connections. People you're already
+  # connected with go first, then alumni of `school`, then the rest.
+  school: ""
+  people_keywords:
+    - software engineer
+    - machine learning
+  skip_headline: [intern, student, trainee]   # skip people whose headline has any of these
+  per_company: 2           # people to ask per company
+  max_per_run: 8           # messages + invites
+  max_per_day: 15          # LinkedIn allows roughly 100 invites a week; stay well under
+  invite_expiry_days: 21   # stop waiting on an invite after this long
+  # Connection invite to people you're not connected with yet. Free accounts get a few notes a month, up
+  # to 300 characters; once the notes run out, invites go without one (unless this is false).
+  invite_without_note: true
+  connect_note: "Hi {first_name}, I'm applying to {company} and would love to connect. Would you be open to referring me? Happy to share my resume."
+  # Sent to people you're connected with, and to the others once they accept. Fill in the <...> part.
+  # {first_name}, {name}, {company}, {title} and {job_url} are filled in.
+  message: |
+    Hi {first_name}, hope you're doing well!
+
+    I'm applying for the {title} role at {company}: {job_url}
+    <one or two lines about you: degree, years of experience, what you've built>
+
+    Would you be open to referring me? I can send my resume and anything else you need. Thanks a lot!
