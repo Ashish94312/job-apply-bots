@@ -1,0 +1,93 @@
+# Browser to drive. "chrome" = your installed Google Chrome (gets past Cloudflare checks more often).
+browser_channel: chrome
+
+# Login: when needed the bot opens a normal Chrome window (Google blocks sign-in in automated browsers).
+# Click "Login" and use OTP, password, Google or Apple, then press Enter in the terminal.
+
+# Search pages, 20 jobs each; the bot pages through them (&page=N).
+# minexp / maxexp = experience range in years. Pattern: https://www.hirist.tech/k/<keyword>-jobs?minexp=1&maxexp=2
+search_urls:
+  - https://www.hirist.tech/k/machine-learning-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/artificial-intelligence-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/llm-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/generative-ai-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/nlp-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/deep-learning-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/computer-vision-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/langchain-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/rag-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/mlops-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/pytorch-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/data-science-jobs?minexp=1&maxexp=2
+  - https://www.hirist.tech/k/python-jobs?minexp=1&maxexp=2
+
+filters:
+  # Apply only if the title has at least one of these (whole word, any case). Empty list = any title.
+  include_title:
+    - machine learning
+    - ml
+    - ai
+    - artificial intelligence
+    - deep learning
+    - data scientist
+    - data science
+    - nlp
+    - computer vision
+    - llm
+    - genai
+    - gen ai
+    - generative ai
+    - mlops
+    - python
+  # Junior profile: skip senior titles, internships, and non-engineering roles.
+  exclude_title:
+    - senior
+    - sr
+    - lead
+    - staff
+    - principal
+    - manager
+    - director
+    - head
+    - architect
+    - vp
+    - chief
+    - intern
+    - internship
+    - sales
+    - marketing
+    - recruiter
+    - business development
+    - trainer
+    - tutor
+    - teacher
+    - faculty
+  exclude_companies: []
+  # Skip if the job description mentions any of these.
+  exclude_text: []
+  # Skip jobs whose minimum required experience (e.g. "3 - 6 years" -> 3) is above this.
+  max_experience_required: 2
+
+limits:
+  max_per_run: 10
+  max_per_day: 30
+  delay_seconds: [20, 45]  # random pause after each application
+  max_pages: 5             # result pages to go through per search URL (20 jobs each)
+
+# Message for "note to recruiter" / "type your message" boxes; {title} and {company} are filled in.
+# Leave empty to apply without a message.
+cover_note: ""
+
+# Answers to screening questions (sample values: put in your own). Key = regex matched against the question text (any case).
+# A question with no matching answer marks the job needs_manual; the bot never guesses.
+answers:
+  "notice period": "30 days"
+  "current.*(ctc|salary|compensation)|(ctc|salary|compensation).*current": "8 LPA"
+  "expect.*(ctc|salary|compensation)|(ctc|salary|compensation).*expect": "12 LPA"
+  "years? of experience|total experience": "2"
+  "current (city|location)": "Bengaluru"
+  # Yes/No questions: the answer must match an option's text. First matching pattern wins.
+  "currently (living|located|residing|based) in (bengaluru|bangalore)": "Yes"
+  "currently (living|located|residing|based) in": "No"
+  "relocat": "Yes"
+  "immediate(ly)? join|join immediately": "Yes"

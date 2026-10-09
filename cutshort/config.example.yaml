@@ -1,0 +1,91 @@
+# Browser to drive. "chrome" = your installed Google Chrome (gets past Cloudflare checks more often).
+browser_channel: chrome
+
+# Login: Cutshort only offers Google / phone OTP, and Google blocks sign-in in automated browsers. When a login
+# is needed the bot opens a normal Chrome window: Candidate login -> tick "I agree" -> sign in -> press Enter.
+
+# Logged-in job feed pages. Filters live in the URL:
+#   minexp / maxexp = experience range in years, skills = skill id (several: join with "-").
+# To find a skill id: open cutshort.io/profile/all-jobs, pick it under Filters > Skills, copy the URL.
+search_urls:
+  - https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=00268   # Machine Learning
+  - https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=06768   # Large Language Models (LLM)
+  - https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=06851   # Generative AI
+  - https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=00301   # Natural Language Processing
+  - https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=00543   # Deep Learning
+  - https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=06726   # Computer Vision
+  - https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=06694   # PyTorch
+  - https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=06790   # MLOps
+  - https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=00121   # Data Science
+  - https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=00360   # Python
+
+filters:
+  # Apply only if the title has at least one of these (whole word, any case). Empty list = any title.
+  include_title:
+    - machine learning
+    - ml
+    - ai
+    - artificial intelligence
+    - deep learning
+    - data scientist
+    - data science
+    - nlp
+    - computer vision
+    - llm
+    - genai
+    - gen ai
+    - generative ai
+    - mlops
+    - python
+  # Junior profile: skip senior titles, internships, and non-engineering roles.
+  exclude_title:
+    - senior
+    - sr
+    - lead
+    - staff
+    - principal
+    - manager
+    - director
+    - head
+    - architect
+    - vp
+    - chief
+    - intern
+    - internship
+    - sales
+    - marketing
+    - recruiter
+    - business development
+    - trainer
+    - tutor
+    - teacher
+    - faculty
+  exclude_companies: []
+  # Skip if the job description mentions any of these.
+  exclude_text: []
+  # Skip jobs whose minimum required experience (e.g. "3 - 6 years" -> 3) is above this.
+  max_experience_required: 2
+
+limits:
+  max_per_run: 10
+  max_per_day: 30
+  delay_seconds: [20, 45]  # random pause after each application
+  max_pages: 10            # feed pages to go through per search URL (~5 jobs each)
+
+# Message for "note to recruiter" / "type your message" boxes; {title} and {company} are filled in.
+# Leave empty to apply without a message.
+cover_note: ""
+
+# Answers to screening questions (sample values: put in your own). Key = regex matched against the question text (any case).
+# A question with no matching answer marks the job needs_manual; the bot never guesses.
+answers:
+  "notice period": "30 days"
+  "current.*(ctc|salary|compensation)|(ctc|salary|compensation).*current": "8 LPA"
+  "expect.*(ctc|salary|compensation)|(ctc|salary|compensation).*expect": "12 LPA"
+  "years? of experience|total experience": "2"
+  "current (city|location)": "Bengaluru"
+  # Yes/No questions: the answer must match an option's text. First matching pattern wins.
+  "currently (living|located|residing|based) in (bengaluru|bangalore)": "Yes"
+  "currently (living|located|residing|based) in": "No"
+  "relocat": "Yes"
+  "immediate(ly)? join|join immediately": "Yes"
