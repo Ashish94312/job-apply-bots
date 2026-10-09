@@ -3,6 +3,7 @@
 Bots that apply to jobs for you on **Instahyre**, **Cutshort**, **Hirist** and **Wellfound**.
 Each one opens a real Chrome window, searches with your filters (role, experience range), skips what doesn't fit,
 answers the screening questions it has answers for, and applies. It never applies to the same job twice.
+Run them from a **browser dashboard** (one Apply button per site) or from the terminal.
 
 | Instahyre | Cutshort | Hirist |
 |---|---|---|
@@ -42,12 +43,15 @@ Google Chrome must be installed (the bots drive it); macOS is what it's been tes
 
 ## Run
 
-**From the browser:** double-click `start-ui.command` in Finder (or run `.venv/bin/python ui/server.py`). A page
+**From the browser (dashboard):** double-click `start-ui.command` in Finder (or run `.venv/bin/python ui/server.py`). A page
 opens at `http://127.0.0.1:8765` with an **Apply** button per site, plus Dry run, Log in and Stop. You see what the
 bot is doing as it goes, and when it needs you (a login, a captcha, "Apply to this one?", a question it can't
 answer) the question shows up there with buttons to answer it. A History table below lists what it applied to and
 what still needs you, with screenshots. Keep the Terminal window it opens running while you use the page; closing
-it stops the bots.
+it stops the bots. **Apply on every site** runs all bots at once, each in its own Chrome window. The page is only
+reachable from your own computer, and works on macOS and Linux.
+
+![The dashboard: one card per site with Apply, Dry run and Log in](docs/dashboard.png)
 
 **From the terminal:**
 

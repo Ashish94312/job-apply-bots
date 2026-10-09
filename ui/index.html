@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job bots</title>
+<link rel="icon" href="data:,">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Schibsted+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #EDEFF3;
+    --surface: #FFFFFF;
+    --sunk: #F4F6F9;
+    --ink: #161A21;
+    --muted: #5A6372;
+    --line: #D3D8E0;
+    --accent: #2741C4;
+    --accent-press: #1D339F;
+    --on-accent: #FFFFFF;
+    --ok: #157A46;
+    --wait: #A45A00;
+    --wait-bg: #FFF3DF;
+    --bad: #B42318;
+    --skip: #747C89;
+    --ext: #5847B5;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #121419;
+      --surface: #1A1D24;
+      --sunk: #0F1115;
+      --ink: #E6E9EE;
+      --muted: #98A1AE;
+      --line: #2D323B;
+      --accent: #8193FF;
+      --accent-press: #6D80F5;
+      --on-accent: #0C1033;
+      --ok: #52C48D;
+      --wait: #F2A64B;
+      --wait-bg: #2A2113;
+      --bad: #F27A6F;
+      --skip: #858D9A;
+      --ext: #AE9FFF;
+      color-scheme: dark;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 400 15px/1.5 "Schibsted Grotesk", system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1260px; margin: 0 auto; padding: 36px 24px 72px; }
+  a { color: var(--accent); }
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ---------- header */
+  .top { display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; margin-bottom: 28px; }
+  h1 { font-size: 44px; line-height: 1; font-weight: 700; letter-spacing: -0.03em; margin: 0 0 10px; }
+  .lede { margin: 0; color: var(--muted); max-width: 62ch; }
+  .offline { color: var(--bad); font-weight: 500; }
+
+  /* ---------- buttons */
+  .btn {
+    border: 1px solid var(--line);
+    background: var(--surface);
+    border-radius: 7px;
+    padding: 7px 14px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .btn:hover:not(:disabled) { border-color: var(--muted); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+  .btn.primary:hover:not(:disabled) { background: var(--accent-press); border-color: var(--accent-press); }
+  .btn.stop { color: var(--bad); border-color: currentColor; }
+  .btn.big { width: 100%; padding: 14px 18px; font-size: 18px; border-radius: 9px; letter-spacing: -0.01em; }
+  .btn.big.busy:disabled { opacity: 1; background: transparent; color: var(--accent); border: 1.5px dashed var(--accent); }
+
+  /* ---------- one column per site; the top edge says what the bot is doing */
+  .bots { display: grid; grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr)); gap: 16px; align-items: start; }
+  .bot {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-top: 5px solid var(--line);
+    border-radius: 3px 3px 10px 10px;
+    padding: 20px 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+  }
+  .bot[data-state="running"] { border-top-color: var(--accent); }
+  .bot[data-state="waiting"] { border-top-color: var(--wait); }
+  .bot-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .bot h2 { font-size: 28px; line-height: 1.1; font-weight: 700; letter-spacing: -0.02em; margin: 0; }
+  .today { margin: 0; color: var(--muted); white-space: nowrap; }
+  .today b { color: var(--ink); font-weight: 600; font-size: 18px; }
+  .how { margin: -8px 0 0; color: var(--muted); font-size: 14px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .row .btn { flex: 1 1 auto; }
+  .need-you {
+    background: none; border: 0; padding: 0; cursor: pointer;
+    color: var(--wait); font-weight: 500; text-decoration: underline; text-underline-offset: 3px;
+  }
+
+  details.opts { font-size: 14px; }
+  details.opts summary { cursor: pointer; color: var(--muted); width: max-content; }
+  .opts-body { display: grid; gap: 8px; padding: 10px 0 2px; }
+  .opts-body label { display: flex; gap: 8px; align-items: baseline; }
+  .opts-body input[type="number"] {
+    width: 4.5em; padding: 2px 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--sunk);
+  }
+
+  /* ---------- the bot is waiting for you */
+  .prompt {
+    background: var(--wait-bg);
+    border: 1px solid var(--wait);
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: grid;
+    gap: 10px;
+    animation: nudge 1.6s ease-in-out 3;
+  }
+  .prompt[hidden] { display: none; }
+  .prompt-q { margin: 0; font-weight: 500; overflow-wrap: anywhere; }
+  .prompt-q small { display: block; color: var(--wait); font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+  .prompt input[type="text"] {
+    flex: 1 1 8em; min-width: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface);
+  }
+  @keyframes nudge { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--wait) 25%, transparent); } }
+  @media (prefers-reduced-motion: reduce) { .prompt { animation: none; } }
+
+  /* ---------- live output */
+  .log {
+    margin: 0;
+    height: 300px;
+    overflow: auto;
+    background: var(--sunk);
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 10px 12px;
+    font: 400 12.5px/1.55 "IBM Plex Mono", ui-monospace, Menlo, monospace;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .log span { display: block; min-height: 1.55em; padding-left: 2ch; text-indent: -2ch; }  /* wrapped lines hang */
+  .log .empty { font-family: "Schibsted Grotesk", system-ui, sans-serif; font-size: 14px; color: var(--muted); white-space: normal; }
+  .l-ok { color: var(--ok); font-weight: 500; }
+  .l-wait { color: var(--wait); font-weight: 500; }
+  .l-bad { color: var(--bad); }
+  .l-skip { color: var(--skip); }
+  .l-ext { color: var(--ext); }
+  .l-would { color: var(--accent); }
+  .l-url { color: var(--muted); }
+  .l-done { font-weight: 500; }
+  .status { margin: -4px 0 0; font-size: 14px; color: var(--muted); min-height: 1.5em; }
+  .status.err { color: var(--bad); }
+
+  /* ---------- history */
+  .history { margin-top: 44px; }
+  .history-head { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; margin-bottom: 14px; }
+  .history h2 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin: 0; margin-right: auto; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 4px 12px; cursor: pointer; font-size: 14px; }
+  .chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+  .history select { padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
+  .table-scroll { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; font-weight: 600; color: var(--muted); padding: 10px 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  td { padding: 10px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  tr:last-child td { border-bottom: 0; }
+  td.when, td.site { white-space: nowrap; color: var(--muted); }
+  td.job a { color: var(--ink); font-weight: 500; text-decoration: none; }
+  td.job a:hover { text-decoration: underline; }
+  td.job span { display: block; color: var(--muted); }
+  td.note { color: var(--muted); min-width: 14em; }
+  .badge { display: inline-block; white-space: nowrap; font-weight: 600; font-size: 13px; border: 1.5px solid currentColor; border-radius: 5px; padding: 0 7px; }
+  .s-applied { color: var(--ok); }
+  .s-needs_manual { color: var(--wait); }
+  .s-failed { color: var(--bad); }
+  .s-skipped, .s-already_applied { color: var(--skip); }
+  .s-external { color: var(--ext); }
+  .history .empty { padding: 28px 14px; color: var(--muted); text-align: center; }
+
+  @media (max-width: 960px) {
+    .bots { --cols: 1 !important; }
+    .log { height: 240px; }
+  }
+  @media (max-width: 640px) {
+    .wrap { padding: 24px 16px 56px; }
+    .top { flex-direction: column; align-items: stretch; }
+    h1 { font-size: 36px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Job bots</h1>
+      <p class="lede" id="lede">Click Apply and Chrome opens on that site. The bot goes through jobs matching your
+        config and applies; when it needs you for a login, a captcha or a question, it asks here.</p>
+    </div>
+    <button class="btn primary" id="apply-all">Apply on every site</button>
+  </header>
+
+  <main class="bots" id="bots"></main>
+
+  <section class="history" aria-labelledby="history-title">
+    <div class="history-head">
+      <h2 id="history-title">History</h2>
+      <div class="chips" id="chips"></div>
+      <select id="history-bot" aria-label="Site">
+        <option value="">All sites</option>
+      </select>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>When</th><th>Site</th><th>Job</th><th>Result</th><th>Note</th></tr></thead>
+        <tbody id="history-rows"></tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<template id="bot-tpl">
+  <section class="bot" data-state="idle">
+    <div class="bot-head">
+      <h2></h2>
+      <p class="today"></p>
+    </div>
+    <p class="how"></p>
+    <button class="btn primary big" data-act="apply">Apply</button>
+    <div class="row">
+      <button class="btn" data-act="dry-run" title="List the jobs it would apply to, without applying">Dry run</button>
+      <button class="btn" data-act="login" title="Only log in and save the session">Log in</button>
+      <button class="btn stop" data-act="stop" hidden>Stop</button>
+    </div>
+    <details class="opts">
+      <summary>Options</summary>
+      <div class="opts-body">
+        <label><input type="checkbox" name="confirm"> Ask me before each application</label>
+        <label><input type="checkbox" name="assist"> Pause on questions it can't answer, so I can fill them in</label>
+        <label>Stop after <input type="number" name="max" min="1" step="1"> applications</label>
+      </div>
+    </details>
+    <div class="prompt" role="alert" hidden>
+      <p class="prompt-q"></p>
+      <div class="row prompt-answers"></div>
+    </div>
+    <pre class="log" tabindex="0" aria-label="Bot output"></pre>
+    <p class="status" aria-live="polite"></p>
+  </section>
+</template>
+
+<script>
+const KNOWN = {
+  instahyre: { name: "Instahyre", how: "Logs in by itself with the email and password in .env." },
+  cutshort: { name: "Cutshort", how: "First time: click Log in and sign in (Google or phone OTP). It stays logged in." },
+  hirist: { name: "Hirist", how: "First time: click Log in and sign in (OTP, password or Google). It stays logged in." },
+  wellfound: { name: "Wellfound", how: "Logs in by itself with the email and password in .env." },
+};
+const BOTS = {};  // filled from the server: every bot folder it finds
+const STATUS = {
+  applied: "Applied",
+  needs_manual: "Needs you",
+  failed: "Failed",
+  skipped: "Skipped",
+  already_applied: "Already applied",
+  external: "External site",
+};
+const BUSY = { apply: "Applying…", "dry-run": "Checking jobs…", login: "Logging in…" };
+const CHIPS = [["applied", "Applied"], ["needs_manual", "Needs you"], ["failed", "Failed"], ["skipped", "Skipped"], ["", "All"]];
+
+const view = {};       // bot -> what the page knows about it
+const filter = { status: "applied", bot: "" };
+
+function store(key, value) {
+  try {
+    if (value === undefined) return JSON.parse(localStorage.getItem(key));
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch { return null; }
+}
+
+async function post(path, body) {
+  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data;
+}
+
+// ---------------------------------------------------------------- columns
+
+function build(names) {
+  for (const bot of names) {
+    BOTS[bot] = KNOWN[bot] || {
+      name: bot[0].toUpperCase() + bot.slice(1),
+      how: "If it needs you to sign in, it asks here. Log in does only that.",
+    };
+  }
+  const grid = document.getElementById("bots");
+  grid.style.setProperty("--cols", names.length === 4 ? 2 : Math.min(names.length, 3));
+  const tpl = document.getElementById("bot-tpl");
+  const select = document.getElementById("history-bot");
+  for (const [bot, info] of Object.entries(BOTS)) {
+    const el = tpl.content.firstElementChild.cloneNode(true);
+    el.querySelector("h2").textContent = info.name;
+    el.querySelector(".how").textContent = info.how;
+    const opts = store(`opts.${bot}`) || {};
+    for (const input of el.querySelectorAll(".opts input")) {
+      if (input.type === "checkbox") input.checked = !!opts[input.name];
+      else input.value = opts[input.name] || "";
+      input.addEventListener("change", () => store(`opts.${bot}`, options(bot)));
+    }
+    el.addEventListener("click", e => {
+      const act = e.target.closest("[data-act]")?.dataset.act;
+      if (act === "stop") stop(bot);
+      else if (act) start(bot, act);
+    });
+    grid.append(el);
+    view[bot] = { el, runId: "", size: 0, text: "", answered: -1, state: null, error: "" };
+    renderLog(bot);
+    select.add(new Option(info.name, bot));
+  }
+}
+
+function options(bot) {
+  const q = name => view[bot].el.querySelector(`.opts [name="${name}"]`);
+  return { confirm: q("confirm").checked, assist: q("assist").checked, max: parseInt(q("max").value, 10) || null };
+}
+
+async function start(bot, action) {
+  view[bot].error = "";
+  setStatus(bot, "");
+  try {
+    await post("/api/start", { bot, action, ...options(bot) });
+  } catch (e) {
+    view[bot].error = e.message;
+    setStatus(bot, e.message, true);
+  }
+  poll(true);
+}
+
+async function stop(bot) {
+  setStatus(bot, "Stopping: the bot finishes the current step and closes Chrome…");
+  try { await post("/api/stop", { bot }); } catch (e) { setStatus(bot, e.message, true); }
+  poll(true);
+}
+
+async function answer(bot, text) {
+  view[bot].answered = view[bot].size;  // hide the question until the bot prints something new
+  renderPrompt(bot);
+  try { await post("/api/send", { bot, text }); } catch (e) { setStatus(bot, e.message, true); }
+  poll(true);
+}
+
+function setStatus(bot, text, isError = false) {
+  const el = view[bot].el.querySelector(".status");
+  el.textContent = text;
+  el.classList.toggle("err", isError);
+}
+
+// ---------------------------------------------------------------- output and questions
+
+const lines = text => text.replace(/\r\n?/g, "\n").split("\n");
+
+function lineClass(line) {
+  if (/^\s+\+ /.test(line)) return "l-ok";
+  if (/^\s+! /.test(line)) return "l-wait";
+  if (/^\s+x /.test(line) || /^Traceback|Error\b/.test(line)) return "l-bad";
+  if (/^\s+[-=] /.test(line)) return "l-skip";
+  if (/^\s+> /.test(line)) return "l-ext";
+  if (/^\s+~ /.test(line)) return "l-would";
+  if (/^https?:\/\//.test(line)) return "l-url";
+  if (/^(Done|Daily limit|Logged in|Stopped|Not logged in)/.test(line)) return "l-done";
+  return "";
+}
+
+function renderLog(bot) {
+  const v = view[bot];
+  const pre = v.el.querySelector(".log");
+  const atBottom = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40;
+  pre.replaceChildren();
+  if (!v.text) {
+    const p = document.createElement("p");
+    p.className = "empty";
+    p.textContent = "Nothing run yet. What the bot does will show up here as it goes.";
+    pre.append(p);
+    return;
+  }
+  for (const line of lines(v.text).slice(-2000)) {
+    const span = document.createElement("span");
+    span.className = lineClass(line);
+    span.textContent = line.replace(/(\S) {3,}/g, "$1  ");  // column padding just wraps badly in a narrow box
+    pre.append(span);
+  }
+  if (atBottom) pre.scrollTop = pre.scrollHeight;
+}
+
+// The bot's input() prompts end without a newline; turn them into buttons.
+function promptOf(text) {
+  const all = lines(text);
+  let tail = all.pop();
+  if (!tail.trim()) return null;
+  if (/^\s{4}/.test(tail)) tail = `${(all.pop() || "").trim()}. ${tail.trim()}`;  // "  ! <job>: <why>\n    Finish it..."
+  const yn = tail.match(/^\s*\?\s*(.*?)\s*\[y\/N\/q\]\s*$/);
+  if (yn) return { title: "Apply to this one?", q: yn[1], buttons: [["Apply", "y", "primary"], ["Skip", "n"], ["Stop run", "q", "stop"]] };
+  if (/press Enter/i.test(tail)) {
+    const q = tail.trim().replace(/^!\s*/, "").replace(/,?\s*then press Enter( here)?\s*\.*$/i, ".");
+    return { title: "Do this in Chrome, then continue", q, buttons: [["Done, continue", "", "primary"]] };
+  }
+  if (/[?:.]\s$/.test(tail)) return { title: "The bot is asking", q: tail.trim(), input: true };
+  return null;
+}
+
+function renderPrompt(bot) {
+  const v = view[bot];
+  const box = v.el.querySelector(".prompt");
+  const p = v.state?.run?.running && v.answered !== v.size ? promptOf(v.text) : null;
+  const key = p ? `${v.size}` : "";
+  v.waiting = !!p;
+  if (box.dataset.key === key) return;  // unchanged; don't rebuild under the cursor
+  box.dataset.key = key;
+  box.hidden = !p;
+  if (!p) return;
+  const q = box.querySelector(".prompt-q");
+  q.replaceChildren(Object.assign(document.createElement("small"), { textContent: p.title }), p.q);
+  const answers = box.querySelector(".prompt-answers");
+  answers.replaceChildren();
+  if (p.input) {
+    const input = Object.assign(document.createElement("input"), { type: "text", placeholder: "Your answer" });
+    const send = Object.assign(document.createElement("button"), { className: "btn primary", textContent: "Send" });
+    send.onclick = () => answer(bot, input.value);
+    input.onkeydown = e => { if (e.key === "Enter") answer(bot, input.value); };
+    answers.append(input, send);
+  }
+  for (const [label, reply, kind] of p.buttons || []) {
+    const b = Object.assign(document.createElement("button"), { className: `btn ${kind || ""}`, textContent: label });
+    b.onclick = () => answer(bot, reply);
+    answers.append(b);
+  }
+}
+
+// ---------------------------------------------------------------- state from the server
+
+function renderBot(bot, s) {
+  const v = view[bot];
+  v.state = s;
+  if (s.log) {
+    if (s.log.reset) { v.text = ""; v.answered = -1; }
+    v.text += s.log.text;
+    v.size = s.log.size;
+    v.runId = s.run.id;
+    if (s.log.text || s.log.reset) renderLog(bot);
+  }
+  renderPrompt(bot);
+
+  const run = s.run;
+  const running = !!run?.running;
+  v.el.dataset.state = !running ? "idle" : v.waiting ? "waiting" : "running";
+
+  const today = v.el.querySelector(".today");
+  today.replaceChildren();
+  const b = document.createElement("b");
+  b.textContent = s.applied_today;
+  today.append(b, s.max_per_day ? ` of ${s.max_per_day} today` : " applied today");
+  if (s.needs_manual) {
+    const link = Object.assign(document.createElement("button"), {
+      className: "need-you", textContent: `${s.needs_manual} need you`, title: "Jobs it couldn't finish; see them in History",
+    });
+    link.onclick = () => setFilter({ status: "needs_manual", bot });
+    today.append(document.createElement("br"), link);
+  }
+
+  const apply = v.el.querySelector('[data-act="apply"]');
+  apply.textContent = running ? BUSY[run.action] : "Apply";
+  apply.classList.toggle("busy", running);
+  for (const btn of v.el.querySelectorAll('[data-act="apply"], [data-act="dry-run"], [data-act="login"]')) {
+    btn.disabled = running || !s.config_ok;
+  }
+  v.el.querySelector('[data-act="stop"]').hidden = !running;
+  const max = v.el.querySelector('.opts [name="max"]');
+  max.placeholder = s.max_per_run ?? "";
+
+  const status = v.el.querySelector(".status");
+  if (v.error) setStatus(bot, v.error, true);
+  else if (!s.config_ok) setStatus(bot, `Missing ${bot}/config.yaml: copy ${bot}/config.example.yaml to it and edit it.`, true);
+  else if (running) { if (!status.textContent.startsWith("Stopping")) setStatus(bot, v.waiting ? "Waiting for you." : "Running. Chrome is doing the work; leave it open."); }
+  else if (run) setStatus(bot, finished(run, v.text), run.exit !== 0 && !run.stopped);
+}
+
+function finished(run, text) {
+  const at = new Date(run.ended * 1000).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if (run.stopped) return `Stopped at ${at}.`;
+  if (run.exit !== 0) return `Ended with an error at ${at}. The output above says what went wrong.`;
+  const done = lines(text).reverse().find(l => /^Done:|^Daily limit|^Logged in|^Still not logged in|^Not logged in/.test(l));
+  return `Finished at ${at}.${done ? " " + done : ""}`;
+}
+
+let timer = null;
+let wasRunning = false;
+
+async function poll(soon = false) {
+  clearTimeout(timer);
+  if (soon) { timer = setTimeout(poll, 150); return; }
+  const qs = new URLSearchParams(Object.fromEntries(Object.keys(BOTS).map(b => [b, `${view[b].runId}:${view[b].size}`])));
+  let data;
+  try {
+    data = await (await fetch(`/api/state?${qs}`)).json();
+    document.getElementById("lede").classList.remove("offline");
+  } catch {
+    const lede = document.getElementById("lede");
+    lede.textContent = "Can't reach the dashboard server. Start it again (double-click start-ui.command), then reload this page.";
+    lede.classList.add("offline");
+    timer = setTimeout(poll, 5000);
+    return;
+  }
+  for (const bot of Object.keys(BOTS)) if (data[bot]) renderBot(bot, data[bot]);
+
+  const running = Object.values(data).some(s => s.run?.running);
+  const waiting = Object.keys(BOTS).filter(b => view[b].waiting);
+  document.title = waiting.length ? `Needs you: ${waiting.map(b => BOTS[b].name).join(", ")}` : running ? "Running – Job bots" : "Job bots";
+  document.getElementById("apply-all").disabled = Object.values(data).every(s => s.run?.running || !s.config_ok);
+
+  if (running || wasRunning) loadHistory();  // new results, or the final ones after a run ends
+  wasRunning = running;
+  timer = setTimeout(poll, running ? 800 : 4000);
+}
+
+// ---------------------------------------------------------------- history
+
+function setFilter(next) {
+  Object.assign(filter, next);
+  document.getElementById("history-bot").value = filter.bot;
+  for (const chip of document.querySelectorAll(".chip")) chip.setAttribute("aria-pressed", chip.dataset.status === filter.status);
+  loadHistory();
+  if (next.bot !== undefined) document.getElementById("history-title").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function when(ts) {
+  const d = new Date(ts.replace(" ", "T"));
+  const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if (d.toDateString() === new Date().toDateString()) return `Today ${time}`;
+  return `${d.toLocaleDateString([], { day: "numeric", month: "short" })} ${time}`;
+}
+
+let historyBusy = false;
+
+async function loadHistory() {
+  if (historyBusy) return;
+  historyBusy = true;
+  try {
+    const qs = new URLSearchParams({ status: filter.status, bot: filter.bot });
+    const rows = await (await fetch(`/api/history?${qs}`)).json();
+    const body = document.getElementById("history-rows");
+    body.replaceChildren();
+    if (!rows.length) {
+      const td = Object.assign(document.createElement("td"), { colSpan: 5, className: "empty" });
+      td.textContent = filter.status === "applied" ? "No applications yet. Click Apply on a site above to start." : "Nothing here.";
+      body.append(document.createElement("tr"));
+      body.lastChild.append(td);
+    }
+    for (const r of rows) {
+      const tr = document.createElement("tr");
+      const cell = (cls, ...kids) => { const td = Object.assign(document.createElement("td"), { className: cls }); td.append(...kids); tr.append(td); return td; };
+      cell("when", when(r.ts));
+      cell("site", BOTS[r.bot]?.name || r.bot);
+      const link = Object.assign(document.createElement("a"), { target: "_blank", rel: "noopener", textContent: r.title || "Untitled job" });
+      if (/^https?:\/\//.test(r.url || "")) link.href = r.url;
+      cell("job", link, Object.assign(document.createElement("span"), { textContent: r.company || "" }));
+      cell("", Object.assign(document.createElement("span"), { className: `badge s-${r.status}`, textContent: STATUS[r.status] || r.status }));
+      const note = cell("note", r.note || "");
+      if (r.shot) {
+        if (r.note) note.append(" ");
+        note.append(Object.assign(document.createElement("a"), { href: r.shot, target: "_blank", textContent: "Screenshot" }));
+      }
+      body.append(tr);
+    }
+  } catch {
+    // the state poll already reports the server being down
+  } finally {
+    historyBusy = false;
+  }
+}
+
+function buildHistory() {
+  const chips = document.getElementById("chips");
+  for (const [status, label] of CHIPS) {
+    const chip = Object.assign(document.createElement("button"), { className: "chip", textContent: label });
+    chip.dataset.status = status;
+    chip.setAttribute("aria-pressed", status === filter.status);
+    chip.onclick = () => setFilter({ status });
+    chips.append(chip);
+  }
+  document.getElementById("history-bot").onchange = e => { filter.bot = e.target.value; loadHistory(); };
+}
+
+document.getElementById("apply-all").onclick = () => {
+  for (const bot of Object.keys(BOTS)) {
+    const s = view[bot].state;
+    if (s?.config_ok && !s.run?.running) start(bot, "apply");
+  }
+};
+
+async function init() {
+  try {
+    build(Object.keys(await (await fetch("/api/state")).json()));
+  } catch {
+    build([]);
+  }
+  buildHistory();
+  loadHistory();
+  poll();
+}
+
+init();
+</script>
+</body>
+</html>
