@@ -35,13 +35,48 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 .venv/bin/playwright install chromium   # only needed if you set browser_channel: ""
 
-cp .env.example .env                     # Instahyre / Wellfound email + password
+cp .env.example .env                     # Instahyre / Wellfound / LinkedIn email + password
 for bot in instahyre cutshort hirist wellfound linkedin; do cp $bot/config.example.yaml $bot/config.yaml; done
 ```
 
 Edit each `config.yaml`: what to search for (`search.keywords` and your experience range), title filters and
 your answers (salary, notice period, city). The bots build the search pages themselves.
+[What to change, and where](#what-to-change-and-where) lists every setting.
 Google Chrome must be installed (the bots drive it); macOS is what it's been tested on.
+
+## What to change, and where
+
+Passwords go in `.env` in the repo root. Everything else is in each bot's own `<bot>/config.yaml` (`<bot>` is
+`instahyre`, `cutshort`, `hirist`, `wellfound` or `linkedin`); the `config.example.yaml` next to it explains every
+line. A change applies from the next run.
+
+| To change | File | Setting |
+|---|---|---|
+| Login email and password | `.env` | `INSTAHYRE_…`, `WELLFOUND_…`, `LINKEDIN_…` (Cutshort and Hirist: click **Log in** once instead) |
+| What to search for | `<bot>/config.yaml` | `search.keywords` |
+| Your experience range | `<bot>/config.yaml` | `search.min_experience`, `search.max_experience` (Instahyre, Cutshort, Hirist) |
+| Where | `<bot>/config.yaml` | `search.locations` (Wellfound, LinkedIn) |
+| LinkedIn's own search filters | `linkedin/config.yaml` | `search.experience_levels`, `work_types`, `posted_within`, `easy_apply_only` |
+| Which job titles to apply to | `<bot>/config.yaml` | `filters.include_title` (must have one), `filters.require_role` (must be an engineering role), `filters.exclude_title` |
+| Companies to skip | `<bot>/config.yaml` | `filters.exclude_companies` |
+| Most experience a job may ask for | `<bot>/config.yaml` | `filters.max_experience_required` |
+| How many applications | `<bot>/config.yaml` | `limits.max_per_run`, `limits.max_per_day`, `limits.delay_seconds` |
+| Answers to screening questions (salary, notice period, phone, city, college, yes/no questions) | `<bot>/config.yaml` | `answers`: a pattern of the question → your answer |
+| LinkedIn's "years of experience with *X*?" | `linkedin/config.yaml` | `skill_years`, `other_skill_years` |
+| Text for "message to the recruiter" / cover letter boxes | `<bot>/config.yaml` | `cover_note` |
+| LinkedIn's "Follow *company*" tick | `linkedin/config.yaml` | `follow_companies` |
+| Referral message and invite note | dashboard → LinkedIn card → **Referral message**, or `linkedin/config.yaml` | `referral.message`, `referral.connect_note` |
+| Who gets asked for a referral | `linkedin/config.yaml` | `referral.school`, `referral.people_keywords`, `referral.skip_headline`, `referral.per_company` |
+| How many referral asks | `linkedin/config.yaml` | `referral.max_per_day`, `referral.max_per_run` |
+| Which jobs to ask about | `linkedin/config.yaml` | `referral.for_jobs`, `referral.within_days`, `referral.jobs` (extra LinkedIn job links) |
+
+What the bots keep, in each bot's `data/` folder (never committed):
+
+- `data/jobs.db`: every job it looked at and what happened; for LinkedIn also everyone asked for a referral.
+- `data/screenshots/`: a screenshot of each job that needs you.
+- `data/profile/`: the bot's own Chrome profile, with your login. Delete it to log out or switch accounts.
+
+After changing filters, `run.py reset` makes a bot look again at the jobs it skipped before.
 
 ## Run
 
