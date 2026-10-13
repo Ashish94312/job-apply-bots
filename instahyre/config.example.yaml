@@ -31,6 +31,24 @@ search:
     - software development engineer
     - sde 1
     - sde 2
+    - ml engineer
+    - genai engineer
+    - llm engineer
+    - agentic ai engineer
+    - ai agents
+    - langgraph
+    - nlp engineer
+    - computer vision engineer
+    - data scientist
+    - applied scientist
+    - research engineer
+    - django
+    - fastapi
+    - flask
+    - python backend developer
+    - full stack engineer
+    - founding engineer
+    - product engineer
   min_experience: 1
   max_experience: 2
 
@@ -89,6 +107,25 @@ filters:
     - full-stack
     - sde1
     - sde2
+    - software
+    - back-end
+    - server side
+    - api
+    - flask
+    - swe
+    - gen-ai
+    - llmops
+    - langgraph
+    - agent
+    - agents
+    - chatbot
+    - prompt
+    - reinforcement learning
+    - applied scientist
+    - research scientist
+    - research engineer
+    - product engineer
+    - founding
   # ...and must also be an actual engineering role (skips \"AI Trainer\", \"Data Science SME\", ...).
   require_role:
     - engineer
@@ -99,6 +136,7 @@ filters:
     - sde1
     - sde2
     - programmer
+    - swe
   # Junior profile: skip senior titles, internships, testing/support and non-engineering roles.
   exclude_title:
     - senior
@@ -135,6 +173,8 @@ filters:
     - sde-3
     - engineer 3
     - developer 3
+    - test
+    - testing
   exclude_companies: []
   # Skip if the job description mentions any of these.
   exclude_text: []
