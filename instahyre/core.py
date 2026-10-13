@@ -2,10 +2,14 @@
 
 The site-specific parts live in portal.py.
 """
+import os
 import re
+import signal
 import sqlite3
 import subprocess
 import sys
+import threading
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -45,8 +49,28 @@ class Job:
 
 # ---------------------------------------------------------------- browser
 
+def profile_in_use():
+    """Pid of a running Chrome that has the bot's profile open, else None. Chrome allows one browser per profile:
+    a second one hands its window to the first and quits, which Playwright only sees as the browser closing."""
+    try:
+        pid = int(os.readlink(PROFILE / "SingletonLock").rpartition("-")[2])  # "<host>-<pid>"
+        os.kill(pid, 0)
+    except (OSError, ValueError):
+        return None  # no lock, a stale one, or not a symlink (Windows)
+    try:
+        name = subprocess.run(["ps", "-p", str(pid), "-o", "comm="], capture_output=True, text=True).stdout
+    except OSError:
+        return pid
+    return pid if "chrom" in name.lower() else None  # the pid now belongs to something else
+
+
 def launch(pw, cfg, headless=False):
     """Persistent browser profile, so a login is remembered between runs."""
+    pid = profile_in_use()
+    if pid:
+        sys.exit(f"Another Chrome (process {pid}) has this bot's browser profile open, most likely an earlier run "
+                 f"that is still going.\nStop that run, or quit that Chrome window (Cmd-Q), then try again. "
+                 f"From a terminal: kill {pid}")
     opts = {"user_data_dir": str(PROFILE), "headless": headless}
     if headless:
         opts["viewport"] = {"width": 1366, "height": 900}
@@ -71,13 +95,35 @@ def login_in_plain_chrome(url):
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    input("\nA normal Chrome window opened. Log in there (Google or phone OTP), then press Enter here... ")
-    if proc.poll() is None:
-        proc.terminate()  # Chrome shuts down cleanly on SIGTERM and saves the session
-        try:
-            proc.wait(timeout=20)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+    try:
+        input("\nA normal Chrome window opened. Log in there (Google or phone OTP), then press Enter here... ")
+    finally:  # also on Stop, so the window doesn't stay open holding the profile
+        if proc.poll() is None:
+            proc.terminate()  # Chrome shuts down cleanly on SIGTERM and saves the session
+            try:
+                proc.wait(timeout=20)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+
+
+def stop_with_dashboard():
+    """Started from the dashboard: stop (like Ctrl-C) if the dashboard goes away, rather than carry on unseen
+    with the browser profile locked. The dashboard passes its pid in JOBBOTS_DASHBOARD."""
+    dashboard = os.environ.get("JOBBOTS_DASHBOARD", "")
+    if not dashboard.isdigit():
+        return
+
+    def watch():
+        while os.getppid() == int(dashboard):
+            time.sleep(2)
+        quiet = os.open(os.devnull, os.O_RDWR)  # its terminal is gone: don't block on printing or waiting for Enter
+        for fd in (0, 1, 2):
+            os.dup2(quiet, fd)
+        os.kill(os.getpid(), signal.SIGINT)
+        time.sleep(30)
+        os._exit(1)  # stuck somewhere Ctrl-C doesn't reach; Playwright closes the browser when we exit
+
+    threading.Thread(target=watch, daemon=True).start()
 
 
 def on_challenge(page):

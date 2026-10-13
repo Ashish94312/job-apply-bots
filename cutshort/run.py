@@ -17,7 +17,7 @@ import yaml
 from playwright.sync_api import Error as PWError
 from playwright.sync_api import sync_playwright
 
-from core import Status, Store, launch, login_in_plain_chrome, screenshot, skip_reason
+from core import Status, Store, launch, login_in_plain_chrome, screenshot, skip_reason, stop_with_dashboard
 from portal import PORTAL
 
 ICONS = {
@@ -180,6 +180,7 @@ def cmd_reset(args, cfg):
 
 
 def main():
+    stop_with_dashboard()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--config", default=str(Path(__file__).parent / "config.yaml"))
     sub = parser.add_subparsers(dest="cmd", required=True)

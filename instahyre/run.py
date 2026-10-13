@@ -29,6 +29,7 @@ from core import (
     preview_ok,
     screenshot,
     skip_reason,
+    stop_with_dashboard,
 )
 from portal import PORTAL
 
@@ -194,6 +195,7 @@ def cmd_reset(args, cfg):
 
 
 def main():
+    stop_with_dashboard()
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--config", default=str(Path(__file__).parent / "config.yaml"))
     sub = parser.add_subparsers(dest="cmd", required=True)

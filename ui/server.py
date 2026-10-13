@@ -62,7 +62,8 @@ class Run:
                 stdout=tty,
                 stderr=tty,
                 start_new_session=True,  # its own process group, so Stop can clean up everything it started
-                env={**os.environ, "PYTHONUNBUFFERED": "1"},
+                # JOBBOTS_DASHBOARD: the bot stops itself if this server goes away (see core.stop_with_dashboard).
+                env={**os.environ, "PYTHONUNBUFFERED": "1", "JOBBOTS_DASHBOARD": str(os.getpid())},
             )
         except OSError:
             os.close(self.fd)
