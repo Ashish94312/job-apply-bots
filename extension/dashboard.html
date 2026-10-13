@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job bots</title>
+<link rel="icon" href="icons/32.png">
+<link rel="stylesheet" href="dashboard.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Job bots</h1>
+    <p class="lede">Click Apply and a Chrome window opens on that site. The bot goes through jobs that match your
+      settings and applies; when it needs you for a login, a check or a question, it asks here.</p>
+  </header>
+
+  <p class="banner" id="first-run" hidden>
+    Before the first run, check <a href="#settings" data-tab="settings">Settings</a>: the answers to screening
+    questions (salary, notice period, phone…) are sample values. Coming from the Python bots?
+    <a href="#bring-over" data-tab="settings">Bring your settings and history over</a>.
+  </p>
+
+  <main class="bots" id="bots"></main>
+
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button class="tab" role="tab" id="tab-history" aria-controls="history" data-tab="history">History</button>
+    <button class="tab" role="tab" id="tab-settings" aria-controls="settings" data-tab="settings">Settings</button>
+  </nav>
+
+  <section class="panel" id="history" role="tabpanel" aria-labelledby="tab-history">
+    <div class="panel-head">
+      <div class="chips" id="chips"></div>
+      <button class="btn" id="recheck" title="Forget the jobs the filters skipped, so the next run looks at them again (after you change the filters)">Re-check skipped jobs</button>
+    </div>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>When</th><th>Site</th><th>Job</th><th>Result</th><th>Note</th></tr></thead>
+        <tbody id="history-rows"></tbody>
+      </table>
+    </div>
+    <p class="more" id="history-more" hidden></p>
+  </section>
+
+  <section class="panel" id="settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
+    <form id="settings-form" novalidate>
+      <div class="grid">
+        <fieldset class="card">
+          <legend>Hirist: what to search for</legend>
+          <label class="field">Search keywords <small>One per line. Each becomes a Hirist search.</small>
+            <textarea name="sites.hirist.keywords" rows="8" spellcheck="false"></textarea></label>
+          <label class="field">Extra search pages <small>Optional: whole Hirist search URLs, one per line, gone through after the keywords.</small>
+            <textarea name="sites.hirist.searchUrls" rows="3" spellcheck="false"></textarea></label>
+        </fieldset>
+
+        <fieldset class="card">
+          <legend>Your experience</legend>
+          <div class="pair">
+            <label class="field">From <small>years</small><input type="number" name="profile.minExperience" min="0" step="1"></label>
+            <label class="field">To <small>years</small><input type="number" name="profile.maxExperience" min="0" step="1"></label>
+          </div>
+          <p class="hint">Hirist searches only jobs in this range.</p>
+          <label class="field">Most experience a job may ask for <small>Skips a job asking for more ("3 - 6 years" counts as 3). Empty: no limit.</small>
+            <input type="number" name="profile.filters.maxExperienceRequired" min="0" step="0.5"></label>
+        </fieldset>
+
+        <fieldset class="card wide">
+          <legend>Which jobs to apply to <small>All sites</small></legend>
+          <p class="hint">Whole words, any case, one per line.</p>
+          <div class="cols">
+            <label class="field">Title has one of <small>Empty: any title.</small>
+              <textarea name="profile.filters.includeTitle" rows="10" spellcheck="false"></textarea></label>
+            <label class="field">…and is a role like <small>Skips "AI Trainer", "Data Science SME"…</small>
+              <textarea name="profile.filters.requireRole" rows="10" spellcheck="false"></textarea></label>
+            <label class="field">Skip titles with
+              <textarea name="profile.filters.excludeTitle" rows="10" spellcheck="false"></textarea></label>
+            <label class="field">Skip companies <small>Part of the name is enough.</small>
+              <textarea name="profile.filters.excludeCompanies" rows="4" spellcheck="false"></textarea>
+            </label>
+            <label class="field">Skip if the description mentions
+              <textarea name="profile.filters.excludeText" rows="4" spellcheck="false"></textarea></label>
+          </div>
+        </fieldset>
+
+        <fieldset class="card wide">
+          <legend>Answers to screening questions <small>All sites</small></legend>
+          <p class="hint">Each question is matched against the patterns from the top; the first match gives the answer.
+            A pattern is words or a regular expression (any case). For yes/no questions the answer must be one of the
+            options ("Yes"). An empty answer leaves that question for you: the job is marked <em>Needs you</em>. The bot never guesses.</p>
+          <div class="table-scroll">
+            <table class="answers">
+              <thead><tr><th>Question pattern</th><th>Answer</th><th><span class="sr">Order</span></th></tr></thead>
+              <tbody id="answer-rows"></tbody>
+            </table>
+          </div>
+          <div class="row"><button type="button" class="btn" id="add-answer">Add answer</button></div>
+        </fieldset>
+
+        <fieldset class="card">
+          <legend>Message to the recruiter <small>All sites</small></legend>
+          <label class="field">For "note to recruiter" / "your message" boxes <small>{title} and {company} are filled in. Empty: apply without a message.</small>
+            <textarea name="profile.coverNote" rows="5"></textarea></label>
+        </fieldset>
+
+        <fieldset class="card">
+          <legend>Hirist: how many</legend>
+          <div class="pair">
+            <label class="field">Per run<input type="number" name="sites.hirist.limits.maxPerRun" min="1" step="1"></label>
+            <label class="field">Per day<input type="number" name="sites.hirist.limits.maxPerDay" min="1" step="1"></label>
+          </div>
+          <div class="pair">
+            <label class="field">Pause after each <small>at least, seconds</small><input type="number" name="sites.hirist.limits.delaySeconds.0" min="0" step="1"></label>
+            <label class="field">&nbsp;<small>at most, seconds</small><input type="number" name="sites.hirist.limits.delaySeconds.1" min="0" step="1"></label>
+          </div>
+          <label class="field">Result pages per search <small>20 jobs each</small><input type="number" name="sites.hirist.limits.maxPages" min="1" step="1"></label>
+        </fieldset>
+      </div>
+
+      <div class="savebar" id="savebar">
+        <p class="errors" id="errors" role="alert"></p>
+        <span class="saved" id="saved" aria-live="polite"></span>
+        <button type="button" class="btn" id="discard">Discard changes</button>
+        <button type="submit" class="btn primary" id="save">Save</button>
+      </div>
+    </form>
+
+    <div class="grid">
+      <section class="card" id="bring-over" aria-labelledby="bring-over-title">
+        <h3 id="bring-over-title">Bring over from the Python bots</h3>
+        <p class="hint">In the bots' folder, run <code>.venv/bin/python tools/export_for_extension.py</code>, then pick the
+          <code>extension-import.json</code> it writes. Your settings are replaced by the ones in the file, and the jobs the
+          Python bots already handled are added to the history, so they aren't applied to again.</p>
+        <input type="file" id="import-file" accept=".json,application/json">
+        <p class="saved" id="import-status" aria-live="polite"></p>
+      </section>
+      <section class="card" aria-labelledby="shots-title">
+        <h3 id="shots-title">Screenshots</h3>
+        <p class="hint">Keep a screenshot of each job that needs you, to see what it asked. Chrome lets an extension take
+          screenshots only if it may see every site, so it asks you for that; the bot still only goes to the job sites.</p>
+        <div class="row"><button type="button" class="btn" id="shots">Allow screenshots</button></div>
+        <p class="saved" id="shots-status" aria-live="polite"></p>
+      </section>
+      <section class="card" aria-labelledby="backup-title">
+        <h3 id="backup-title">Back up</h3>
+        <p class="hint">Download your settings and history as a file. Bring it back the same way as above, here or in another Chrome.</p>
+        <div class="row"><button type="button" class="btn" id="export">Download backup</button></div>
+      </section>
+    </div>
+  </section>
+</div>
+
+<template id="bot-tpl">
+  <section class="bot" data-state="idle">
+    <div class="bot-head">
+      <h2></h2>
+      <p class="today"></p>
+    </div>
+    <p class="how"></p>
+    <button class="btn primary big" data-act="apply">Apply</button>
+    <div class="row">
+      <button class="btn" data-act="dry-run" title="List the jobs it would apply to, without applying">Dry run</button>
+      <button class="btn" data-act="login" title="Open the site so you can log in">Log in</button>
+      <button class="btn stop" data-act="stop" hidden>Stop</button>
+    </div>
+    <details class="opts">
+      <summary>Options</summary>
+      <div class="opts-body">
+        <label><input type="checkbox" name="confirm"> Ask me before each application</label>
+        <label><input type="checkbox" name="assist"> Pause on questions it can't answer, so I can fill them in</label>
+        <label>Stop after <input type="number" name="max" min="1" step="1"> applications</label>
+      </div>
+    </details>
+    <div class="prompt" role="alert" hidden>
+      <p class="prompt-q"></p>
+      <div class="row prompt-answers"></div>
+    </div>
+    <pre class="log" tabindex="0" aria-label="Bot output"></pre>
+    <p class="status" aria-live="polite"></p>
+  </section>
+</template>
+
+<dialog id="shot-dialog" aria-label="Screenshot">
+  <form method="dialog">
+    <img alt="The page when the bot stopped">
+    <div class="row"><button class="btn">Close</button></div>
+  </form>
+</dialog>
+
+<script src="lib/defaults.js"></script>
+<script src="lib/filters.js"></script>
+<script src="lib/answers.js"></script>
+<script src="sites/hirist.js"></script>
+<script src="lib/store.js"></script>
+<script src="dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,1302 @@
+{
+ "filters": {
+  "includeTitle": [
+   "machine learning",
+   "ml",
+   "ai",
+   "artificial intelligence",
+   "deep learning",
+   "data scientist",
+   "data science",
+   "nlp",
+   "computer vision",
+   "llm",
+   "genai",
+   "gen ai",
+   "generative ai",
+   "agentic",
+   "mlops",
+   "rag",
+   "langchain",
+   "python",
+   "django",
+   "fastapi",
+   "backend",
+   "back end",
+   "software engineer",
+   "software developer",
+   "software development engineer",
+   "sde",
+   "full stack",
+   "fullstack",
+   "full-stack",
+   "sde1",
+   "sde2",
+   "software",
+   "back-end",
+   "server side",
+   "api",
+   "flask",
+   "swe",
+   "gen-ai",
+   "llmops",
+   "langgraph",
+   "agent",
+   "agents",
+   "chatbot",
+   "prompt",
+   "reinforcement learning",
+   "applied scientist",
+   "research scientist",
+   "research engineer",
+   "product engineer",
+   "founding"
+  ],
+  "requireRole": [
+   "engineer",
+   "developer",
+   "scientist",
+   "researcher",
+   "sde",
+   "sde1",
+   "sde2",
+   "programmer",
+   "swe"
+  ],
+  "excludeTitle": [
+   "senior",
+   "sr",
+   "lead",
+   "staff",
+   "principal",
+   "manager",
+   "director",
+   "head",
+   "architect",
+   "vp",
+   "chief",
+   "intern",
+   "internship",
+   "sales",
+   "marketing",
+   "recruiter",
+   "business development",
+   "trainer",
+   "tutor",
+   "teacher",
+   "faculty",
+   "qa",
+   "sdet",
+   "tester",
+   "support",
+   "hr",
+   "content",
+   "writer",
+   "iii",
+   "sde3",
+   "sde 3",
+   "sde-3",
+   "engineer 3",
+   "developer 3",
+   "test",
+   "testing"
+  ],
+  "excludeCompanies": [
+   "Acme Staffing"
+  ],
+  "excludeText": [
+   "night shift"
+  ],
+  "maxExperienceRequired": 2
+ },
+ "answers": [
+  [
+   "notice period",
+   "30 days"
+  ],
+  [
+   "current.*(ctc|salary|compensation)|(ctc|salary|compensation).*current",
+   "8 LPA"
+  ],
+  [
+   "expect.*(ctc|salary|compensation)|(ctc|salary|compensation).*expect",
+   "12 LPA"
+  ],
+  [
+   "years? of (work )?experi?e?nce|total experi?e?nce|how much experi?e?nce",
+   "2"
+  ],
+  [
+   "current (city|location)",
+   "Bengaluru"
+  ],
+  [
+   "currently (living|located|residing|based) in (bengaluru|bangalore)",
+   "Yes"
+  ],
+  [
+   "currently (living|located|residing|based) in",
+   "No"
+  ],
+  [
+   "relocat",
+   "Yes"
+  ],
+  [
+   "immediate(ly)? join|join immediately",
+   "Yes"
+  ],
+  [
+   "phone|mobile",
+   "+91 98765 43210"
+  ],
+  [
+   "linkedin",
+   ""
+  ],
+  [
+   "undergraduate|college|university|institution",
+   ""
+  ],
+  [
+   "work(ing)? from (the )?office|office \\d+ days|on-?site",
+   ""
+  ],
+  [
+   "high agency|ownership",
+   ""
+  ],
+  [
+   "date of birth",
+   ""
+  ]
+ ],
+ "skipReason": [
+  {
+   "title": "Software Engineer",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "Software Engineer",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "Software Engineer",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "SWE II",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "SWE II",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "SWE II",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Backend Engineer",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "Backend Engineer",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "Backend Engineer",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Back-End Developer",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "Back-End Developer",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "Back-End Developer",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "AI Agent Developer",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "AI Agent Developer",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "AI Agent Developer",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Founding Engineer",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "Founding Engineer",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "Founding Engineer",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Product Engineer - Python",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "Product Engineer - Python",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "Product Engineer - Python",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Applied Scientist",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "Applied Scientist",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "Applied Scientist",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Prompt Engineer",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "Prompt Engineer",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "Prompt Engineer",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "LLMOps Engineer",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "LLMOps Engineer",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "LLMOps Engineer",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Agentic AI Engineer",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "Agentic AI Engineer",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "Agentic AI Engineer",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "API Developer",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "API Developer",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "API Developer",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Software Test Engineer",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": "title has 'test'"
+  },
+  {
+   "title": "Software Test Engineer",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "title has 'test'"
+  },
+  {
+   "title": "Software Test Engineer",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Senior Backend Engineer",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": "title has 'senior'"
+  },
+  {
+   "title": "Senior Backend Engineer",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "title has 'senior'"
+  },
+  {
+   "title": "Senior Backend Engineer",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Software Engineer in Test",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": "title has 'test'"
+  },
+  {
+   "title": "Software Engineer in Test",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "title has 'test'"
+  },
+  {
+   "title": "Software Engineer in Test",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "AI Agent Trainer",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": "not an engineering role"
+  },
+  {
+   "title": "AI Agent Trainer",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "not an engineering role"
+  },
+  {
+   "title": "AI Agent Trainer",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Customer Support Agent",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": "not an engineering role"
+  },
+  {
+   "title": "Customer Support Agent",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "not an engineering role"
+  },
+  {
+   "title": "Customer Support Agent",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Java Developer",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": "title not in include_title"
+  },
+  {
+   "title": "Java Developer",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "title not in include_title"
+  },
+  {
+   "title": "Java Developer",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "DevOps Engineer",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": "title not in include_title"
+  },
+  {
+   "title": "DevOps Engineer",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "title not in include_title"
+  },
+  {
+   "title": "DevOps Engineer",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Sr. ML Engineer",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": "title has 'sr'"
+  },
+  {
+   "title": "Sr. ML Engineer",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "title has 'sr'"
+  },
+  {
+   "title": "Sr. ML Engineer",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "ML Engineer (Gen AI)",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "ML Engineer (Gen AI)",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "ML Engineer (Gen AI)",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "AI/ML Engineer - NLP & Speech Recognition",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "AI/ML Engineer - NLP & Speech Recognition",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "AI/ML Engineer - NLP & Speech Recognition",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "SDE1 - Backend",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "SDE1 - Backend",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "SDE1 - Backend",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "SDE-2 Python",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "SDE-2 Python",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "SDE-2 Python",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "SDE 3",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": "title has 'sde 3'"
+  },
+  {
+   "title": "SDE 3",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "title has 'sde 3'"
+  },
+  {
+   "title": "SDE 3",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Software Development Engineer III",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": "title has 'iii'"
+  },
+  {
+   "title": "Software Development Engineer III",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "title has 'iii'"
+  },
+  {
+   "title": "Software Development Engineer III",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Data Scientist",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "Data Scientist",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "Data Scientist",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Data Science SME",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": "not an engineering role"
+  },
+  {
+   "title": "Data Science SME",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "not an engineering role"
+  },
+  {
+   "title": "Data Science SME",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Machine Learning Intern",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": "not an engineering role"
+  },
+  {
+   "title": "Machine Learning Intern",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "not an engineering role"
+  },
+  {
+   "title": "Machine Learning Intern",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Lead Data Scientist",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": "title has 'lead'"
+  },
+  {
+   "title": "Lead Data Scientist",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "title has 'lead'"
+  },
+  {
+   "title": "Lead Data Scientist",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Full-Stack Developer (Django)",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "Full-Stack Developer (Django)",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "Full-Stack Developer (Django)",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Fullstack Engineer",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "Fullstack Engineer",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "Fullstack Engineer",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Python Developer - Django",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "Python Developer - Django",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "Python Developer - Django",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Computer Vision Engineer",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "Computer Vision Engineer",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "Computer Vision Engineer",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Head of AI",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": "not an engineering role"
+  },
+  {
+   "title": "Head of AI",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "not an engineering role"
+  },
+  {
+   "title": "Head of AI",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "AI Architect",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": "not an engineering role"
+  },
+  {
+   "title": "AI Architect",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "not an engineering role"
+  },
+  {
+   "title": "AI Architect",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "QA Automation Engineer",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": "title not in include_title"
+  },
+  {
+   "title": "QA Automation Engineer",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "title not in include_title"
+  },
+  {
+   "title": "QA Automation Engineer",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Engineer 3 - Platform",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": "title not in include_title"
+  },
+  {
+   "title": "Engineer 3 - Platform",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "title not in include_title"
+  },
+  {
+   "title": "Engineer 3 - Platform",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Développeur Python",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": "not an engineering role"
+  },
+  {
+   "title": "Développeur Python",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "not an engineering role"
+  },
+  {
+   "title": "Développeur Python",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Ingénieur IA",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": "title not in include_title"
+  },
+  {
+   "title": "Ingénieur IA",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "title not in include_title"
+  },
+  {
+   "title": "Ingénieur IA",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "RAG Engineer",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "RAG Engineer",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "RAG Engineer",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "LangChain Developer",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "LangChain Developer",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "LangChain Developer",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Gen AI Engineer",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "Gen AI Engineer",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "Gen AI Engineer",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Generative AI Scientist",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "Generative AI Scientist",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "Generative AI Scientist",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Research Engineer, LLMs",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "Research Engineer, LLMs",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "Research Engineer, LLMs",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "NLP Researcher",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "NLP Researcher",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "NLP Researcher",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "AI Content Writer",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": "not an engineering role"
+  },
+  {
+   "title": "AI Content Writer",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "not an engineering role"
+  },
+  {
+   "title": "AI Content Writer",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Mlops Engineer",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "Mlops Engineer",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "Mlops Engineer",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Platform Engineer - AI Systems",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "Platform Engineer - AI Systems",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "Platform Engineer - AI Systems",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "Forward Deployed Engineer - AI/ML",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": null
+  },
+  {
+   "title": "Forward Deployed Engineer - AI/ML",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "company 'Acme Staffing' excluded"
+  },
+  {
+   "title": "Forward Deployed Engineer - AI/ML",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "needs 4+ yrs"
+  },
+  {
+   "title": "",
+   "company": "Nice Co",
+   "text": "2 - 4 yrs",
+   "expected": "couldn't read job title"
+  },
+  {
+   "title": "",
+   "company": "Acme Staffing Pvt",
+   "text": "",
+   "expected": "couldn't read job title"
+  },
+  {
+   "title": "",
+   "company": "Nice Co",
+   "text": "4 - 8 yrs night shift",
+   "expected": "couldn't read job title"
+  }
+ ],
+ "previewOk": [
+  {
+   "preview": "Focalworks - Python Developer - Django 2 - 6 yrs Mumbai Python Django Posted 3 weeks ago",
+   "expected": true
+  },
+  {
+   "preview": "TELUS Digital - Robotics Applied AI Engineer - Python 2 - 4 yrs Bangalore",
+   "expected": true
+  },
+  {
+   "preview": "Acme Staffing - AI Engineer 1 - 3 yrs Pune",
+   "expected": false
+  },
+  {
+   "preview": "Coverfox - Backend Developer - Python/Django 1 to 2 years Bangalore",
+   "expected": true
+  },
+  {
+   "preview": "Some Co - Sales Executive 0 - 1 yrs Delhi",
+   "expected": false
+  },
+  {
+   "preview": "BigCo - Data Scientist 3.5 - 7 Years Hyderabad",
+   "expected": false
+  },
+  {
+   "preview": "",
+   "expected": true
+  },
+  {
+   "preview": "Startup - Founding Engineer 0-2yrs Remote",
+   "expected": true
+  }
+ ],
+ "minYears": [
+  {
+   "text": "2 - 6 yrs",
+   "expected": 2.0
+  },
+  {
+   "text": "3.5 – 7 years",
+   "expected": 3.5
+  },
+  {
+   "text": "1 to 2 years",
+   "expected": 1.0
+  },
+  {
+   "text": "0-2yrs",
+   "expected": 0.0
+  },
+  {
+   "text": "v2.0 - 5 years",
+   "expected": 2.0
+  },
+  {
+   "text": "12 - 15 Years",
+   "expected": 12.0
+  },
+  {
+   "text": "no range here",
+   "expected": null
+  },
+  {
+   "text": "5 yrs+",
+   "expected": null
+  }
+ ],
+ "answerFor": [
+  {
+   "label": "What is your notice period?",
+   "expected": "30 days"
+  },
+  {
+   "label": "Current CTC (in LPA)",
+   "expected": "8 LPA"
+  },
+  {
+   "label": "What is your expected CTC?",
+   "expected": "12 LPA"
+  },
+  {
+   "label": "How many years of experience do you have?",
+   "expected": "2"
+  },
+  {
+   "label": "Total experience",
+   "expected": "2"
+  },
+  {
+   "label": "Are you currently living in Bengaluru?",
+   "expected": "Yes"
+  },
+  {
+   "label": "Are you currently based in Pune?",
+   "expected": "No"
+  },
+  {
+   "label": "Are you willing to relocate?",
+   "expected": "Yes"
+  },
+  {
+   "label": "Can you join immediately?",
+   "expected": "Yes"
+  },
+  {
+   "label": "Phone number",
+   "expected": "+91 98765 43210"
+  },
+  {
+   "label": "Mobile",
+   "expected": "+91 98765 43210"
+  },
+  {
+   "label": "What's your LinkedIn profile?",
+   "expected": null
+  },
+  {
+   "label": "Date of birth",
+   "expected": null
+  },
+  {
+   "label": "Which college did you attend?",
+   "expected": null
+  },
+  {
+   "label": "Can you work from office 5 days a week?",
+   "expected": null
+  },
+  {
+   "label": "Describe a time you showed high agency",
+   "expected": null
+  },
+  {
+   "label": "Why do you want to join us?",
+   "expected": null
+  },
+  {
+   "label": "Current city",
+   "expected": "Bengaluru"
+  },
+  {
+   "label": "",
+   "expected": null
+  }
+ ],
+ "hasWord": [
+  {
+   "text": "AI/ML Engineer",
+   "word": "ai",
+   "expected": true
+  },
+  {
+   "text": "Email engineer",
+   "word": "ai",
+   "expected": false
+  },
+  {
+   "text": "Sr. ML",
+   "word": "sr",
+   "expected": true
+  },
+  {
+   "text": "SDE1",
+   "word": "sde",
+   "expected": false
+  },
+  {
+   "text": "SDE-1",
+   "word": "sde",
+   "expected": true
+  },
+  {
+   "text": "Full-Stack",
+   "word": "full stack",
+   "expected": false
+  },
+  {
+   "text": "Full-Stack",
+   "word": "full-stack",
+   "expected": true
+  },
+  {
+   "text": "C++ Dev",
+   "word": "c++",
+   "expected": true
+  },
+  {
+   "text": "Ingénieur IA",
+   "word": "ia",
+   "expected": true
+  },
+  {
+   "text": "naïve",
+   "word": "na",
+   "expected": false
+  },
+  {
+   "text": "RAG/LLM",
+   "word": "rag",
+   "expected": true
+  },
+  {
+   "text": "drag",
+   "word": "rag",
+   "expected": false
+  }
+ ]
+}

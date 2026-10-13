@@ -8,3 +8,7 @@ data/
 config.yaml
 # macOS Finder files
 .DS_Store
+# Export for the Chrome extension: has your answers (phone, salary...) in it.
+extension-import.json
+# The extension's end-to-end test downloads React here.
+extension/tests/.cache/
