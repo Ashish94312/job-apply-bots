@@ -1,6 +1,6 @@
-# Job Apply Bots: Chrome extension
+# Sendoff
 
-The bots as a Chrome extension: no Python, no terminal. It runs in your own Chrome, with your own logins, and
+Sends your job applications off for you. It's the bots in this repo as a Chrome extension: no Python, no terminal. It runs in your own Chrome, with your own logins, and
 keeps everything (settings, history) in that Chrome. **Hirist** works so far; the other sites are still the
 Python bots in this repo.
 

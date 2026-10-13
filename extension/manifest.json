@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Job Apply Bots",
+  "name": "Sendoff",
   "version": "0.1.0",
-  "description": "Applies to jobs on Hirist for you, with your filters and answers to screening questions. Runs in your own Chrome.",
+  "description": "Sends your job applications off for you: applies on Hirist with your filters and answers to screening questions. Runs in your own Chrome.",
   "minimum_chrome_version": "120",
   "permissions": [
     "storage",
@@ -18,7 +18,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Job Apply Bots: open the dashboard",
+    "default_title": "Sendoff: open the dashboard",
     "default_icon": {
       "16": "icons/16.png",
       "32": "icons/32.png"

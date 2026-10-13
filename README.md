@@ -115,9 +115,9 @@ cd ../linkedin
 
 Each bot folder is self-contained: its own `config.yaml`, login session, history (`data/jobs.db`) and screenshots.
 
-## Chrome extension (Hirist so far)
+## Sendoff: the Chrome extension (Hirist so far)
 
-The same bot as a Chrome extension, with no Python or terminal: it runs in your own Chrome with your own logins,
+**Sendoff** is the same bot as a Chrome extension, with no Python or terminal: it runs in your own Chrome with your own logins,
 from a dashboard with settings, history and live progress. Load the `extension` folder in `chrome://extensions`
 (Developer mode > Load unpacked); [extension/README.md](extension/README.md) has the details, including how to
 bring your settings and history over from the Python bots (`tools/export_for_extension.py`).

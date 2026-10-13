@@ -348,7 +348,7 @@ function renderSites() {
 
 function renderTitle() {
   const run = state.run;
-  document.title = run?.running && run.prompt ? "Needs you – Job bots" : run?.running ? "Running – Job bots" : "Job bots";
+  document.title = run?.running && run.prompt ? "Needs you – Sendoff" : run?.running ? "Running – Sendoff" : "Sendoff";
 }
 
 // ---------------------------------------------------------------- the rail: today, last 14 days, needs you, totals
@@ -752,7 +752,7 @@ function exportBackup() {
   const history = Object.values(jobs).map(({ shot, ...r }) => r);
   const data = { format: FORMAT, exported: new Date().toISOString(), settings, history };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: "application/json" }));
-  el("a", { href: url, download: `job-bots-backup-${today()}.json` }).click();
+  el("a", { href: url, download: `sendoff-backup-${today()}.json` }).click();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 

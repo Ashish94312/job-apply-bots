@@ -1,4 +1,4 @@
-/* Job bots dashboard. One raised surface (the run), everything else sits on the page and is divided by space and
+/* Sendoff's dashboard. One raised surface (the run), everything else sits on the page and is divided by space and
    hairlines. Archivo carries the voice: condensed for figures and headings, normal width for reading. */
 
 @font-face {
@@ -92,7 +92,7 @@ h1, h2, h3 { margin: 0; }
   padding: 22px 18px 20px; border-right: 1px solid var(--line);
 }
 .brand { display: flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; padding: 2px 8px; }
-.brand img { border-radius: 6px; }
+.brand img { display: block; }
 .brand span { font-size: 19px; font-weight: 700; font-stretch: 82%; letter-spacing: -.01em; }
 .nav { display: grid; gap: 2px; }
 .nav a {
