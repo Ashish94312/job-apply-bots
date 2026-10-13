@@ -8,189 +8,280 @@
 <link rel="stylesheet" href="dashboard.css">
 </head>
 <body>
-<div class="wrap">
-  <header class="top">
-    <h1>Job bots</h1>
-    <p class="lede">Click Apply and a Chrome window opens on that site. The bot goes through jobs that match your
-      settings and applies; when it needs you for a login, a check or a question, it asks here.</p>
-  </header>
+<div class="app">
+  <aside class="side">
+    <a class="brand" href="#overview"><img src="icons/32.png" alt="" width="22" height="22"><span>Job bots</span></a>
+    <nav class="nav" aria-label="Pages">
+      <a href="#overview" id="nav-overview" data-page="overview">Overview</a>
+      <a href="#history" id="nav-history" data-page="history">History <span class="nav-count" id="nav-needs" hidden></span></a>
+      <a href="#settings" id="nav-settings" data-page="settings">Settings</a>
+    </nav>
+    <section class="sites" aria-labelledby="sites-title">
+      <h2 id="sites-title">Sites</h2>
+      <ul id="site-list"></ul>
+      <p class="later">Instahyre, Wellfound, Cutshort and LinkedIn still run as the Python bots for now.</p>
+    </section>
+    <p class="side-foot">Your settings and history stay in this Chrome.</p>
+  </aside>
 
-  <p class="banner" id="first-run" hidden>
-    Before the first run, check <a href="#settings" data-tab="settings">Settings</a>: the answers to screening
-    questions (salary, notice period, phone…) are sample values. Coming from the Python bots?
-    <a href="#bring-over" data-tab="settings">Bring your settings and history over</a>.
-  </p>
+  <main class="main">
+    <p class="banner" id="first-run" hidden>
+      Before the first run, check your <a href="#settings" data-goto="answers">answers to screening questions</a>:
+      salary and notice period are sample values. Coming from the Python bots?
+      <a href="#settings" data-goto="bring-over">Bring your settings and history over</a>.
+    </p>
 
-  <main class="bots" id="bots"></main>
+    <!-- ===================================================== overview -->
+    <section class="page bot" id="page-overview" data-site="hirist" data-state="idle" aria-labelledby="site-name">
+      <header class="site-head">
+        <div>
+          <h1 id="site-name">Hirist</h1>
+          <p class="status" aria-live="polite"></p>
+        </div>
+        <div class="actions">
+          <details class="opts">
+            <summary>Options</summary>
+            <div class="opts-body">
+              <label><input type="checkbox" name="confirm"> Ask me before each application</label>
+              <label><input type="checkbox" name="assist"> Pause on questions it can't answer, so I can fill them in</label>
+              <label>Stop after <input type="number" name="max" min="1" step="1"> applications this run</label>
+            </div>
+          </details>
+          <button class="btn" data-act="login" title="Open Hirist so you can log in">Log in</button>
+          <button class="btn" data-act="dry-run" title="List the jobs it would apply to, without applying">Dry run</button>
+          <button class="btn primary" data-act="apply">Apply</button>
+          <button class="btn stop" data-act="stop" hidden>Stop</button>
+        </div>
+      </header>
 
-  <nav class="tabs" role="tablist" aria-label="Sections">
-    <button class="tab" role="tab" id="tab-history" aria-controls="history" data-tab="history">History</button>
-    <button class="tab" role="tab" id="tab-settings" aria-controls="settings" data-tab="settings">Settings</button>
-  </nav>
+      <div class="prompt" role="alert" hidden>
+        <p class="prompt-q"></p>
+        <div class="prompt-answers"></div>
+      </div>
 
-  <section class="panel" id="history" role="tabpanel" aria-labelledby="tab-history">
-    <div class="panel-head">
-      <div class="chips" id="chips"></div>
-      <button class="btn" id="recheck" title="Forget the jobs the filters skipped, so the next run looks at them again (after you change the filters)">Re-check skipped jobs</button>
-    </div>
-    <div class="table-scroll">
-      <table>
-        <thead><tr><th>When</th><th>Site</th><th>Job</th><th>Result</th><th>Note</th></tr></thead>
-        <tbody id="history-rows"></tbody>
-      </table>
-    </div>
-    <p class="more" id="history-more" hidden></p>
-  </section>
+      <section class="run" aria-labelledby="run-title">
+        <div class="run-head">
+          <h2 id="run-title">Current page of results</h2>
+          <p class="run-where" id="run-where"></p>
+        </div>
+        <ol class="strip" id="strip" aria-label="Jobs on this page of results"></ol>
+        <p class="now" id="now" aria-live="polite"></p>
+        <ul class="key" aria-label="What the squares mean">
+          <li><span class="glyph s-applied" aria-hidden="true"></span>Applied</li>
+          <li><span class="glyph s-needs_manual" aria-hidden="true"></span>Needs you</li>
+          <li><span class="glyph s-external" aria-hidden="true"></span>Other site</li>
+          <li><span class="glyph s-skipped" aria-hidden="true"></span>Skipped</li>
+          <li><span class="glyph s-failed" aria-hidden="true"></span>Failed</li>
+          <li><span class="glyph s-seen" aria-hidden="true"></span>Handled before</li>
+          <li><span class="glyph s-pending" aria-hidden="true"></span>Not reached</li>
+        </ul>
+      </section>
 
-  <section class="panel" id="settings" role="tabpanel" aria-labelledby="tab-settings" hidden>
-    <form id="settings-form" novalidate>
-      <div class="grid">
-        <fieldset class="card">
-          <legend>Hirist: what to search for</legend>
-          <label class="field">Search keywords <small>One per line. Each becomes a Hirist search.</small>
-            <textarea name="sites.hirist.keywords" rows="8" spellcheck="false"></textarea></label>
-          <label class="field">Extra search pages <small>Optional: whole Hirist search URLs, one per line, gone through after the keywords.</small>
-            <textarea name="sites.hirist.searchUrls" rows="3" spellcheck="false"></textarea></label>
-        </fieldset>
+      <div class="cols">
+        <section class="feed" aria-labelledby="feed-title">
+          <h2 id="feed-title">Activity</h2>
+          <ol class="events" id="events"></ol>
+          <details class="raw">
+            <summary>Full log</summary>
+            <pre class="log" tabindex="0" aria-label="Bot output"></pre>
+          </details>
+        </section>
 
-        <fieldset class="card">
-          <legend>Your experience</legend>
-          <div class="pair">
-            <label class="field">From <small>years</small><input type="number" name="profile.minExperience" min="0" step="1"></label>
-            <label class="field">To <small>years</small><input type="number" name="profile.maxExperience" min="0" step="1"></label>
-          </div>
-          <p class="hint">Hirist searches only jobs in this range.</p>
-          <label class="field">Most experience a job may ask for <small>Skips a job asking for more ("3 - 6 years" counts as 3). Empty: no limit.</small>
-            <input type="number" name="profile.filters.maxExperienceRequired" min="0" step="0.5"></label>
-        </fieldset>
+        <aside class="rail">
+          <section class="today" aria-labelledby="today-title">
+            <h2 id="today-title">Today</h2>
+            <p class="today-figure"><b id="today-n">0</b> <span id="today-of"></span></p>
+            <div class="meter" id="meter" role="meter" aria-label="Applications today against your daily limit"><span></span></div>
+            <p class="today-note" id="today-note"></p>
+          </section>
 
-        <fieldset class="card wide">
-          <legend>Which jobs to apply to <small>All sites</small></legend>
-          <p class="hint">Whole words, any case, one per line.</p>
-          <div class="cols">
-            <label class="field">Title has one of <small>Empty: any title.</small>
-              <textarea name="profile.filters.includeTitle" rows="10" spellcheck="false"></textarea></label>
-            <label class="field">…and is a role like <small>Skips "AI Trainer", "Data Science SME"…</small>
-              <textarea name="profile.filters.requireRole" rows="10" spellcheck="false"></textarea></label>
-            <label class="field">Skip titles with
-              <textarea name="profile.filters.excludeTitle" rows="10" spellcheck="false"></textarea></label>
-            <label class="field">Skip companies <small>Part of the name is enough.</small>
-              <textarea name="profile.filters.excludeCompanies" rows="4" spellcheck="false"></textarea>
-            </label>
-            <label class="field">Skip if the description mentions
-              <textarea name="profile.filters.excludeText" rows="4" spellcheck="false"></textarea></label>
-          </div>
-        </fieldset>
-
-        <fieldset class="card wide">
-          <legend>Answers to screening questions <small>All sites</small></legend>
-          <p class="hint">Each question is matched against the patterns from the top; the first match gives the answer.
-            A pattern is words or a regular expression (any case). For yes/no questions the answer must be one of the
-            options ("Yes"). An empty answer leaves that question for you: the job is marked <em>Needs you</em>. The bot never guesses.</p>
-          <div class="table-scroll">
-            <table class="answers">
-              <thead><tr><th>Question pattern</th><th>Answer</th><th><span class="sr">Order</span></th></tr></thead>
-              <tbody id="answer-rows"></tbody>
+          <section class="trend" aria-labelledby="trend-title">
+            <div class="rail-head">
+              <h2 id="trend-title">Applications, last 14 days</h2>
+              <button class="link" id="trend-table-toggle" aria-pressed="false">Table</button>
+            </div>
+            <div class="chart" id="trend-chart"></div>
+            <table class="trend-table" id="trend-table" hidden>
+              <thead><tr><th>Day</th><th>Applied</th></tr></thead>
+              <tbody></tbody>
             </table>
-          </div>
-          <div class="row"><button type="button" class="btn" id="add-answer">Add answer</button></div>
-        </fieldset>
+          </section>
 
-        <fieldset class="card">
-          <legend>Message to the recruiter <small>All sites</small></legend>
-          <label class="field">For "note to recruiter" / "your message" boxes <small>{title} and {company} are filled in. Empty: apply without a message.</small>
-            <textarea name="profile.coverNote" rows="5"></textarea></label>
-        </fieldset>
+          <section class="needs" aria-labelledby="needs-title">
+            <h2 id="needs-title">Needs you</h2>
+            <ul id="needs-list"></ul>
+          </section>
 
-        <fieldset class="card">
-          <legend>Hirist: how many</legend>
-          <div class="pair">
-            <label class="field">Per run<input type="number" name="sites.hirist.limits.maxPerRun" min="1" step="1"></label>
-            <label class="field">Per day<input type="number" name="sites.hirist.limits.maxPerDay" min="1" step="1"></label>
-          </div>
-          <div class="pair">
-            <label class="field">Pause after each <small>at least, seconds</small><input type="number" name="sites.hirist.limits.delaySeconds.0" min="0" step="1"></label>
-            <label class="field">&nbsp;<small>at most, seconds</small><input type="number" name="sites.hirist.limits.delaySeconds.1" min="0" step="1"></label>
-          </div>
-          <label class="field">Result pages per search <small>20 jobs each</small><input type="number" name="sites.hirist.limits.maxPages" min="1" step="1"></label>
-        </fieldset>
+          <section class="totals" aria-labelledby="totals-title">
+            <h2 id="totals-title">All time</h2>
+            <dl id="totals"></dl>
+          </section>
+        </aside>
       </div>
+    </section>
 
-      <div class="savebar" id="savebar">
-        <p class="errors" id="errors" role="alert"></p>
-        <span class="saved" id="saved" aria-live="polite"></span>
-        <button type="button" class="btn" id="discard">Discard changes</button>
-        <button type="submit" class="btn primary" id="save">Save</button>
+    <!-- ===================================================== history -->
+    <section class="page" id="page-history" aria-labelledby="history-title" hidden>
+      <header class="page-head">
+        <h1 id="history-title">History</h1>
+        <p class="page-lede">Every job the bot looked at, newest first.</p>
+      </header>
+      <div class="filters">
+        <div class="chips" id="chips"></div>
+        <input type="search" id="history-search" placeholder="Find a title or company" aria-label="Find a title or company">
+        <button class="btn" id="recheck" title="Forget the jobs the filters skipped, so the next run looks at them again">Re-check skipped jobs</button>
       </div>
-    </form>
+      <div class="table-wrap">
+        <table class="history">
+          <thead><tr><th>When</th><th>Job</th><th>Result</th><th>Note</th></tr></thead>
+          <tbody id="history-rows"></tbody>
+        </table>
+      </div>
+      <p class="more" id="history-more" hidden></p>
+    </section>
 
-    <div class="grid">
-      <section class="card" id="bring-over" aria-labelledby="bring-over-title">
-        <h3 id="bring-over-title">Bring over from the Python bots</h3>
-        <p class="hint">In the bots' folder, run <code>.venv/bin/python tools/export_for_extension.py</code>, then pick the
-          <code>extension-import.json</code> it writes. Your settings are replaced by the ones in the file, and the jobs the
-          Python bots already handled are added to the history, so they aren't applied to again.</p>
-        <input type="file" id="import-file" accept=".json,application/json">
-        <p class="saved" id="import-status" aria-live="polite"></p>
-      </section>
-      <section class="card" aria-labelledby="shots-title">
-        <h3 id="shots-title">Screenshots</h3>
-        <p class="hint">Keep a screenshot of each job that needs you, to see what it asked. Chrome lets an extension take
-          screenshots only if it may see every site, so it asks you for that; the bot still only goes to the job sites.</p>
-        <div class="row"><button type="button" class="btn" id="shots">Allow screenshots</button></div>
-        <p class="saved" id="shots-status" aria-live="polite"></p>
-      </section>
-      <section class="card" aria-labelledby="backup-title">
-        <h3 id="backup-title">Back up</h3>
-        <p class="hint">Download your settings and history as a file. Bring it back the same way as above, here or in another Chrome.</p>
-        <div class="row"><button type="button" class="btn" id="export">Download backup</button></div>
-      </section>
-    </div>
-  </section>
+    <!-- ===================================================== settings -->
+    <section class="page" id="page-settings" aria-labelledby="settings-title" hidden>
+      <header class="page-head">
+        <h1 id="settings-title">Settings</h1>
+        <p class="page-lede">What to search for, which jobs to take, and how to answer their questions. The next run uses what you save here.</p>
+      </header>
+      <div class="settings">
+        <nav class="toc" aria-label="Settings sections">
+          <a href="#settings" data-goto="search">What to search for</a>
+          <a href="#settings" data-goto="experience">Your experience</a>
+          <a href="#settings" data-goto="jobs">Which jobs</a>
+          <a href="#settings" data-goto="answers">Answers</a>
+          <a href="#settings" data-goto="message">Message to recruiters</a>
+          <a href="#settings" data-goto="limits">How many</a>
+          <a href="#settings" data-goto="screenshots">Screenshots</a>
+          <a href="#settings" data-goto="bring-over">Bring over, back up</a>
+        </nav>
+
+        <div class="settings-body">
+          <form id="settings-form" novalidate>
+            <section class="set" id="set-search" aria-labelledby="search-title">
+              <h2 id="search-title">What to search for <small>Hirist</small></h2>
+              <div class="two">
+                <label class="field">Search keywords <small>One per line. Each one is its own Hirist search.</small>
+                  <textarea name="sites.hirist.keywords" rows="12" spellcheck="false"></textarea></label>
+                <label class="field">Extra search pages <small>Optional. Whole Hirist search addresses, one per line.</small>
+                  <textarea name="sites.hirist.searchUrls" rows="12" spellcheck="false"></textarea></label>
+              </div>
+            </section>
+
+            <section class="set" id="set-experience" aria-labelledby="experience-title">
+              <h2 id="experience-title">Your experience</h2>
+              <div class="row-fields">
+                <label class="field narrow">From <small>years</small><input type="number" name="profile.minExperience" min="0" step="1"></label>
+                <label class="field narrow">To <small>years</small><input type="number" name="profile.maxExperience" min="0" step="1"></label>
+                <label class="field">Most a job may ask for <small>Skips a job asking for more ("3 - 6 years" counts as 3). Empty: no limit.</small>
+                  <input type="number" name="profile.filters.maxExperienceRequired" min="0" step="0.5"></label>
+              </div>
+              <p class="hint">Hirist only searches jobs in your range.</p>
+            </section>
+
+            <section class="set" id="set-jobs" aria-labelledby="jobs-title">
+              <h2 id="jobs-title">Which jobs to apply to <small>All sites</small></h2>
+              <p class="hint">Whole words, any case, one per line. A title must have one word from the first list and one from the second, and none from the third.</p>
+              <div class="three">
+                <label class="field">Title has one of <small>Empty: any title.</small>
+                  <textarea name="profile.filters.includeTitle" rows="11" spellcheck="false"></textarea></label>
+                <label class="field">…and is a role like <small>Skips "AI Trainer", "Data Science SME".</small>
+                  <textarea name="profile.filters.requireRole" rows="11" spellcheck="false"></textarea></label>
+                <label class="field">Skip titles with <small>Seniority, internships, non-engineering roles.</small>
+                  <textarea name="profile.filters.excludeTitle" rows="11" spellcheck="false"></textarea></label>
+              </div>
+              <div class="two">
+                <label class="field">Skip companies <small>Part of the name is enough.</small>
+                  <textarea name="profile.filters.excludeCompanies" rows="3" spellcheck="false"></textarea></label>
+                <label class="field">Skip if the description mentions
+                  <textarea name="profile.filters.excludeText" rows="3" spellcheck="false"></textarea></label>
+              </div>
+            </section>
+
+            <section class="set" id="set-answers" aria-labelledby="answers-title">
+              <h2 id="answers-title">Answers to screening questions <small>All sites</small></h2>
+              <p class="hint">Each question is matched against these patterns from the top, and the first match answers it.
+                A pattern is a few words or a regular expression, any case. For yes/no questions the answer has to be one of
+                the options, like "Yes". Leave an answer empty to keep that question for yourself: the job is then marked
+                <b>Needs you</b>. The bot never guesses.</p>
+              <div class="table-wrap">
+                <table class="answers">
+                  <thead><tr><th>When the question matches</th><th>Answer</th><th><span class="sr">Order</span></th></tr></thead>
+                  <tbody id="answer-rows"></tbody>
+                </table>
+              </div>
+              <div><button type="button" class="btn" id="add-answer">Add an answer</button></div>
+            </section>
+
+            <section class="set" id="set-message" aria-labelledby="message-title">
+              <h2 id="message-title">Message to recruiters <small>All sites</small></h2>
+              <label class="field">For "note to the recruiter" and "your message" boxes <small>{title} and {company} are filled in. Empty: apply without a message.</small>
+                <textarea name="profile.coverNote" rows="5"></textarea></label>
+            </section>
+
+            <section class="set" id="set-limits" aria-labelledby="limits-title">
+              <h2 id="limits-title">How many <small>Hirist</small></h2>
+              <div class="row-fields">
+                <label class="field narrow">Per run<input type="number" name="sites.hirist.limits.maxPerRun" min="1" step="1"></label>
+                <label class="field narrow">Per day<input type="number" name="sites.hirist.limits.maxPerDay" min="1" step="1"></label>
+                <label class="field narrow">Pages per search <small>20 jobs each</small><input type="number" name="sites.hirist.limits.maxPages" min="1" step="1"></label>
+              </div>
+              <div class="row-fields">
+                <label class="field narrow">Pause, at least <small>seconds</small><input type="number" name="sites.hirist.limits.delaySeconds.0" min="0" step="1"></label>
+                <label class="field narrow">Pause, at most <small>seconds</small><input type="number" name="sites.hirist.limits.delaySeconds.1" min="0" step="1"></label>
+              </div>
+              <p class="hint">After each application the bot waits a random time in this range, like a person would.</p>
+            </section>
+
+            <div class="savebar" id="savebar">
+              <p class="errors" id="errors" role="alert"></p>
+              <span class="saved" id="saved" aria-live="polite"></span>
+              <button type="button" class="btn" id="discard">Discard changes</button>
+              <button type="submit" class="btn primary" id="save">Save</button>
+            </div>
+          </form>
+
+          <section class="set" id="set-screenshots" aria-labelledby="shots-title">
+            <h2 id="shots-title">Screenshots</h2>
+            <p class="hint">Keep a screenshot of each job that needs you, to see what it asked. Chrome lets an extension take
+              screenshots only if it may see every site, so turning this on asks you for that. The bot still only goes to the job sites.</p>
+            <div class="inline"><button type="button" class="btn" id="shots">Allow screenshots</button>
+              <span class="saved" id="shots-status" aria-live="polite"></span></div>
+          </section>
+
+          <section class="set" id="set-bring-over" aria-labelledby="bring-over-title">
+            <h2 id="bring-over-title">Bring over from the Python bots</h2>
+            <p class="hint">In the bots' folder, run <code>.venv/bin/python tools/export_for_extension.py</code> and pick the
+              <code>extension-import.json</code> it writes. It replaces your settings here and adds the jobs the Python bots
+              already handled to the history, so they aren't applied to again.</p>
+            <div class="inline"><input type="file" id="import-file" accept=".json,application/json">
+              <span class="saved" id="import-status" aria-live="polite"></span></div>
+            <h2 class="sub">Back up</h2>
+            <p class="hint">Download your settings and history as a file. Bring it back the same way, here or in another Chrome.</p>
+            <div><button type="button" class="btn" id="export">Download backup</button></div>
+          </section>
+        </div>
+      </div>
+    </section>
+  </main>
 </div>
 
-<template id="bot-tpl">
-  <section class="bot" data-state="idle">
-    <div class="bot-head">
-      <h2></h2>
-      <p class="today"></p>
-    </div>
-    <p class="how"></p>
-    <button class="btn primary big" data-act="apply">Apply</button>
-    <div class="row">
-      <button class="btn" data-act="dry-run" title="List the jobs it would apply to, without applying">Dry run</button>
-      <button class="btn" data-act="login" title="Open the site so you can log in">Log in</button>
-      <button class="btn stop" data-act="stop" hidden>Stop</button>
-    </div>
-    <details class="opts">
-      <summary>Options</summary>
-      <div class="opts-body">
-        <label><input type="checkbox" name="confirm"> Ask me before each application</label>
-        <label><input type="checkbox" name="assist"> Pause on questions it can't answer, so I can fill them in</label>
-        <label>Stop after <input type="number" name="max" min="1" step="1"> applications</label>
-      </div>
-    </details>
-    <div class="prompt" role="alert" hidden>
-      <p class="prompt-q"></p>
-      <div class="row prompt-answers"></div>
-    </div>
-    <pre class="log" tabindex="0" aria-label="Bot output"></pre>
-    <p class="status" aria-live="polite"></p>
-  </section>
-</template>
+<div class="tip" id="tip" role="tooltip" hidden></div>
 
 <dialog id="shot-dialog" aria-label="Screenshot">
   <form method="dialog">
     <img alt="The page when the bot stopped">
-    <div class="row"><button class="btn">Close</button></div>
+    <div class="dialog-foot"><button class="btn">Close</button></div>
   </form>
 </dialog>
 
 <script src="lib/defaults.js"></script>
 <script src="lib/filters.js"></script>
 <script src="lib/answers.js"></script>
-<script src="sites/hirist.js"></script>
 <script src="lib/store.js"></script>
+<script src="sites/hirist.js"></script>
 <script src="dashboard.js"></script>
 </body>
 </html>

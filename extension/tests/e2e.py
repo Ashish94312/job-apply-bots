@@ -192,8 +192,16 @@ class Test:
             await JB.store.saveSettings(s);
         }""", changes)
 
+    def page(self, name):
+        if not self.dash.locator(f"#page-{name}").is_visible():
+            self.dash.click(f"#nav-{name}")
+
     def click(self, act):
+        self.page("overview")
         self.dash.click(f'.bot [data-act="{act}"]')
+
+    def cells(self):
+        return self.dash.eval_on_selector_all("#strip .cell", "els => els.map(e => e.className.replace('cell s-', ''))")
 
     def wait_running(self, timeout=20):
         end = time.time() + timeout
@@ -300,6 +308,10 @@ def main():
         t.check(t.status("2006") == "skipped" and "title has 'senior'" in t.jobs()["hirist:2006"]["note"], "Senior title skipped after opening")
         t.check("Done: would apply to 6." in log, "dry run summary")
         t.check(not site.posted, "dry run applied to nothing")
+        t.check(t.cells() == ["would_apply", "would_apply", "would_apply", "would_apply", "filtered", "skipped", "would_apply", "would_apply"],
+                f"run strip shows each job on the page ({t.cells()})")
+        t.check(dash.locator("#events li").count() == 8 and "Searched “python”" in dash.locator("#events").inner_text(),
+                "activity lists the search and each job")
         t.check(not bot_tabs(dash), "the bot's window closes after the run")
 
         print("\nApply, logging in when asked")
@@ -322,13 +334,23 @@ def main():
         t.check(t.status("2007") == "already_applied", "already applied")
         t.check(t.status("2008") == "applied" and site.posted.get("2008") == {"notice": "30 days"}, "apply dialog filled and submitted")
         t.check("Done: applied to 3." in log, "run summary")
+        t.check(t.cells() == ["applied", "applied", "needs_manual", "external", "filtered", "seen", "already_applied", "applied"],
+                f"run strip shows how each job went ({t.cells()})")
+        t.check("Couldn't answer: Describe your favourite colour" in dash.locator("#events").inner_text(), "activity says what it couldn't answer")
+        t.check("Applies on the company's site: careers.example.com/jobs/2004" in dash.locator("#events").inner_text(), "activity names the other site")
+        t.check("Last run finished" in dash.locator(".bot .status").inner_text(), "header says the run finished")
         t.check(not bot_tabs(dash), "the bot's window closes after the run")
 
         print("\nHistory on the dashboard")
+        t.check("AI Engineer" in dash.locator("#needs-list").inner_text(), "overview lists the job that needs you")
+        t.check(dash.locator("#nav-needs").inner_text() == "1", "History shows 1 needs you")
+        t.page("history")
         dash.click('.chip[data-status="needs_manual"]')
         t.check("AI Engineer" in dash.locator("#history-rows").inner_text(), "Needs you filter lists the job")
         t.check(dash.locator("#history-rows button:has-text('Screenshot')").count() == 0, "no Screenshot link without one")
-        t.check(dash.locator(".bot .today").inner_text().startswith("3 of 30"), "applied today: 3 of 30")
+        t.page("overview")
+        t.check(dash.locator(".today-figure").inner_text().startswith("3 of 30"), "applied today: 3 of 30")
+        t.check(dash.locator("#trend-chart .col.today").count() == 1, "today's column on the 14-day chart")
 
         print("\nAsk before each, then stop")
         site.listed = ["2009", "2010"]
@@ -337,13 +359,15 @@ def main():
         t.click("apply")
         t.wait_prompt("Apply to this one?")
         t.answer("Skip")
-        dash.wait_for_function("() => !document.querySelector('.bot .prompt').hidden && document.querySelector('.bot .prompt').innerText.includes('Python Developer @ Ten Co')", timeout=60000)
+        dash.wait_for_function("() => !document.querySelector('.bot .prompt').hidden && document.querySelector('.bot .prompt').innerText.includes('Python Developer at Ten Co')", timeout=60000)
         t.answer("Stop run")
         s = t.wait_done()
         t.check(t.status("2009") == "skipped" and t.jobs()["hirist:2009"]["note"] == "declined", "Skip records it as declined")
         t.check(s["stopped"] and "Stopped." in t.log(s) and t.status("2010") is None, "Stop run stops before applying")
         t.check("Stopped at" in dash.locator(".bot .status").inner_text(), "card says it stopped")
+        dash.click(".bot details.opts summary")
         dash.uncheck('.bot .opts [name="confirm"]')
+        dash.click(".bot details.opts summary")
 
         print("\nDaily limit")
         t.set_settings(limits={"maxPerDay": 3})
@@ -364,7 +388,7 @@ def main():
         t.check("Browser window was closed, stopping." in t.log(s), "notices the window was closed")
 
         print("\nSettings")
-        dash.click("#tab-settings")
+        t.page("settings")
         t.check(dash.locator("#shots").inner_text() == "Allow screenshots", "screenshots are off until you allow them")
         dash.fill('[name="sites.hirist.keywords"]', "python\nbackend engineer")
         dash.click("#add-answer")
@@ -407,7 +431,7 @@ def main():
         t.check("1 jobs listed, 0 new and matching" in t.log(s) and "2012" not in site.posted, "imported jobs aren't applied to again")
 
         print("\nRe-check skipped jobs")
-        dash.click("#tab-history")
+        t.page("history")
         dash.click("#recheck")
         dash.wait_for_function("() => document.querySelector('.chip[data-status=skipped] .n').innerText === '0'", timeout=10000)
         t.check(t.status("2006") is None and t.status("2009") is None, "skipped jobs forgotten")
@@ -435,11 +459,12 @@ def main():
         t.check(t.jobs().get("hirist:2003", {}).get("shot") is True, "screenshot kept for the job that needs you")
         shot = dash.evaluate("() => JB.store.shot('hirist', '2003')") or ""
         t.check(shot.startswith("data:image/jpeg"), "screenshot is an image")
+        t.page("history")
         dash.click(".chip[data-status=needs_manual]")
         dash.click("#history-rows button:has-text('Screenshot')")
         t.check(dash.locator("#shot-dialog img").get_attribute("src").startswith("data:image"), "screenshot opens on the dashboard")
         dash.click("#shot-dialog button")
-        dash.click("#tab-settings")
+        t.page("settings")
         t.check(dash.locator("#shots").inner_text() == "Turn screenshots off", "dashboard shows screenshots are on")
         ctx.close()
 

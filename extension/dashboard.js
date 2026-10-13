@@ -1,23 +1,23 @@
 // The dashboard: start and watch runs, answer the bot's questions, see the history, edit the settings.
-// Runs happen in the background worker; this page only shows their state (chrome.storage.session "run:<site>").
-const SITES = {
-  hirist: { name: "Hirist", how: "Uses your Hirist login in this Chrome. First time: click Log in and sign in (OTP, password or Google)." },
-};
+// Runs happen in the background worker; this page shows their state (chrome.storage.session "run:<site>").
+const SITES = { hirist: { name: "Hirist" } };
+const SITE = "hirist"; // the site the overview shows; the only one so far
 const STATUS = {
   applied: "Applied",
   needs_manual: "Needs you",
-  failed: "Failed",
+  external: "Other site",
   skipped: "Skipped",
-  already_applied: "Already applied",
-  external: "External site",
+  failed: "Failed",
+  already_applied: "Applied before",
+  would_apply: "Would apply",
 };
-const CHIPS = [["applied", "Applied"], ["needs_manual", "Needs you"], ["failed", "Failed"], ["skipped", "Skipped"], ["external", "External"], ["", "All"]];
-const BUSY = { apply: "Applying…", "dry-run": "Checking jobs…", login: "Logging in…" };
+const CELL = { seen: "Handled before", filtered: "Skipped by your filters", pending: "Not reached", working: "Working on it now" };
+const CHIPS = [["applied", "Applied"], ["needs_manual", "Needs you"], ["external", "Other site"], ["skipped", "Skipped"], ["failed", "Failed"], ["", "All"]];
 const FORMAT = "job-apply-bots/1";
 const HISTORY_LIMIT = 300;
 
-const view = {}; // site -> { el, run, logKey, promptKey, stopping, error }
-const filter = { status: "applied" };
+const state = { run: null, stopping: false, error: "", logKey: "", stripKey: "", eventsKey: "" };
+const filter = { status: "applied", text: "" };
 let settings = null; // as last saved
 let jobs = {};
 
@@ -38,84 +38,272 @@ function el(tag, props = {}, ...kids) {
   return e;
 }
 
+function svg(tag, attrs = {}) {
+  const e = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  return e;
+}
+
 async function send(message) {
   const reply = await chrome.runtime.sendMessage(message);
   if (!reply || reply.error) throw new Error(reply ? reply.error : "The extension didn't answer. Reload this page.");
   return reply;
 }
 
+const $ = id => document.getElementById(id);
+const panel = () => $("page-overview");
+const today = () => JB.store.now().slice(0, 10);
+const clock = d => d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
 function when(ts) {
   const d = new Date(String(ts).replace(" ", "T"));
   if (isNaN(d)) return ts || "";
-  const time = d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  if (d.toDateString() === new Date().toDateString()) return `Today ${time}`;
-  return `${d.toLocaleDateString([], { day: "numeric", month: "short" })} ${time}`;
+  if (d.toDateString() === new Date().toDateString()) return `Today ${clock(d)}`;
+  return `${d.toLocaleDateString([], { day: "numeric", month: "short" })} ${clock(d)}`;
 }
 
-const today = () => JB.store.now().slice(0, 10);
+function glyph(status) {
+  return el("span", { className: `glyph s-${status}`, ariaHidden: "true" });
+}
 
-// ---------------------------------------------------------------- site cards
-
-function buildCards() {
-  const grid = document.getElementById("bots");
-  const tpl = document.getElementById("bot-tpl");
-  for (const [site, info] of Object.entries(SITES)) {
-    const card = tpl.content.firstElementChild.cloneNode(true);
-    card.querySelector("h2").textContent = info.name;
-    card.querySelector(".how").textContent = info.how;
-    const opts = remember(`opts.${site}`) || {};
-    for (const input of card.querySelectorAll(".opts input")) {
-      if (input.type === "checkbox") input.checked = !!opts[input.name];
-      else input.value = opts[input.name] || "";
-      input.addEventListener("change", () => remember(`opts.${site}`, options(site)));
-    }
-    card.addEventListener("click", e => {
-      const act = e.target.closest("[data-act]")?.dataset.act;
-      if (act === "stop") stop(site);
-      else if (act) start(site, act);
-    });
-    grid.append(card);
-    view[site] = { el: card, run: null, logKey: "", promptKey: "", stopping: false, error: "" };
-    renderRun(site);
+/** The bot's note on a job, said the way a person would. */
+function describe(status, note) {
+  note = (note || "").trim();
+  const unanswered = /^unanswered: (.*)$/.exec(note);
+  if (unanswered) {
+    const questions = unanswered[1].split("; ")
+      .map(q => q.replace(/^\d+\.\s*/, "").replace(/\s+(Yes No|No Yes)$/, "").replace(/\s*\d+ characters? l(e(ft?)?)?$/, "").trim())
+      .filter(Boolean);
+    return `Couldn't answer: ${questions.join("; ")}`;
   }
-  grid.style.setProperty("--cols", Math.min(Object.keys(SITES).length, 3));
+  const external = /^apply opens an external site(?:: (\S+))?$/.exec(note) || /^redirected to (\S+)$/.exec(note);
+  if (external) return external[1] ? `Applies on the company's site: ${external[1].replace(/^https?:\/\//, "")}` : "Applies on the company's site";
+  const senior = /^needs (\S+)\+ yrs$/.exec(note);
+  if (senior) return `Asks for ${senior[1]}+ years`;
+  const word = /^title has '(.+)'$/.exec(note);
+  if (word) return `Title has "${word[1]}"`;
+  const reasons = {
+    "title not in include_title": "Title isn't one you look for",
+    "not an engineering role": "Not an engineering role",
+    "couldn't read job title": "Couldn't read the job title",
+    declined: "You chose to skip it",
+    "no apply button found": "No apply button on the page",
+    "couldn't confirm the application went through": "Couldn't confirm the application went through",
+    "finished by hand": "You finished it",
+  };
+  if (reasons[note]) return reasons[note];
+  if (/^company '/.test(note)) return note.replace(/^company '(.+)' excluded$/, "Company \"$1\" is on your skip list");
+  if (/^description mentions '/.test(note)) return note.replace(/^description mentions '(.+)'$/, "Description mentions \"$1\"");
+  if (!note) return status === "would_apply" ? "Would apply (dry run)" : STATUS[status] || "";
+  return note.charAt(0).toUpperCase() + note.slice(1);
 }
 
-function options(site) {
-  const q = name => view[site].el.querySelector(`.opts [name="${name}"]`);
+// ---------------------------------------------------------------- one tooltip for the strip and the chart
+
+const tip = $("tip");
+function showTip(target, title, text) {
+  tip.replaceChildren(el("b", { textContent: title }), text || "");
+  tip.hidden = false;
+  const r = target.getBoundingClientRect();
+  const w = tip.offsetWidth;
+  const h = tip.offsetHeight;
+  const left = Math.min(Math.max(8, r.left + r.width / 2 - w / 2), innerWidth - w - 8);
+  const top = r.top - h - 8 > 8 ? r.top - h - 8 : r.bottom + 8;
+  tip.style.left = `${left}px`;
+  tip.style.top = `${top}px`;
+}
+const hideTip = () => { tip.hidden = true; };
+function tipOn(target, title, text) {
+  target.addEventListener("pointerenter", () => showTip(target, title, text));
+  target.addEventListener("focus", () => showTip(target, title, text));
+  target.addEventListener("pointerleave", hideTip);
+  target.addEventListener("blur", hideTip);
+}
+
+// ---------------------------------------------------------------- pages
+
+function showPage(name) {
+  if (!["overview", "history", "settings"].includes(name)) name = "overview";
+  for (const page of document.querySelectorAll(".page")) page.hidden = page.id !== `page-${name}`;
+  for (const link of document.querySelectorAll(".nav a")) {
+    if (link.dataset.page === name) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  }
+  hideTip();
+}
+
+function goto(section) {
+  location.hash = "#settings";
+  showPage("settings");
+  requestAnimationFrame(() => $(`set-${section}`)?.scrollIntoView({ behavior: "smooth", block: "start" }));
+}
+
+// ---------------------------------------------------------------- running
+
+function options() {
+  const q = name => panel().querySelector(`.opts [name="${name}"]`);
   return { confirm: q("confirm").checked, assist: q("assist").checked, max: parseInt(q("max").value, 10) || null };
 }
 
-async function start(site, action) {
-  const v = view[site];
-  v.error = "";
-  v.stopping = false;
+async function start(action) {
+  state.error = "";
+  state.stopping = false;
+  panel().querySelector("details.opts").open = false;
   try {
-    await send({ type: "start", site, action, opts: options(site) });
+    await send({ type: "start", site: SITE, action, opts: options() });
   } catch (e) {
-    v.error = e.message;
+    state.error = e.message;
   }
-  renderRun(site);
+  renderRun();
 }
 
-async function stop(site) {
-  view[site].stopping = true;
-  renderRun(site);
+async function stop() {
+  state.stopping = true;
+  renderRun();
   try {
-    await send({ type: "stop", site });
+    await send({ type: "stop", site: SITE });
   } catch (e) {
-    view[site].error = e.message;
-    renderRun(site);
+    state.error = e.message;
+    renderRun();
   }
 }
 
-async function answer(site, id, value) {
-  view[site].el.querySelector(".prompt").hidden = true;
+async function answer(id, value) {
+  panel().querySelector(".prompt").hidden = true;
   try {
-    await send({ type: "answer", site, id, value });
+    await send({ type: "answer", site: SITE, id, value });
   } catch (e) {
-    view[site].error = e.message;
-    renderRun(site);
+    state.error = e.message;
+    renderRun();
+  }
+}
+
+function buildRunPanel() {
+  const opts = remember(`opts.${SITE}`) || {};
+  for (const input of panel().querySelectorAll(".opts input")) {
+    if (input.type === "checkbox") input.checked = !!opts[input.name];
+    else input.value = opts[input.name] || "";
+    input.addEventListener("change", () => remember(`opts.${SITE}`, options()));
+  }
+  panel().addEventListener("click", e => {
+    const act = e.target.closest("[data-act]")?.dataset.act;
+    if (act === "stop") stop();
+    else if (act) start(act);
+  });
+  document.addEventListener("click", e => { // close the options menu when clicking elsewhere
+    const opts = panel().querySelector("details.opts");
+    if (opts.open && !opts.contains(e.target)) opts.open = false;
+  });
+}
+
+function finished(run) {
+  const at = clock(new Date(run.ended));
+  if (run.stopped) return [`Stopped at ${at}.`, false];
+  if (run.error === "interrupted") return [`Interrupted at ${at}: Chrome restarted the extension. Click Apply to carry on.`, true];
+  if (run.error) return [`Ended with an error at ${at}: ${run.error}`, true];
+  const done = [...run.log].reverse().find(l => /^(Done:|Daily limit|Logged in|Still not logged in|Not logged in .*stopping|Nothing to search|Browser window)/.test(l));
+  const what = done ? ` ${done.replace(/^Done: /, "").replace(/^\w/, c => c.toUpperCase())}` : "";
+  return [`Last run finished at ${at}.${what}`, false];
+}
+
+function renderRun() {
+  const run = state.run;
+  const running = !!run?.running;
+  if (!running) state.stopping = false;
+  const p = panel();
+  p.dataset.state = !running ? "idle" : run.prompt ? "waiting" : "running";
+
+  const apply = p.querySelector('[data-act="apply"]');
+  apply.textContent = !running ? "Apply" : run.action === "apply" ? "Applying…" : run.action === "dry-run" ? "Checking…" : "Logging in…";
+  apply.classList.toggle("busy", running);
+  for (const b of p.querySelectorAll('[data-act="apply"], [data-act="dry-run"], [data-act="login"]')) b.disabled = running;
+  p.querySelector('[data-act="stop"]').hidden = !running;
+
+  let [text, isError] = ["", false];
+  if (state.error) [text, isError] = [state.error, true];
+  else if (state.stopping && running) text = "Stopping after this step, then closing its window…";
+  else if (running && run.prompt) text = "Waiting for you.";
+  else if (running && run.action === "dry-run") text = "Going through jobs without applying, in its own window.";
+  else if (running && run.action === "login") text = "Waiting for you to log in, in its own window.";
+  else if (running) text = "Applying in its own Chrome window. Leave that window open.";
+  else if (run) [text, isError] = finished(run);
+  else text = "Ready. A dry run first shows what it would apply to.";
+  const status = p.querySelector(".status");
+  status.textContent = text;
+  status.classList.toggle("err", isError);
+
+  renderPrompt();
+  renderStrip();
+  renderEvents();
+  renderLog();
+  renderSites();
+  renderTitle();
+}
+
+function renderPrompt() {
+  const run = state.run;
+  const box = panel().querySelector(".prompt");
+  const p = run?.running ? run.prompt : null;
+  const key = p ? String(p.id) : "";
+  if (box.dataset.key === key && box.hidden === !p) return; // unchanged: don't rebuild under the cursor
+  box.dataset.key = key;
+  box.hidden = !p;
+  if (!p) return;
+  box.querySelector(".prompt-q").replaceChildren(el("small", { textContent: p.title }), p.text);
+  box.querySelector(".prompt-answers").replaceChildren(
+    ...p.choices.map(([label, value, kind]) => el("button", { className: `btn ${kind || ""}`, textContent: label, onclick: () => answer(p.id, value) })),
+  );
+}
+
+function renderStrip() {
+  const run = state.run;
+  const page = run?.page;
+  const key = JSON.stringify([run?.id, run?.running, page?.cells?.map(c => c.state)]);
+  $("now").textContent = run?.running ? run.now || "" : "";
+  if (key === state.stripKey) return;
+  state.stripKey = key;
+  $("run-title").textContent = page && !run.running ? "Last page of results" : "Current page of results";
+  const strip = $("strip");
+  strip.replaceChildren();
+  if (!page) {
+    $("run-where").textContent = "";
+    strip.append(el("li", { className: "empty", textContent: "When it runs, each job on the page it's working through shows up here as a square." }));
+    return;
+  }
+  $("run-where").textContent = `“${page.label}”${page.n > 1 ? `, page ${page.n}` : ""}: ${page.listed} jobs, ${page.fresh} new and matching`;
+  for (const cell of page.cells) {
+    const s = cell.state === "working" && !run.running ? "pending" : cell.state;
+    const name = STATUS[s] || CELL[s] || s;
+    const a = el("a", { className: `cell s-${s}`, href: cell.url, target: "_blank", rel: "noopener" });
+    a.setAttribute("aria-label", `${cell.label}: ${name}`);
+    tipOn(a, name, cell.label);
+    strip.append(el("li", {}, a));
+  }
+}
+
+function renderEvents() {
+  const events = state.run?.events || [];
+  const key = `${state.run?.id}:${events.length}`;
+  if (key === state.eventsKey) return;
+  state.eventsKey = key;
+  const list = $("events");
+  list.replaceChildren();
+  if (!events.length) {
+    list.append(el("li", { className: "empty", textContent: "Nothing yet. What the bot does shows up here as it goes." }));
+    return;
+  }
+  for (const e of events.slice(-60).reverse()) {
+    const t = el("span", { className: "t", textContent: clock(new Date(e.ts)) });
+    if (e.kind === "search") {
+      const where = `Searched “${e.label}”${e.n > 1 ? `, page ${e.n}` : ""}: ${e.listed} jobs, ${e.fresh} new and matching.`;
+      list.append(el("li", { className: "search" }, t, el("span", { className: "what", textContent: where })));
+      continue;
+    }
+    const what = el("span", { className: "what" },
+      el("b", { textContent: e.title || "Untitled job" }), e.company ? el("span", { textContent: ` at ${e.company}` }) : null,
+      el("small", { textContent: describe(e.status, e.note) }));
+    const open = /^https?:\/\//.test(e.url || "") ? el("a", { className: "open", href: e.url, target: "_blank", rel: "noopener", textContent: "Open" }) : el("span");
+    list.append(el("li", {}, t, glyph(e.status), what, open));
   }
 }
 
@@ -131,97 +319,157 @@ function lineClass(line) {
   return "";
 }
 
-function renderLog(site) {
-  const v = view[site];
-  const pre = v.el.querySelector(".log");
-  const log = v.run?.log || [];
-  const key = `${v.run?.id}:${log.length}:${log[log.length - 1] || ""}`;
-  if (key === v.logKey) return;
-  v.logKey = key;
+function renderLog() {
+  const log = state.run?.log || [];
+  const key = `${state.run?.id}:${log.length}:${log[log.length - 1] || ""}`;
+  if (key === state.logKey) return;
+  state.logKey = key;
+  const pre = panel().querySelector(".log");
   const atBottom = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40;
   pre.replaceChildren();
   if (!log.length) {
-    pre.append(el("p", { className: "empty", textContent: "Nothing run yet. What the bot does will show up here as it goes." }));
+    pre.append(el("span", { className: "empty", textContent: "No run yet." }));
     return;
   }
-  for (const line of log.slice(-2000)) {
-    pre.append(el("span", { className: lineClass(line), textContent: line.replace(/(\S) {3,}/g, "$1  ") }));
-  }
+  for (const line of log.slice(-2000)) pre.append(el("span", { className: lineClass(line), textContent: line.replace(/(\S) {3,}/g, "$1  ") }));
   if (atBottom) pre.scrollTop = pre.scrollHeight;
 }
 
-function renderPrompt(site) {
-  const v = view[site];
-  const box = v.el.querySelector(".prompt");
-  const p = v.run?.running ? v.run.prompt : null;
-  const key = p ? String(p.id) : "";
-  if (box.dataset.key === key && box.hidden === !p) return; // unchanged; don't rebuild under the cursor
-  box.dataset.key = key;
-  box.hidden = !p;
-  if (!p) return;
-  box.querySelector(".prompt-q").replaceChildren(el("small", { textContent: p.title }), p.text);
-  box.querySelector(".prompt-answers").replaceChildren(
-    ...p.choices.map(([text, value, kind]) => el("button", { className: `btn ${kind || ""}`, textContent: text, onclick: () => answer(site, p.id, value) })),
-  );
-}
-
-function finished(run) {
-  const at = new Date(run.ended).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  if (run.stopped) return [`Stopped at ${at}.`, false];
-  if (run.error === "interrupted") return [`Interrupted at ${at}. Click Apply to carry on.`, true];
-  if (run.error) return [`Ended with an error at ${at}: ${run.error}`, true];
-  const done = [...run.log].reverse().find(l => /^(Done:|Daily limit|Logged in|Still not logged in|Not logged in .*stopping|Nothing to search|Browser window)/.test(l));
-  return [`Finished at ${at}.${done ? ` ${done}` : ""}`, false];
-}
-
-function renderRun(site) {
-  const v = view[site];
-  const run = v.run;
+function renderSites() {
+  const run = state.run;
   const running = !!run?.running;
-  if (!running) v.stopping = false;
-  renderLog(site);
-  renderPrompt(site);
-  v.el.dataset.state = !running ? "idle" : run.prompt ? "waiting" : "running";
-
-  const apply = v.el.querySelector('[data-act="apply"]');
-  apply.textContent = running ? BUSY[run.action] : "Apply";
-  apply.classList.toggle("busy", running);
-  for (const b of v.el.querySelectorAll('[data-act="apply"], [data-act="dry-run"], [data-act="login"]')) b.disabled = running;
-  v.el.querySelector('[data-act="stop"]').hidden = !running;
-
-  let [text, isError] = ["", false];
-  if (v.error) [text, isError] = [v.error, true];
-  else if (v.stopping && running) text = "Stopping: the bot finishes the current step and closes its window…";
-  else if (running) text = run.prompt ? "Waiting for you." : "Running. The bot works in its own Chrome window; leave it open.";
-  else if (run) [text, isError] = finished(run);
-  const status = v.el.querySelector(".status");
-  status.textContent = text;
-  status.classList.toggle("err", isError);
-  renderTitle();
-}
-
-function renderToday(site) {
-  const v = view[site];
-  const rows = Object.values(jobs).filter(r => r.site === site);
-  const applied = rows.filter(r => r.status === "applied" && String(r.ts).startsWith(today())).length;
-  const needYou = rows.filter(r => r.status === "needs_manual").length;
-  const max = settings?.sites[site]?.limits.maxPerDay;
-  const box = v.el.querySelector(".today");
-  box.replaceChildren(el("b", { textContent: applied }), max ? ` of ${max} today` : " applied today");
-  if (needYou) {
-    box.append(el("br"), el("button", {
-      className: "need-you", textContent: `${needYou} need you`, title: "Jobs it couldn't finish; see them in History",
-      onclick: () => { setFilter("needs_manual"); showTab("history", true); },
-    }));
-  }
-  const maxInput = v.el.querySelector('.opts [name="max"]');
-  maxInput.placeholder = settings?.sites[site]?.limits.maxPerRun ?? "";
+  const list = $("site-list");
+  const s = !running ? "idle" : run.prompt ? "waiting" : "running";
+  const label = { idle: "Idle", running: "Running", waiting: "Needs you" }[s];
+  list.replaceChildren(...Object.entries(SITES).map(([, info]) => el("li", {},
+    el("a", { href: "#overview" }, el("span", { className: "dot" }), info.name, el("span", { className: "site-state", textContent: label })))));
+  list.querySelector(".dot").dataset.state = s;
 }
 
 function renderTitle() {
-  const waiting = Object.keys(view).filter(s => view[s].run?.running && view[s].run.prompt);
-  const running = Object.values(view).some(v => v.run?.running);
-  document.title = waiting.length ? `Needs you: ${waiting.map(s => SITES[s].name).join(", ")}` : running ? "Running – Job bots" : "Job bots";
+  const run = state.run;
+  document.title = run?.running && run.prompt ? "Needs you – Job bots" : run?.running ? "Running – Job bots" : "Job bots";
+}
+
+// ---------------------------------------------------------------- the rail: today, last 14 days, needs you, totals
+
+function counts() {
+  const rows = Object.values(jobs).filter(r => r.site === SITE);
+  const by = {};
+  for (const r of rows) by[r.status] = (by[r.status] || 0) + 1;
+  return { rows, by };
+}
+
+function renderRail() {
+  const { rows, by } = counts();
+  const limits = settings?.sites[SITE]?.limits;
+  const n = rows.filter(r => r.status === "applied" && String(r.ts).startsWith(today())).length;
+  const max = limits?.maxPerDay || 0;
+  $("today-n").textContent = n;
+  $("today-of").textContent = max ? `of ${max} today` : "applied today";
+  const meter = $("meter");
+  meter.firstElementChild.style.width = `${max ? Math.min(100, (n / max) * 100) : 0}%`;
+  meter.setAttribute("aria-valuenow", n);
+  meter.setAttribute("aria-valuemax", max);
+  $("today-note").textContent = !max ? "" : n >= max ? "Daily limit reached. It starts again tomorrow."
+    : `${max - n} more allowed today; each run stops after ${limits.maxPerRun}.`;
+  panel().querySelector('.opts [name="max"]').placeholder = limits?.maxPerRun ?? "";
+
+  renderTrend(rows);
+
+  const needs = rows.filter(r => r.status === "needs_manual").sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
+  const list = $("needs-list");
+  list.replaceChildren();
+  if (!needs.length) list.append(el("li", { className: "none", textContent: "Nothing. Jobs it couldn't finish show up here." }));
+  for (const r of needs.slice(0, 5)) {
+    const link = el("a", { href: r.url, target: "_blank", rel: "noopener", textContent: r.title || "Untitled job" });
+    list.append(el("li", {}, link, el("small", { textContent: [r.company, describe(r.status, r.note)].filter(Boolean).join(". ") })));
+  }
+  if (needs.length > 5) {
+    list.append(el("li", {}, el("a", { className: "all", href: "#history", textContent: `All ${needs.length} in History`, onclick: () => setFilter("needs_manual") })));
+  }
+  const badge = $("nav-needs");
+  badge.hidden = !needs.length;
+  badge.textContent = needs.length;
+  badge.title = `${needs.length} need you`;
+
+  $("totals").replaceChildren(...["applied", "needs_manual", "external", "skipped", "failed"].flatMap(s => [
+    el("dt", {}, glyph(s), STATUS[s]), el("dd", { textContent: (by[s] || 0).toLocaleString() }),
+  ]));
+}
+
+/** Applications per day for the last 14 days: thin columns, today in the accent, the rest a lighter step. */
+function renderTrend(rows) {
+  const days = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const p = x => String(x).padStart(2, "0");
+    days.push({ date: d, key: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`, n: 0 });
+  }
+  const index = Object.fromEntries(days.map((d, i) => [d.key, i]));
+  for (const r of rows) {
+    const i = index[String(r.ts).slice(0, 10)];
+    if (r.status === "applied" && i != null) days[i].n++;
+  }
+  const most = Math.max(...days.map(d => d.n));
+  const top = most <= 4 ? 4 : most <= 10 ? 10 : Math.ceil(most / 10) * 10; // even, so the middle tick is whole
+  const W = 300;
+  const L = 24;
+  const T = 14;
+  const B = 104;
+  const band = (W - L) / days.length;
+  const colW = Math.min(14, band * 0.62);
+  const y = v => B - (v / top) * (B - T);
+  const label = d => d.date.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+
+  const chart = svg("svg", { viewBox: `0 0 ${W} 124`, role: "img", "aria-label": `Applications per day: ${days.map(d => `${label(d)} ${d.n}`).join(", ")}` });
+  const grid = svg("g", { class: "grid" });
+  for (const v of [0, top / 2, top]) {
+    grid.append(svg("line", { x1: L, x2: W, y1: y(v), y2: y(v) }));
+    const t = svg("text", { x: 0, y: y(v) + 4, class: "axis" });
+    t.textContent = v;
+    grid.append(t);
+  }
+  chart.append(grid);
+  days.forEach((d, i) => {
+    const x = L + i * band + (band - colW) / 2;
+    const h = B - y(d.n);
+    const isToday = i === days.length - 1;
+    const hit = svg("rect", { x: L + i * band, y: T - 10, width: band, height: B - T + 10, class: "hit", tabindex: 0 });
+    hit.setAttribute("aria-label", `${label(d)}: ${d.n} applied`);
+    tipOn(hit, `${d.n} applied`, label(d));
+    chart.append(hit);
+    if (d.n > 0) {
+      const r = Math.min(4, h, colW / 2); // rounded data end, square at the baseline
+      const path = `M${x},${B} V${B - h + r} Q${x},${B - h} ${x + r},${B - h} H${x + colW - r} Q${x + colW},${B - h} ${x + colW},${B - h + r} V${B} Z`;
+      chart.append(svg("path", { d: path, class: `col${isToday ? " today" : ""}` }));
+    }
+    if ((isToday || (d.n === most && most > 0)) && d.n > 0) {
+      const v = svg("text", { x: x + colW / 2, y: B - h - 4, "text-anchor": "middle", class: "value" });
+      v.textContent = d.n;
+      chart.append(v);
+    }
+  });
+  const first = svg("text", { x: L, y: 120, class: "axis" });
+  first.textContent = days[0].date.toLocaleDateString([], { day: "numeric", month: "short" });
+  const last = svg("text", { x: W, y: 120, "text-anchor": "end", class: "axis" });
+  last.textContent = "Today";
+  chart.append(first, last);
+  $("trend-chart").replaceChildren(chart);
+
+  $("trend-table").querySelector("tbody").replaceChildren(...days.slice().reverse().map(d => el("tr", {}, el("td", { textContent: label(d) }), el("td", { textContent: d.n }))));
+}
+
+function buildRail() {
+  const toggle = $("trend-table-toggle");
+  toggle.onclick = () => {
+    const on = toggle.getAttribute("aria-pressed") !== "true";
+    toggle.setAttribute("aria-pressed", on);
+    toggle.textContent = on ? "Chart" : "Table";
+    $("trend-table").hidden = !on;
+    $("trend-chart").hidden = on;
+  };
 }
 
 // ---------------------------------------------------------------- history
@@ -233,20 +481,20 @@ function setFilter(status) {
 }
 
 function buildHistory() {
-  const chips = document.getElementById("chips");
   for (const [status, text] of CHIPS) {
     const chip = el("button", { className: "chip", onclick: () => setFilter(status) }, text, el("span", { className: "n" }));
     chip.dataset.status = status;
     chip.setAttribute("aria-pressed", status === filter.status);
-    chips.append(chip);
+    $("chips").append(chip);
   }
-  document.getElementById("recheck").onclick = recheckSkipped;
+  $("history-search").addEventListener("input", e => { filter.text = e.target.value.trim().toLowerCase(); renderHistory(); });
+  $("recheck").onclick = recheckSkipped;
 }
 
 async function showShot(r) {
   const image = await JB.store.shot(r.site, r.jobId);
   if (!image) return;
-  const dialog = document.getElementById("shot-dialog");
+  const dialog = $("shot-dialog");
   dialog.querySelector("img").src = image;
   dialog.showModal();
 }
@@ -254,30 +502,29 @@ async function showShot(r) {
 function renderHistory() {
   const all = Object.values(jobs).sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
   for (const chip of document.querySelectorAll(".chip")) {
-    const n = chip.dataset.status ? all.filter(r => r.status === chip.dataset.status).length : all.length;
-    chip.querySelector(".n").textContent = n;
+    chip.querySelector(".n").textContent = chip.dataset.status ? all.filter(r => r.status === chip.dataset.status).length : all.length;
   }
-  const rows = filter.status ? all.filter(r => r.status === filter.status) : all;
-  const body = document.getElementById("history-rows");
+  let rows = filter.status ? all.filter(r => r.status === filter.status) : all;
+  if (filter.text) rows = rows.filter(r => `${r.title} ${r.company}`.toLowerCase().includes(filter.text));
+  const body = $("history-rows");
   body.replaceChildren();
   if (!rows.length) {
-    const text = filter.status === "applied" ? "No applications yet. Click Apply above to start." : "Nothing here.";
-    body.append(el("tr", { className: "empty-row" }, el("td", { colSpan: 5, textContent: text })));
+    const text = filter.text ? "No jobs match that." : filter.status === "applied" ? "No applications yet. Click Apply on the overview to start." : "Nothing here.";
+    body.append(el("tr", { className: "empty-row" }, el("td", { colSpan: 4, textContent: text })));
   }
   for (const r of rows.slice(0, HISTORY_LIMIT)) {
     const link = el("a", { target: "_blank", rel: "noopener", textContent: r.title || "Untitled job" });
     if (/^https?:\/\//.test(r.url || "")) link.href = r.url;
-    const note = el("td", { className: "note" }, r.note || "");
+    const note = el("td", { className: "note" }, r.note ? describe(r.status, r.note) : "");
     if (r.shot) note.append(r.note ? " " : "", el("button", { textContent: "Screenshot", onclick: () => showShot(r) }));
     body.append(el("tr", {},
       el("td", { className: "when", textContent: when(r.ts) }),
-      el("td", { className: "site", textContent: SITES[r.site]?.name || r.site }),
-      el("td", { className: "job" }, link, el("span", { textContent: r.company || "" })),
-      el("td", {}, el("span", { className: `badge s-${r.status}`, textContent: STATUS[r.status] || r.status })),
+      el("td", { className: "job" }, link, el("span", { textContent: Object.keys(SITES).length > 1 ? [r.company, SITES[r.site]?.name || r.site].filter(Boolean).join(", ") : r.company || "" })),
+      el("td", { className: "result" }, el("span", { className: "result-tag" }, glyph(r.status), STATUS[r.status] || r.status)),
       note,
     ));
   }
-  const more = document.getElementById("history-more");
+  const more = $("history-more");
   more.hidden = rows.length <= HISTORY_LIMIT;
   more.textContent = `Showing the latest ${HISTORY_LIMIT} of ${rows.length}.`;
 }
@@ -291,7 +538,7 @@ async function recheckSkipped() {
 
 // ---------------------------------------------------------------- settings
 
-const form = document.getElementById("settings-form");
+const form = $("settings-form");
 const LIST_FIELDS = new Set([
   "sites.hirist.keywords", "sites.hirist.searchUrls", "profile.filters.includeTitle", "profile.filters.requireRole",
   "profile.filters.excludeTitle", "profile.filters.excludeCompanies", "profile.filters.excludeText",
@@ -313,8 +560,6 @@ function answerRow(pattern = "", answerText = "") {
     box.setAttribute("aria-label", label);
     return box;
   };
-  const p = input("pattern", pattern, "Question pattern");
-  const a = input("answer", answerText, "Answer");
   const tr = el("tr");
   const move = dir => () => {
     const to = dir < 0 ? tr.previousElementSibling : tr.nextElementSibling?.nextElementSibling;
@@ -323,13 +568,11 @@ function answerRow(pattern = "", answerText = "") {
     dirty();
   };
   tr.append(
-    el("td", {}, p),
-    el("td", {}, a),
+    el("td", {}, input("pattern", pattern, "When the question matches")),
+    el("td", {}, input("answer", answerText, "Answer")),
     el("td", {},
-      el("button", { type: "button", className: "btn icon", textContent: "↑", title: "Move up (checked earlier)", onclick: move(-1) }),
-      " ",
-      el("button", { type: "button", className: "btn icon", textContent: "↓", title: "Move down", onclick: move(1) }),
-      " ",
+      el("button", { type: "button", className: "btn icon", textContent: "↑", title: "Move up: checked earlier", onclick: move(-1) }), " ",
+      el("button", { type: "button", className: "btn icon", textContent: "↓", title: "Move down", onclick: move(1) }), " ",
       el("button", { type: "button", className: "btn icon", textContent: "✕", title: "Remove", onclick: () => { tr.remove(); dirty(); } }),
     ),
   );
@@ -342,9 +585,9 @@ function fillForm(s) {
     input.value = LIST_FIELDS.has(input.name) ? (value || []).join("\n") : value ?? "";
     input.removeAttribute("aria-invalid");
   }
-  document.getElementById("answer-rows").replaceChildren(...s.profile.answers.map(([p, a]) => answerRow(p, a)));
+  $("answer-rows").replaceChildren(...s.profile.answers.map(([p, a]) => answerRow(p, a)));
   setDirty(false);
-  document.getElementById("errors").textContent = "";
+  $("errors").textContent = "";
 }
 
 function readForm() {
@@ -373,8 +616,7 @@ function check(s) {
     }
     return true;
   };
-  for (const input of form.querySelectorAll("[aria-invalid]")) input.removeAttribute("aria-invalid");
-  for (const input of document.querySelectorAll("#answer-rows [aria-invalid]")) input.removeAttribute("aria-invalid");
+  for (const input of document.querySelectorAll("#settings-form [aria-invalid]")) input.removeAttribute("aria-invalid");
 
   const exp = ["profile.minExperience", "profile.maxExperience"];
   for (const name of exp) {
@@ -391,69 +633,66 @@ function check(s) {
   for (const [site, info] of Object.entries(SITES)) {
     const base = `sites.${site}.limits`;
     const ok = [whole(`${base}.maxPerRun`, 1), whole(`${base}.maxPerDay`, 1), whole(`${base}.maxPages`, 1)];
-    if (ok.includes(false)) errors.push(`${info.name}: how many per run, per day and pages are whole numbers, at least 1.`);
+    if (ok.includes(false)) errors.push(`${info.name}: per run, per day and pages per search are whole numbers, at least 1.`);
     const [lo, hi] = s.sites[site].limits.delaySeconds;
     if (![lo, hi].every(v => v != null && v >= 0) || lo > hi) {
       bad(`${base}.delaySeconds.0`);
       bad(`${base}.delaySeconds.1`);
       errors.push(`${info.name}: the pause is two numbers of seconds, the first not more than the second.`);
     }
-    const offSite = s.sites[site].searchUrls.filter(u => !JB.sites[site].searchHost.test(u));
-    if (offSite.length) {
+    if (s.sites[site].searchUrls.some(u => !JB.sites[site].searchHost.test(u))) {
       bad(`sites.${site}.searchUrls`);
-      errors.push(`${info.name}: extra search pages must be ${info.name} pages, e.g. ${JB.sites[site].loginUrl}…`);
+      errors.push(`${info.name}: extra search pages must be ${info.name} pages, starting ${JB.sites[site].loginUrl}`);
     }
   }
 
-  const rows = [...document.querySelectorAll("#answer-rows tr")];
-  for (const tr of rows) {
+  let broken = 0;
+  for (const tr of document.querySelectorAll("#answer-rows tr")) {
     const input = tr.querySelector('[data-key="pattern"]');
-    if (JB.answers.badPatterns([[input.value.trim(), ""]]).length && (input.value.trim() || tr.querySelector('[data-key="answer"]').value.trim())) {
+    const used = input.value.trim() || tr.querySelector('[data-key="answer"]').value.trim();
+    if (used && JB.answers.badPatterns([[input.value.trim(), ""]]).length) {
       input.setAttribute("aria-invalid", "true");
+      broken++;
     }
   }
-  const broken = rows.filter(tr => tr.querySelector('[aria-invalid="true"]')).length;
   if (broken) errors.push(`${broken} answer pattern${broken > 1 ? "s aren't" : " isn't"} a valid regular expression (marked in red).`);
   return errors;
 }
 
 function setDirty(on) {
-  document.getElementById("savebar").classList.toggle("dirty", on);
-  if (on) document.getElementById("saved").textContent = "Unsaved changes.";
+  $("savebar").classList.toggle("dirty", on);
+  if (on) $("saved").textContent = "Unsaved changes.";
 }
-
-function dirty() {
-  setDirty(true);
-}
+const dirty = () => setDirty(true);
 
 async function save(e) {
   e.preventDefault();
   const s = readForm();
   const errors = check(s);
-  document.getElementById("errors").textContent = errors.join("\n");
+  $("errors").textContent = errors.join("\n");
   if (errors.length) {
-    document.getElementById("saved").textContent = "";
+    $("saved").textContent = "";
     return;
   }
   await JB.store.saveSettings(s);
   setDirty(false);
-  document.getElementById("saved").textContent = `Saved. The next run uses these.`;
+  $("saved").textContent = "Saved. The next run uses these.";
 }
 
 function buildSettings() {
   form.addEventListener("input", dirty);
   form.addEventListener("submit", save);
-  document.getElementById("discard").onclick = () => fillForm(settings);
-  document.getElementById("add-answer").onclick = () => {
+  $("discard").onclick = () => fillForm(settings);
+  $("add-answer").onclick = () => {
     const row = answerRow();
-    document.getElementById("answer-rows").append(row);
+    $("answer-rows").append(row);
     row.querySelector("input").focus();
     dirty();
   };
-  document.getElementById("import-file").onchange = importFile;
-  document.getElementById("export").onclick = exportBackup;
+  $("import-file").onchange = importFile;
+  $("export").onclick = exportBackup;
   window.addEventListener("beforeunload", e => {
-    if (document.getElementById("savebar").classList.contains("dirty")) e.preventDefault();
+    if ($("savebar").classList.contains("dirty")) e.preventDefault();
   });
 }
 
@@ -463,16 +702,14 @@ const ALL_SITES = { origins: ["<all_urls>"] };
 
 async function renderShots() {
   const on = await chrome.permissions.contains(ALL_SITES);
-  const button = document.getElementById("shots");
+  const button = $("shots");
   button.dataset.on = on ? "1" : "";
   button.textContent = on ? "Turn screenshots off" : "Allow screenshots";
-  document.getElementById("shots-status").textContent = on
-    ? "On: each job that needs you gets a screenshot."
-    : "Off: the history still lists the questions it couldn't answer.";
+  $("shots-status").textContent = on ? "On: each job that needs you gets a screenshot." : "Off: the history still lists the questions it couldn't answer.";
 }
 
 function buildShots() {
-  const button = document.getElementById("shots");
+  const button = $("shots");
   button.onclick = async () => {
     // request() has to come straight from the click, before anything else is awaited
     if (button.dataset.on) await chrome.permissions.remove(ALL_SITES);
@@ -487,7 +724,7 @@ function buildShots() {
 // ---------------------------------------------------------------- bring over, back up
 
 async function importFile(e) {
-  const status = document.getElementById("import-status");
+  const status = $("import-status");
   const file = e.target.files[0];
   e.target.value = "";
   if (!file) return;
@@ -501,8 +738,7 @@ async function importFile(e) {
     status.textContent = "That isn't a file from export_for_extension.py or a backup from here.";
     return;
   }
-  const question = `Replace your settings with the ones in ${file.name}, and add its ${data.history.length} past jobs to the history?`;
-  if (!confirm(question)) return;
+  if (!confirm(`Replace your settings with the ones in ${file.name}, and add its ${data.history.length} past jobs to the history?`)) return;
   try {
     const { added } = await send({ type: "import", settings: data.settings, history: data.history });
     status.textContent = `Done: settings replaced, ${added} past jobs added${added < data.history.length ? ` (${data.history.length - added} were already here)` : ""}.`;
@@ -520,70 +756,49 @@ function exportBackup() {
   setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
-// ---------------------------------------------------------------- tabs, first run, live updates
-
-function showTab(name, scroll = false) {
-  for (const tab of document.querySelectorAll(".tab")) tab.setAttribute("aria-selected", tab.dataset.tab === name);
-  for (const panel of document.querySelectorAll(".panel")) panel.hidden = panel.id !== name;
-  remember("tab", name);
-  if (scroll) document.querySelector(".tabs").scrollIntoView({ behavior: "smooth", block: "start" });
-}
-
-function renderSettingsState() {
-  document.getElementById("first-run").hidden = !!settings.savedAt;
-  for (const site of Object.keys(SITES)) renderToday(site);
-}
+// ---------------------------------------------------------------- start
 
 async function init() {
-  buildCards();
+  buildRunPanel();
+  buildRail();
   buildHistory();
   buildSettings();
   buildShots();
-  for (const link of document.querySelectorAll("[data-tab]")) {
-    link.addEventListener("click", e => {
-      showTab(link.dataset.tab, link.classList.contains("tab") ? false : true);
-      if (link.hash) {
-        e.preventDefault();
-        document.querySelector(link.hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
-    });
+  for (const link of document.querySelectorAll("[data-goto]")) {
+    link.addEventListener("click", e => { e.preventDefault(); goto(link.dataset.goto); });
   }
-  showTab(remember("tab") === "settings" ? "settings" : "history");
+  window.addEventListener("hashchange", () => showPage(location.hash.slice(1)));
+  showPage(location.hash.slice(1));
 
   settings = await JB.store.getSettings();
   jobs = await JB.store.jobs();
+  state.run = (await chrome.storage.session.get(`run:${SITE}`))[`run:${SITE}`] || null;
   fillForm(settings);
-  renderSettingsState();
+  $("first-run").hidden = !!settings.savedAt;
+  renderRun();
+  renderRail();
   renderHistory();
-  const saved = await chrome.storage.session.get(null);
-  for (const site of Object.keys(SITES)) {
-    view[site].run = saved[`run:${site}`] || null;
-    renderRun(site);
-  }
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "session") {
-      for (const [k, { newValue }] of Object.entries(changes)) {
-        const site = k.slice(4);
-        if (k.startsWith("run:") && view[site]) {
-          view[site].run = newValue || null;
-          if (newValue?.running) view[site].error = "";
-          renderRun(site);
-        }
-      }
+    if (area === "session" && changes[`run:${SITE}`]) {
+      state.run = changes[`run:${SITE}`].newValue || null;
+      if (state.run?.running) state.error = "";
+      renderRun();
     } else if (area === "local") {
       if (changes.jobs) {
         jobs = changes.jobs.newValue || {};
+        renderRail();
         renderHistory();
-        Object.keys(SITES).forEach(renderToday);
       }
       if (changes.settings) {
         settings = JB.store.normalize(changes.settings.newValue);
-        if (!document.getElementById("savebar").classList.contains("dirty")) fillForm(settings);
-        renderSettingsState();
+        if (!$("savebar").classList.contains("dirty")) fillForm(settings);
+        $("first-run").hidden = !!settings.savedAt;
+        renderRail();
       }
     }
   });
+  setInterval(renderRail, 60000); // "today" moves on at midnight
 }
 
 init();

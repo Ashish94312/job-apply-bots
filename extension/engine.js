@@ -7,6 +7,7 @@
   const CONTINUE = [["Done, continue", "continue", "primary"], ["Stop run", "stop", "stop"]];
   const CHECK_RE = /just a moment|attention required|verify you are human|captcha|security check/i;
   const MAX_LOG = 3000;
+  const MAX_EVENTS = 400;
 
   class Stopped extends Error {}
   class WindowClosed extends Error {}
@@ -14,7 +15,18 @@
   const random = (lo, hi) => lo + Math.random() * (hi - lo);
   const firstLine = e => String((e && e.message) || e).split("\n")[0];
   const label = job => `${job.title || "?"} @ ${job.company || "?"}`;
+  const named = job => (job.company ? `${job.title || "the job"} at ${job.company}` : job.title || "the job");
   const pageFiles = site => ["lib/filters.js", "lib/answers.js", "lib/page.js", `sites/${site}.js`];
+
+  /** "https://www.hirist.tech/search/generative-ai?minexp=1" -> "generative ai" */
+  function searchLabel(url) {
+    try {
+      const last = new URL(url).pathname.split("/").filter(Boolean).pop() || url;
+      return decodeURIComponent(last).replace(/-jobs$/, "").replace(/[-_]+/g, " ");
+    } catch {
+      return url;
+    }
+  }
 
   /** Runs in the page's own world: note the URLs it opens with window.open (Chrome blocks those, see clickApply). */
   function watchWindowOpen() {
@@ -68,6 +80,9 @@
       this.state = {
         id: `${siteName}-${Date.now()}`, site: siteName, action, running: true, started: Date.now(), ended: null,
         stopped: false, error: "", log: [], prompt: null,
+        now: "", // what it's doing, in words
+        events: [], // searches and job results, for the dashboard's activity list
+        page: null, // the search page being worked through: one cell per job listed
       };
     }
 
@@ -83,6 +98,24 @@
     log(line = "") {
       this.state.log.push(line);
       if (this.state.log.length > MAX_LOG) this.state.log.splice(0, this.state.log.length - MAX_LOG);
+      this.save();
+    }
+
+    step(text) {
+      this.state.now = text;
+      this.save();
+    }
+
+    event(e) {
+      this.state.events.push({ ts: Date.now(), ...e });
+      if (this.state.events.length > MAX_EVENTS) this.state.events.splice(0, this.state.events.length - MAX_EVENTS);
+      this.save();
+    }
+
+    /** Update the current search page's cell for this job. */
+    mark(url, change) {
+      const cell = this.state.page && this.state.page.cells.find(c => c.url === url);
+      if (cell) Object.assign(cell, change);
       this.save();
     }
 
@@ -259,6 +292,7 @@
     }
 
     async loggedIn() {
+      this.step(`Checking you're logged in to ${this.site.label}`);
       await this.goto(this.site.loginUrl);
       await this.clearChallenge();
       await this.sleep(3000); // let the page finish drawing its header
@@ -301,6 +335,7 @@
         this.state.running = false;
         this.state.ended = Date.now();
         this.state.prompt = null;
+        this.state.now = "";
         if (this.windowId != null) chrome.windows.remove(this.windowId).catch(() => {});
         delete runs[this.site.name];
         await this.save(true);
@@ -345,8 +380,10 @@
         const listed = new Set();
         for (let n = 1; n <= limits.maxPages && done < budget; n++) {
           const url = this.site.searchPageUrl(search, n);
+          const where = searchLabel(search);
           this.log();
           this.log(url);
+          this.step(`Searching "${where}"${n > 1 ? `, page ${n}` : ""}`);
           let links;
           try {
             await this.goto(url);
@@ -363,9 +400,15 @@
           }
           urls.forEach(u => listed.add(u));
           const fresh = [];
+          const cells = [];
           for (const [u, preview] of links) {
-            if (!(await JB.store.seen(this.site.name, this.site.jobId(u))) && JB.filters.previewOk(preview, cfg.filters)) fresh.push(u);
+            const before = await JB.store.seen(this.site.name, this.site.jobId(u));
+            const fits = !before && JB.filters.previewOk(preview, cfg.filters);
+            if (fits) fresh.push(u);
+            cells.push({ url: u, state: before ? "seen" : fits ? "pending" : "filtered", label: preview.slice(0, 160) });
           }
+          this.state.page = { label: where, n, listed: urls.length, fresh: fresh.length, cells };
+          this.event({ kind: "search", label: where, n, listed: urls.length, fresh: fresh.length });
           this.log(`  ${urls.length} jobs listed, ${fresh.length} new and matching`);
 
           for (const u of fresh) {
@@ -373,22 +416,30 @@
             let job = { url: u, jobId: this.site.jobId(u), title: "", company: "", text: "" };
             let status;
             let note;
+            this.mark(u, { state: "working" });
             try {
               [status, job, note] = await this.handleJob(job, cfg);
             } catch (e) {
               if (e instanceof Stopped || e instanceof WindowClosed) throw e;
               [status, note] = [S.FAILED, firstLine(e)];
             }
+            const result = { title: job.title, company: job.company, url: job.url };
             if (status == null) { // dry run
+              this.mark(u, { state: "would_apply", label: named(job) });
+              this.event({ kind: "job", status: "would_apply", ...result });
               done++;
               continue;
             }
             const shot = (status === S.MANUAL || status === S.FAILED) && (await this.screenshot(job.jobId));
             await JB.store.record(this.site.name, job, status, note, shot);
             this.log(`  ${ICONS[status]} ${status.padEnd(15)} ${label(job)}  ${note}`);
+            this.mark(u, { state: status, label: named(job) });
+            this.event({ kind: "job", status, note, ...result });
             if (status === S.APPLIED) {
               done++;
-              await this.sleep(random(...limits.delaySeconds) * 1000);
+              const pause = random(...limits.delaySeconds);
+              if (done < budget && pause >= 3) this.step(`Waiting ${Math.round(pause)} s before the next application`);
+              await this.sleep(pause * 1000);
             } else {
               await this.sleep(random(2, 5) * 1000);
             }
@@ -402,10 +453,12 @@
 
     /** Returns [status, job, note]; status null means nothing to record (a dry run). */
     async handleJob(job, cfg) {
+      this.step("Opening the next job");
       await this.goto(job.url);
       await this.ensureLoaded(this.site.jobReadyCss);
       await this.sleep(1500); // let the apply button render
       job = { ...job, ...(await this.exec("site.readJob")) };
+      this.step(`Checking ${named(job)}`);
 
       const reason = JB.filters.skipReason(job, cfg.filters);
       if (reason) return [S.SKIPPED, job, reason];
@@ -414,13 +467,14 @@
         return [null, job, ""];
       }
       if (this.opts.confirm) {
-        const yes = await this.ask("Apply to this one?", label(job), [["Apply", "y", "primary"], ["Skip", "n"], ["Stop run", "stop", "stop"]]);
+        const yes = await this.ask("Apply to this one?", named(job), [["Apply", "y", "primary"], ["Skip", "n"], ["Stop run", "stop", "stop"]]);
         if (yes !== "y") return [S.SKIPPED, job, "declined"];
       }
 
+      this.step(`Applying to ${named(job)}`);
       let [status, note] = await this.applyJob(cfg, job);
       if (status === S.MANUAL && this.opts.assist) {
-        await this.ask("Do this in Chrome, then continue", `${label(job)}: ${note}\nFinish it in the bot's window.`, CONTINUE);
+        await this.ask("Do this in Chrome, then continue", `${named(job)}: ${note}\nFinish it in the bot's window.`, CONTINUE);
         if (await this.exec("isApplied")) [status, note] = [S.APPLIED, "finished by hand"];
       }
       return [status, job, note];
@@ -456,6 +510,7 @@
         await this.loaded({ fresh: false });
         await this.exec("site.dismissExtras");
         if (await this.exec("isApplied")) return [S.APPLIED, ""];
+        this.step(`Filling in the application for ${named(job)}`);
         const step = await this.exec("formStep", cfg.answers, note);
         if (!step || !step.found) break;
         if (step.missing.length) return [S.MANUAL, `unanswered: ${step.missing.join("; ")}`];

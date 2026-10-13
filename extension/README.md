@@ -80,6 +80,7 @@ Plain JavaScript, Manifest V3, no build step.
 | `lib/defaults.js` | Default settings, generated from the bots' `config.example.yaml` |
 | `sites/hirist.js` | Everything Hirist-specific (from `hirist/portal.py`) |
 | `dashboard.*` | The dashboard page |
+| `fonts/` | Archivo, the dashboard's typeface (SIL Open Font License, `fonts/OFL.txt`) |
 
 A run's state (log, the question it's waiting on) lives in `chrome.storage.session` as `run:<site>`, which the
 dashboard watches. A new site is a `sites/<name>.js` like Hirist's, plus its host in `manifest.json`, its
