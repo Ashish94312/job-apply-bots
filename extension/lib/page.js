@@ -209,6 +209,8 @@
 
   const SUBMIT_RE = /^\s*(submit|apply|send|confirm|continue|next|done|yes)\b/i;
   const isDisabled = e => e.disabled || e.getAttribute("aria-disabled") === "true";
+  /** A form enables its submit button once it has seen the answers; give it a moment. */
+  const whenEnabled = (e, timeout = 5000) => waitUntil(() => !isDisabled(e), timeout);
 
   /** One step of an application form: fill it, then submit it if everything got an answer. */
   async function formStep(answers, note) {
@@ -218,7 +220,7 @@
     if (missing.length) return { found: true, missing };
     const submit = firstVisible(form, SUBMIT_RE);
     if (!submit) return { found: true, missing: [], submitted: false };
-    await waitUntil(() => !isDisabled(submit), 5000); // the form enables it once it has seen the answers
+    await whenEnabled(submit);
     click(submit);
     return { found: true, missing: [], submitted: true };
   }
@@ -241,6 +243,9 @@
     APPLIED_TEXT_RE,
     fields,
     fillForm,
+    setValue,
+    visibleDialog,
+    whenEnabled,
     exists: css => !!document.querySelector(css),
     isApplied,
     collectLinks,

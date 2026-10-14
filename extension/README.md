@@ -1,8 +1,8 @@
 # Sendoff
 
 Sends your job applications off for you. It's the bots in this repo as a Chrome extension: no Python, no terminal. It runs in your own Chrome, with your own logins, and
-keeps everything (settings, history) in that Chrome. **Hirist**, **Instahyre** and **Wellfound** work so far;
-Cutshort and LinkedIn are still the Python bots in this repo.
+keeps everything (settings, history) in that Chrome. **Hirist**, **Instahyre**, **Wellfound** and **Cutshort**
+work so far; LinkedIn is still the Python bot in this repo.
 
 On each site it does what the Python bot does: searches with your keywords and experience range, skips jobs that don't
 fit your filters, answers the screening questions it has answers for, applies, and never applies to the same job
@@ -36,8 +36,9 @@ Your settings and history stay.
    can run several at once, each in its own window.
 
 Per site, in Settings > Sites: the search keywords (Hirist: any words; Instahyre: skills, searched once per year
-of your experience range; Wellfound: role names, plus the places to search, like `india` or `remote`) and how
-many applications per run and per day. Which jobs to take, your answers and the cover note are shared by all sites.
+of your experience range; Wellfound: role names, plus the places to search, like `india` or `remote`; Cutshort:
+skill names, each looked up once in Cutshort's Skills filter and remembered) and how many applications per run
+and per day. Cutshort applies from its logged-in feed, so it needs you logged in even for a dry run. Which jobs to take, your answers and the cover note are shared by all sites.
 
 While it runs, the bot works in its own Chrome window: leave that window open (you can use other windows
 meanwhile). It closes the window when it's done. **Stop** stops it after the current step.
@@ -52,8 +53,8 @@ screenshots if you turn them on. Nothing is sent anywhere. **Download backup** s
 
 Chrome asks for:
 
-- **Read and change your data on hirist.tech, instahyre.com and wellfound.com**: to search, read jobs and fill in
-  applications there.
+- **Read and change your data on hirist.tech, instahyre.com, wellfound.com and cutshort.io**: to search, read
+  jobs and fill in applications there.
 - **Read your browsing history** (Chrome's wording for the `tabs` permission): to see the bot window's address,
   e.g. to notice an apply button that leads to another site.
 - **Screenshots** are off by default. Turning them on (Settings > Screenshots) asks for access to all sites,
@@ -92,7 +93,7 @@ Plain JavaScript, Manifest V3, no build step.
 A run's state (log, the question it's waiting on) lives in `chrome.storage.session` as `run:<site>`, which the
 dashboard watches. A new site is a `sites/<name>.js` like the others (`paged` for sites with page 2, 3...;
 otherwise results are scrolled; optional `page` hooks such as `collectLinks`, `isApplied`, `cannotApply` and
-`dismissExtras`), plus its hosts in `manifest.json`, `importScripts` in `background.js`, a `<script>` in
+`dismissExtras`; `flow: "feed"` for a site that applies from cards in a feed, like Cutshort), plus its hosts in `manifest.json`, `importScripts` in `background.js`, a `<script>` in
 `dashboard.html`, an entry in the dashboard's `SITES`, and the site in `tools/export_for_extension.py`.
 
 Tests:
@@ -101,7 +102,7 @@ Tests:
 node --test extension/tests/                     # filters and answers, checked against the Python bots
 .venv/bin/python extension/tests/make_cases.py   # after changing core.py's filters: refresh those cases
 .venv/bin/python extension/tests/e2e.py          # the extension in Chromium, applying on a fake Hirist
-.venv/bin/python extension/tests/e2e_sites.py    # ...and on fake Instahyre and Wellfound
+.venv/bin/python extension/tests/e2e_sites.py    # ...and on fake Instahyre, Wellfound and Cutshort
 .venv/bin/python tools/export_for_extension.py --defaults   # after changing a config.example.yaml
 ```
 

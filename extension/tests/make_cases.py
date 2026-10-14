@@ -88,6 +88,13 @@ site_urls = [{"site": "instahyre", "cfg": c, "expected": instahyre.search_urls(N
 site_urls += [{"site": "wellfound", "cfg": c, "expected": wellfound_portal.PORTAL.search_urls(None, python_cfg(c))} for c in PLACES]
 with_range = [{"text": x, "expected": wellfound_portal.with_range(x)}
               for x in ["Acme ML Engineer 3 years of exp Remote", "Beta 10+ years of exp", "Gamma 1 year of exp", "no experience given", ""]]
+cutshort = bot_module("cutshort", "portal")
+cutshort.SKILLS_CACHE = Path("/nonexistent")  # only the built-in skill ids, not this machine's cache
+FEEDS = [
+    {"keywords": ["machine learning", "NLP", "python", "llm"], "minExperience": 1, "maxExperience": 2, "searchUrls": ["https://cutshort.io/profile/all-jobs?skills=00268"]},
+    {"keywords": ["deep learning"], "minExperience": None, "maxExperience": None, "searchUrls": []},
+]
+site_urls += [{"site": "cutshort", "cfg": c, "expected": cutshort.PORTAL.search_urls(None, python_cfg(c))} for c in FEEDS]
 sys.modules.pop("core", None)
 sys.modules.pop("portal", None)
 

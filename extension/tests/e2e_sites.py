@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""End-to-end test for Instahyre and Wellfound: the extension in a real Chromium, on fake copies of both sites.
+"""End-to-end test for Instahyre, Wellfound and Cutshort: the extension in a real Chromium, on fake copies of them.
 
   .venv/bin/python extension/tests/e2e_sites.py            # headless
   .venv/bin/python extension/tests/e2e_sites.py --headed   # watch it
@@ -196,6 +196,99 @@ class Wellfound:
         route.fulfill(status=404, body="not found")
 
 
+class Cutshort:
+    CARDS = {  # id: (title, company, years, kind)
+        "ML-Engineer-Acme-abc123": ("ML Engineer", "Acme", "1 - 3", "message"),
+        "Senior-ML-Engineer-Big-def456": ("Senior ML Engineer", "Big Co", "1 - 3", "message"),
+        "Backend-Developer-Beta-ghi789": ("Backend Developer", "Beta", "1 - 2", "city"),
+        "Python-Developer-Gamma-jkl012": ("Python Developer", "Gamma", "0 - 2", "direct"),
+    }
+    SKILLS = {"FastAPI": "06785", "Machine Learning (ML)": "00268", "Machine Learning Ops": "09999"}
+
+    def __init__(self):
+        self.logged_in = False
+        self.applied = set()
+        self.posted = {}
+        self.popups = {"survey": 0, "feedback": 0}
+
+    def card(self, cid):
+        title, company, years, kind = self.CARDS[cid]
+        act = "<span>View conversation</span>" if cid in self.applied else '<button class="apply">Apply now</button>'
+        return (f'<div class="card" data-id="{cid}" data-kind="{kind}"><div><a href="/job/{cid}?ref=feed">{title}</a></div>'
+                f'<div><a href="/company/{company.lower()}">{company}</a></div><div>{years} yrs · Bangalore</div><div class="act">{act}</div></div>')
+
+    def handle(self, route):
+        req = route.request
+        path = urlsplit(req.url).path
+        if path.startswith("/api/apply/"):
+            cid = path.rsplit("/", 1)[1]
+            self.applied.add(cid)
+            self.posted[cid] = json.loads(req.post_data or "{}")
+            return route.fulfill(json={"ok": True})
+        if path.startswith("/api/popup/"):
+            self.popups[path.rsplit("/", 1)[1]] += 1
+            return route.fulfill(json={"ok": True})
+        login = "" if self.logged_in else "<button>Candidate login</button>"
+        if path == "/jobs":
+            return route.fulfill(body=page("Jobs | Cutshort", f"<header>{login}</header><h1>Jobs</h1>"), content_type="text/html")
+        if path.startswith("/profile/all-jobs"):
+            if not self.logged_in:
+                return route.fulfill(body=page("Cutshort", f"<header>{login}</header><p>Log in to see your feed.</p>"), content_type="text/html")
+            cards = "".join(self.card(c) for c in self.CARDS)
+            script = f"""<script>
+const SKILLS = {json.dumps(self.SKILLS)};
+const post = (id, data) => fetch('/api/apply/' + id, {{method: 'POST', body: JSON.stringify(data || {{}})}});
+const done = (card, text) => {{ card.querySelector('.act').innerHTML = '<span>' + text + '</span>'; }};
+function dialog(card, field) {{
+  const d = document.body.appendChild(document.createElement('div'));
+  d.setAttribute('role', 'dialog');
+  d.innerHTML = '<p>Your resume: resume.pdf</p>' + field + '<button class="send">Send</button><button class="x">×</button>';
+  const close = () => {{ d.remove(); document.removeEventListener('keydown', esc); }};
+  const esc = e => {{ if (e.key === 'Escape') close(); }};
+  document.addEventListener('keydown', esc);
+  d.querySelector('.x').onclick = close;
+  d.querySelector('.send').onclick = () => {{
+    const box = d.querySelector('textarea, input');
+    if (!box.value) return;
+    post(card.dataset.id, {{ message: box.value }}).then(() => {{ close(); done(card, 'View conversation'); }});
+  }};
+}}
+document.addEventListener('click', e => {{
+  const b = e.target.closest('button.apply');
+  if (!b) return;
+  const card = b.closest('.card');
+  if (card.dataset.kind === 'direct') post(card.dataset.id).then(() => done(card, 'Applied'));
+  if (card.dataset.kind === 'message') dialog(card, '<label for=m>Message to the recruiter</label><textarea id=m></textarea>');
+  if (card.dataset.kind === 'city') dialog(card, '<input type=text placeholder="Start typing a city">');
+}});
+// the Skills filter: the id goes into the address, the way Cutshort's does
+document.getElementById('skills').onclick = () => {{ document.getElementById('skill-box').style.display = 'block'; }};
+document.querySelector('#skill-box input').addEventListener('input', e => {{
+  const q = e.target.value.toLowerCase();
+  const list = document.getElementById('skill-options');
+  list.innerHTML = '';
+  for (const [name, id] of Object.entries(SKILLS)) if (q && name.toLowerCase().includes(q)) {{
+    const o = list.appendChild(document.createElement('div'));
+    o.textContent = name;
+    o.onclick = () => history.pushState(null, '', '?skills=' + id);
+  }}
+}});
+// what Cutshort pops up over the feed
+document.body.insertAdjacentHTML('beforeend', '<div id="survey"><p>Quick survey</p><button aria-label="Close survey">×</button></div>' +
+  '<div id="feedback"><p>Submit feedback to companies</p><p class="co">Acme</p><button>Skip</button></div>');
+document.querySelector('[aria-label="Close survey"]').onclick = () => {{ document.getElementById('survey').remove(); fetch('/api/popup/survey', {{method: 'POST'}}); }};
+let steps = 2;
+document.querySelector('#feedback button').onclick = () => {{
+  fetch('/api/popup/feedback', {{method: 'POST'}});
+  if (--steps) document.querySelector('#feedback .co').textContent = 'Beta'; else document.getElementById('feedback').remove();
+}};
+</script>"""
+            filters = ('<div class="filters"><span id="skills">Skills</span><div id="skill-box" style="display:none">'
+                       '<input type="text" placeholder="Search skills"><div id="skill-options"></div></div></div>')
+            return route.fulfill(body=page("All jobs | Cutshort", f"<header>{login}</header>{filters}<main>{cards}</main>", script), content_type="text/html")
+        route.fulfill(status=404, body="not found")
+
+
 class Check:
     def __init__(self, dash):
         self.dash = dash
@@ -256,7 +349,7 @@ def main():
         if not (CACHE / name).exists():
             urllib.request.urlretrieve(url, CACHE / name)
 
-    ih, wf = Instahyre(), Wellfound()
+    ih, wf, cs = Instahyre(), Wellfound(), Cutshort()
     with sync_playwright() as pw, tempfile.TemporaryDirectory() as profile:
         ctx = pw.chromium.launch_persistent_context(
             profile, channel="chromium", headless=not args.headed,
@@ -264,6 +357,7 @@ def main():
         )
         ctx.route(re.compile(r"^https://(www\.)?instahyre\.com/"), fake(ih.handle))
         ctx.route(re.compile(r"^https://(www\.)?wellfound\.com/"), fake(wf.handle))
+        ctx.route(re.compile(r"^https://(www\.)?cutshort\.io/"), fake(cs.handle))
         worker = ctx.service_workers[0] if ctx.service_workers else ctx.wait_for_event("serviceworker")
         dash = ctx.new_page()
         dash.goto(f"chrome-extension://{worker.url.split('/')[2]}/dashboard.html")
@@ -281,12 +375,14 @@ def main():
             Object.assign(s.sites.instahyre.limits, { delaySeconds: [0, 0], maxScrolls: 2 });
             Object.assign(s.sites.wellfound, { keywords: ["machine learning engineer", "unicorn wrangler"], locations: ["india"], searchUrls: [] });
             Object.assign(s.sites.wellfound.limits, { delaySeconds: [0, 0], maxPages: 2 });
+            Object.assign(s.sites.cutshort, { keywords: ["machine learning", "fastapi", "unicorn"], searchUrls: [] });
+            Object.assign(s.sites.cutshort.limits, { delaySeconds: [0, 0], maxPages: 2 });
             await JB.store.saveSettings(s);
         }""")
 
         print("\nThe dashboard has every site")
         names = dash.eval_on_selector_all("#site-list li a", "els => els.map(a => a.childNodes[1].textContent)")
-        check(names == ["Hirist", "Instahyre", "Wellfound"], f"sidebar lists the sites ({names})")
+        check(names == ["Hirist", "Instahyre", "Wellfound", "Cutshort"], f"sidebar lists the sites ({names})")
         check.overview("instahyre")
         check(dash.locator("#site-list a[aria-current]").inner_text().startswith("Instahyre"), "sidebar marks the site shown")
 
@@ -333,6 +429,39 @@ def main():
         titles = [r["title"] for k, r in check.jobs().items() if k.startswith("wellfound:")]
         check("ML Engineer" in titles and not any(t.endswith(" at Acme") for t in titles), "job titles read without the \"at <company>\"")
 
+        print("\nCutshort: dry run needs a login (the feed only shows logged in)")
+        check.start("cutshort", "dry-run")
+        check.wait_prompt("Log in, then continue")
+        cs.logged_in = True
+        check.answer("Done, continue")
+        s = check.wait_done("cutshort")
+        log = "\n".join(s["log"])
+        check("Cutshort has no skill called 'unicorn', skipping it." in log, "a keyword Cutshort has no skill for is skipped")
+        kept = dash.evaluate("async () => (await chrome.storage.local.get('cache:cutshort:skills'))['cache:cutshort:skills']")
+        check(kept == {"fastapi": "06785"}, f"FastAPI looked up in the Skills filter and remembered ({kept})")
+        check("skills=00268" in log and "skills=06785" in log, "one feed per skill")
+        check("4 jobs on page, 4 new" in log and "No more jobs on this feed." in log, "reads the cards; page 2 repeating ends the feed")
+        check(check.status("cutshort", "Senior-ML-Engineer-Big-def456") == "skipped", "Senior title skipped")
+        check(re.findall(r"~ would apply\s+(.+?) @", log)[:3] == ["ML Engineer", "Backend Developer", "Python Developer"], "would apply to the other 3")
+        check(cs.popups["survey"] > 0 and cs.popups["feedback"] >= 2, f"survey and feedback pop-ups closed ({cs.popups})")
+        check(not cs.posted, "dry run applied to nothing")
+
+        print("\nCutshort: apply from the cards")
+        check.start("cutshort", "apply")
+        s = check.wait_done("cutshort")
+        log = "\n".join(s["log"])
+        check(check.status("cutshort", "ML-Engineer-Acme-abc123") == "applied" and cs.posted.get("ML-Engineer-Acme-abc123") == {"message": "Keen on ML Engineer at Acme."},
+              f"message dialog filled with the cover note and sent ({cs.posted.get('ML-Engineer-Acme-abc123')})")
+        check(check.status("cutshort", "Backend-Developer-Beta-ghi789") == "needs_manual" and check.note("cutshort", "Backend-Developer-Beta-ghi789") == "unanswered: Start typing a city",
+              "a question it can't answer is left for you")
+        check(check.status("cutshort", "Python-Developer-Gamma-jkl012") == "applied", "applied straight from the card, after closing the half-filled dialog")
+        check(re.search(r"\d+ jobs on page, 0 new", log) and "Done: applied to 2." in log, "the second skill's feed has nothing new; summary")
+
+        print("\nBringing over remembered skill ids")
+        dash.evaluate("""() => chrome.runtime.sendMessage({ type: "import", history: [], cache: { "cache:cutshort:skills": { django: "00136", fastapi: "11111" } } })""")
+        kept = dash.evaluate("async () => (await chrome.storage.local.get('cache:cutshort:skills'))['cache:cutshort:skills']")
+        check(kept == {"django": "00136", "fastapi": "06785"}, f"imported ids added; ones found here kept ({kept})")
+
         print("\nBoth sites at once")
         dash.evaluate("async () => { await chrome.storage.local.set({ jobs: {} }); }")
         check.start("instahyre", "dry-run")
@@ -343,7 +472,7 @@ def main():
         print("\nSettings for each site")
         dash.evaluate("location.hash = '#settings'")
         tabs = dash.eval_on_selector_all("#site-tabs button", "els => els.map(b => b.textContent)")
-        check(tabs == ["Hirist", "Instahyre", "Wellfound"], "a tab per site")
+        check(tabs == ["Hirist", "Instahyre", "Wellfound", "Cutshort"], "a tab per site")
         dash.click("#site-tab-wellfound")
         check(dash.locator('[name="sites.wellfound.locations"]').is_visible(), "Wellfound has places to search")
         dash.fill('[name="sites.wellfound.locations"]', "india\nremote\nbangalore")

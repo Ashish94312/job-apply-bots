@@ -346,8 +346,9 @@
 
     async main() {
       const cfg = JB.store.effective(await JB.store.getSettings(), this.site.name);
-      const searches = this.site.searchUrls(cfg);
-      if (this.action !== "login" && !searches.length) {
+      const fixed = this.site.searches ? null : this.site.searchUrls(cfg); // Cutshort looks its searches up once logged in
+      const nothing = fixed ? !fixed.length : !(cfg.keywords || []).length && !(cfg.searchUrls || []).length;
+      if (this.action !== "login" && nothing) {
         this.log("Nothing to search for: add keywords in Settings first.");
         return;
       }
@@ -357,8 +358,9 @@
         this.log(ok ? "Logged in. Chrome remembers it; the bot uses that login." : "Still not logged in - try again.");
         return;
       }
-      if (!(await this.login(!this.dry))) {
-        if (!this.dry) {
+      const mustLogIn = !this.dry || this.site.loginRequired;
+      if (!(await this.login(mustLogIn))) {
+        if (mustLogIn) {
           this.log(`Not logged in to ${this.site.label}, stopping.`);
           return;
         }
@@ -374,14 +376,60 @@
           return;
         }
       }
+      const searches = fixed || await this.site.searches(cfg, keyword => this.lookupSkill(keyword), line => this.log(line));
+      if (!searches.length) {
+        this.log("Nothing to search for: none of the keywords can be searched here.");
+        return;
+      }
+      const done = this.site.flow === "feed" ? await this.runFeed(cfg, searches, budget) : await this.runPages(cfg, searches, budget);
+      this.log();
+      this.log(`Done: ${this.dry ? "would apply" : "applied"} to ${done}.`);
+    }
 
+    whereFor(search) {
+      return (this.site.searchLabel && this.site.searchLabel(search)) || searchLabel(search);
+    }
+
+    /** Record a job's result and pause before the next one. Returns 1 if it counts towards the run's limit. */
+    async finish(job, status, note, budget, done, limits) {
+      const result = { title: job.title, company: job.company, url: job.url };
+      if (status == null) { // dry run
+        this.mark(job.url, { state: "would_apply", label: named(job) });
+        this.event({ kind: "job", status: "would_apply", ...result });
+        return 1;
+      }
+      const shot = (status === S.MANUAL || status === S.FAILED) && (await this.screenshot(job.jobId));
+      if ((status === S.MANUAL || status === S.FAILED) && this.site.page.dismiss) {
+        try {
+          if (await this.exec("site.dismiss")) await this.sleep(800); // close a half-filled dialog so the next job can go
+        } catch (e) {
+          if (e instanceof Stopped || e instanceof WindowClosed) throw e;
+        }
+      }
+      await JB.store.record(this.site.name, job, status, note, shot);
+      this.log(`  ${ICONS[status]} ${status.padEnd(15)} ${label(job)}  ${note}`);
+      this.mark(job.url, { state: status, label: named(job) });
+      this.event({ kind: "job", status, note, ...result });
+      if (status === S.APPLIED) {
+        const pause = random(...limits.delaySeconds);
+        if (done + 1 < budget && pause >= 3) this.step(`Waiting ${Math.round(pause)} s before the next application`);
+        await this.sleep(pause * 1000);
+        return 1;
+      }
+      if (status !== S.SKIPPED || this.site.flow !== "feed") await this.sleep(random(2, 5) * 1000); // feed skips don't load a page
+      return 0;
+    }
+
+    /** Sites with a page per job (Hirist, Instahyre, Wellfound): search pages, then each job's own page. */
+    async runPages(cfg, searches, budget) {
+      const limits = cfg.limits;
       let done = 0;
       for (const search of searches) {
         const listed = new Set();
         const pages = this.site.paged ? limits.maxPages : 1;
         for (let n = 1; n <= pages && done < budget; n++) {
           const url = this.site.searchPageUrl(search, n);
-          const where = searchLabel(search);
+          const where = this.whereFor(search);
           this.log();
           this.log(url);
           this.step(`Searching "${where}"${n > 1 ? `, page ${n}` : ""}`);
@@ -429,32 +477,128 @@
               if (e instanceof Stopped || e instanceof WindowClosed) throw e;
               [status, note] = [S.FAILED, firstLine(e)];
             }
-            const result = { title: job.title, company: job.company, url: job.url };
-            if (status == null) { // dry run
-              this.mark(u, { state: "would_apply", label: named(job) });
-              this.event({ kind: "job", status: "would_apply", ...result });
-              done++;
-              continue;
-            }
-            const shot = (status === S.MANUAL || status === S.FAILED) && (await this.screenshot(job.jobId));
-            await JB.store.record(this.site.name, job, status, note, shot);
-            this.log(`  ${ICONS[status]} ${status.padEnd(15)} ${label(job)}  ${note}`);
-            this.mark(u, { state: status, label: named(job) });
-            this.event({ kind: "job", status, note, ...result });
-            if (status === S.APPLIED) {
-              done++;
-              const pause = random(...limits.delaySeconds);
-              if (done < budget && pause >= 3) this.step(`Waiting ${Math.round(pause)} s before the next application`);
-              await this.sleep(pause * 1000);
-            } else {
-              await this.sleep(random(2, 5) * 1000);
-            }
+            done += await this.finish(job, status, note, budget, done, limits);
           }
         }
         if (done >= budget) break;
       }
-      this.log();
-      this.log(`Done: ${this.dry ? "would apply" : "applied"} to ${done}.`);
+      return done;
+    }
+
+    /** Sites that apply from a feed of job cards (Cutshort): each card has the job and its own apply button. */
+    async runFeed(cfg, searches, budget) {
+      const limits = cfg.limits;
+      let done = 0;
+      for (const search of searches) {
+        const listed = new Set();
+        for (let n = 1; n <= limits.maxPages && done < budget; n++) {
+          const url = this.site.searchPageUrl(search, n);
+          const where = this.whereFor(search);
+          this.log();
+          this.log(url);
+          this.step(`Reading the feed for "${where}"${n > 1 ? `, page ${n}` : ""}`);
+          let cards = [];
+          try {
+            await this.goto(url);
+            await this.clearChallenge();
+            if (await this.waitForTrue("site.feedReady", 20000)) {
+              await this.exec("site.closePopups");
+              cards = await this.exec("site.feedJobs");
+            }
+          } catch (e) {
+            if (e instanceof Stopped || e instanceof WindowClosed) throw e;
+            this.log(`  Couldn't load feed: ${firstLine(e)}`);
+            break;
+          }
+          const jobs = cards.map(([u, title, company, text]) => ({ url: u, jobId: this.site.jobId(u), title, company, text }));
+          if (!jobs.some(j => !listed.has(j.jobId))) { // empty, or a page past the end repeating earlier jobs
+            this.log("  No more jobs on this feed.");
+            break;
+          }
+          jobs.forEach(j => listed.add(j.jobId));
+          const fresh = [];
+          const cells = [];
+          for (const job of jobs) {
+            const before = await JB.store.seen(this.site.name, job.jobId);
+            if (!before) fresh.push(job);
+            cells.push({ url: job.url, state: before ? "seen" : "pending", label: named(job) });
+          }
+          this.state.page = { label: where, n, listed: jobs.length, fresh: fresh.length, cells };
+          this.event({ kind: "search", label: where, n, listed: jobs.length, fresh: fresh.length });
+          this.log(`  ${jobs.length} jobs on page, ${fresh.length} new`);
+
+          for (const job of fresh) {
+            if (done >= budget) break;
+            let status;
+            let note;
+            this.mark(job.url, { state: "working" });
+            try {
+              [status, note] = await this.handleCard(job, cfg);
+            } catch (e) {
+              if (e instanceof Stopped || e instanceof WindowClosed) throw e;
+              [status, note] = [S.FAILED, firstLine(e)];
+            }
+            done += await this.finish(job, status, note, budget, done, limits);
+          }
+        }
+        if (done >= budget) break;
+      }
+      return done;
+    }
+
+    /** A feed card: the filters, then apply from the card. Returns [status, note]. */
+    async handleCard(job, cfg) {
+      const reason = JB.filters.skipReason(job, cfg.filters);
+      if (reason) return [S.SKIPPED, reason];
+      if (this.dry) {
+        this.log(`  ~ would apply   ${label(job)}  ${job.url}`);
+        return [null, ""];
+      }
+      if (this.opts.confirm) {
+        const yes = await this.ask("Apply to this one?", named(job), [["Apply", "y", "primary"], ["Skip", "n"], ["Stop run", "stop", "stop"]]);
+        if (yes !== "y") return [S.SKIPPED, "declined"];
+      }
+      let [status, note] = await this.applyCard(job, cfg);
+      if (status === S.MANUAL && this.opts.assist) {
+        await this.ask("Do this in Chrome, then continue", `${named(job)}: ${note}\nFinish it in the bot's window.`, CONTINUE);
+        if (await this.exec("site.cardApplied", job.jobId)) [status, note] = [S.APPLIED, "finished by hand"];
+      }
+      return [status, note];
+    }
+
+    async applyCard(job, cfg) {
+      this.step(`Applying to ${named(job)}`);
+      await this.exec("site.closePopups");
+      if (!(await this.exec("site.clickApply", job.jobId))) return [S.MANUAL, "card not found on the feed"];
+      await this.sleep(2500);
+      this.step(`Filling in the application for ${named(job)}`);
+      const step = await this.exec("site.sendApplication", job.jobId, cfg.answers, JB.answers.coverNote(cfg.coverNote, job));
+      if (!step.dialog) return step.applied ? [S.APPLIED, ""] : [S.MANUAL, "no apply dialog appeared"];
+      if (step.missing.length) return [S.MANUAL, `unanswered: ${step.missing.join("; ")}`];
+      if (!step.sent) return [S.MANUAL, "no Send button in the apply dialog"];
+      await this.sleep(3500);
+      if (await this.exec("site.sent", job.jobId)) return [S.APPLIED, ""];
+      return [S.MANUAL, "couldn't confirm the application went through"];
+    }
+
+    /** Find a keyword's id in the site's own filter (Cutshort's Skills): the id shows up in the address. */
+    async lookupSkill(keyword) {
+      this.step(`Looking up "${keyword}" in ${this.site.label}'s skills`);
+      await this.goto(this.site.lookupUrl);
+      await this.clearChallenge();
+      await this.sleep(4000);
+      if (!(await this.exec("site.pickSkill", keyword))) return null;
+      await this.sleep(2500);
+      const ids = new URL((await this.tab()).url).searchParams.get("skills");
+      return ids ? ids.split("-").pop() : null;
+    }
+
+    async waitForTrue(path, timeout) {
+      for (const end = Date.now() + timeout; ;) {
+        if (await this.exec(path)) return true;
+        if (Date.now() > end) return false;
+        await this.sleep(500);
+      }
     }
 
     /** Returns [status, job, note]; status null means nothing to record (a dry run). */

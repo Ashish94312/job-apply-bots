@@ -7,6 +7,10 @@ const SITES = {
     name: "Wellfound", keywords: "Wellfound role names, one per line, like machine learning engineer. Roles it doesn't have are skipped.",
     pages: "25-30 jobs each", locations: true,
   },
+  cutshort: {
+    name: "Cutshort", keywords: "Cutshort skill names, one per line, like machine learning. Each is looked up once in Cutshort's Skills filter; skills it doesn't have are skipped.",
+    pages: "a few jobs each",
+  },
 };
 const STATUS = {
   applied: "Applied",
@@ -829,7 +833,7 @@ async function importFile(e) {
   }
   if (!confirm(`Replace your settings with the ones in ${file.name}, and add its ${data.history.length} past jobs to the history?`)) return;
   try {
-    const { added } = await send({ type: "import", settings: data.settings, history: data.history });
+    const { added } = await send({ type: "import", settings: data.settings, history: data.history, cache: data.cache });
     status.textContent = `Done: settings replaced, ${added} past jobs added${added < data.history.length ? ` (${data.history.length - added} were already here)` : ""}.`;
   } catch (err) {
     status.classList.add("err");

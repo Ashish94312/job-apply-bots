@@ -76,6 +76,43 @@
     "https://wellfound.com/role/l/backend-engineer/india",
     "https://wellfound.com/jobs?x=1"
    ]
+  },
+  {
+   "site": "cutshort",
+   "cfg": {
+    "keywords": [
+     "machine learning",
+     "NLP",
+     "python",
+     "llm"
+    ],
+    "minExperience": 1,
+    "maxExperience": 2,
+    "searchUrls": [
+     "https://cutshort.io/profile/all-jobs?skills=00268"
+    ]
+   },
+   "expected": [
+    "https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=00268",
+    "https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=00301",
+    "https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=00360",
+    "https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=06768",
+    "https://cutshort.io/profile/all-jobs?skills=00268"
+   ]
+  },
+  {
+   "site": "cutshort",
+   "cfg": {
+    "keywords": [
+     "deep learning"
+    ],
+    "minExperience": null,
+    "maxExperience": null,
+    "searchUrls": []
+   },
+   "expected": [
+    "https://cutshort.io/profile/all-jobs?skills=00543"
+   ]
   }
  ],
  "withRange": [

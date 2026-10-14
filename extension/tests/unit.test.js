@@ -6,7 +6,7 @@ const path = require("node:path");
 
 globalThis.JB = {};
 globalThis.chrome = { storage: { local: {} } }; // store.js only touches it when called
-for (const file of ["lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/store.js", "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js"]) {
+for (const file of ["lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/store.js", "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js", "sites/cutshort.js"]) {
   require(path.join(__dirname, "..", file));
 }
 const cases = require("./cases.json");
@@ -78,8 +78,35 @@ test("settings: defaults fill gaps, a site's answers come before the shared ones
   assert.equal(store.normalize(undefined).savedAt, null);
 });
 
-test("Instahyre and Wellfound search pages match the Python bots", () => {
-  for (const c of cases.siteUrls) assert.deepEqual(sites[c.site].searchUrls(c.cfg), c.expected, `${c.site} ${JSON.stringify(c.cfg)}`);
+test("Instahyre, Wellfound and Cutshort search pages match the Python bots", async () => {
+  const kept = {};
+  globalThis.chrome = { storage: { local: { get: async k => ({ [k]: kept[k] }), set: async o => Object.assign(kept, o) } } };
+  for (const c of cases.siteUrls) {
+    const got = sites[c.site].searches ? await sites[c.site].searches(c.cfg, async () => null, () => {}) : sites[c.site].searchUrls(c.cfg);
+    assert.deepEqual(got, c.expected, `${c.site} ${JSON.stringify(c.cfg)}`);
+  }
+});
+
+test("Cutshort looks up a skill it doesn't know once, and remembers it", async () => {
+  const kept = {};
+  globalThis.chrome = { storage: { local: { get: async k => ({ [k]: kept[k] }), set: async o => Object.assign(kept, o) } } };
+  const asked = [];
+  const lookup = async k => { asked.push(k); return k === "FastAPI" ? "06785" : null; };
+  const said = [];
+  const cfg = { keywords: ["FastAPI", "unicorn", "python"], minExperience: 1, maxExperience: 2, searchUrls: [] };
+  const urls = await sites.cutshort.searches(cfg, lookup, line => said.push(line));
+  assert.deepEqual(urls, [
+    "https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=06785",
+    "https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=00360",
+  ]);
+  assert.deepEqual(asked, ["FastAPI", "unicorn"]);
+  assert.deepEqual(said, ["  Cutshort has no skill called 'unicorn', skipping it."]);
+  assert.deepEqual(kept[sites.cutshort.CACHE_KEY], { fastapi: "06785" });
+  assert.equal(sites.cutshort.searchLabel(urls[0]), "fastapi");
+  await sites.cutshort.searches(cfg, lookup, () => {});
+  assert.deepEqual(asked, ["FastAPI", "unicorn", "unicorn"]); // found ones aren't looked up again; misses are retried
+  assert.equal(sites.cutshort.searchPageUrl(urls[0], 3), `${urls[0]}&page=3`);
+  assert.equal(sites.cutshort.jobId("https://cutshort.io/job/ML-Engineer-Acme-abc123?ref=feed"), "ML-Engineer-Acme-abc123");
 });
 
 test("Wellfound's experience reads like the Python bot's", () => {

@@ -1,7 +1,7 @@
 // The extension's background worker: runs the bots (engine.js) and takes requests from the dashboard.
 importScripts(
   "lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/store.js",
-  "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js",
+  "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js", "sites/cutshort.js",
   "engine.js",
 );
 
@@ -36,6 +36,11 @@ const handlers = {
   forget: async m => ({ count: await JB.store.forget(m.site, m.status) }),
   import: async m => {
     if (m.settings) await JB.store.saveSettings(m.settings);
+    for (const [key, found] of Object.entries(m.cache || {})) { // e.g. Cutshort skill ids the Python bot looked up
+      if (!key.startsWith("cache:") || !found || typeof found !== "object") continue;
+      const have = (await chrome.storage.local.get(key))[key] || {};
+      await chrome.storage.local.set({ [key]: { ...found, ...have } });
+    }
     return { added: await JB.store.importHistory(m.history) };
   },
 };

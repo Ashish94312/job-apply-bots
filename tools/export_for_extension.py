@@ -21,7 +21,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
-SITES = ("hirist", "instahyre", "wellfound")  # what the extension can run so far
+SITES = ("hirist", "instahyre", "wellfound", "cutshort")  # what the extension can run so far
 PROFILE_SITE = "hirist"  # whose filters and answers become the profile every site shares
 FORMAT = "job-apply-bots/1"
 SHOT_RE = re.compile(r"\s*\[[\w.-]+\.png\]")
@@ -112,9 +112,18 @@ def write_defaults():
     print(f"Wrote {out.relative_to(ROOT)}.")
 
 
+def cache():
+    """What the bots have looked up and kept, e.g. Cutshort's skill ids."""
+    found = {}
+    skills = ROOT / "cutshort" / "data" / "skill_ids.json"
+    if skills.exists():
+        found["cache:cutshort:skills"] = json.loads(skills.read_text())
+    return found
+
+
 def write_export(out):
     data = {"format": FORMAT, "exported": datetime.now().isoformat(timespec="seconds"),
-            "settings": settings("config.yaml"), "history": history()}
+            "settings": settings("config.yaml"), "history": history(), "cache": cache()}
     out.write_text(json.dumps(data, indent=1, ensure_ascii=False))
     applied = sum(r["status"] == "applied" for r in data["history"])
     print(f"Wrote {out}: settings for {', '.join(SITES)} and {len(data['history'])} past jobs ({applied} applied).")

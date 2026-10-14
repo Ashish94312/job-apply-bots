@@ -115,7 +115,7 @@ cd ../linkedin
 
 Each bot folder is self-contained: its own `config.yaml`, login session, history (`data/jobs.db`) and screenshots.
 
-## Sendoff: the Chrome extension (Hirist, Instahyre and Wellfound so far)
+## Sendoff: the Chrome extension (all sites but LinkedIn so far)
 
 **Sendoff** is the same bot as a Chrome extension, with no Python or terminal: it runs in your own Chrome with your own logins,
 from a dashboard with settings, history and live progress. Load the `extension` folder in `chrome://extensions`

@@ -352,6 +352,55 @@
           "india",
           "remote"
         ]
+      },
+      "cutshort": {
+        "keywords": [
+          "generative ai",
+          "agentic ai",
+          "large language models",
+          "machine learning",
+          "artificial intelligence",
+          "natural language processing",
+          "deep learning",
+          "computer vision",
+          "mlops",
+          "langchain",
+          "data science",
+          "python",
+          "django",
+          "fastapi",
+          "software development",
+          "pytorch",
+          "tensorflow",
+          "flask",
+          "prompt engineering",
+          "retrieval augmented generation",
+          "microservices",
+          "restful apis",
+          "backend development",
+          "full stack development"
+        ],
+        "searchUrls": [
+          "https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=00268",
+          "https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=06768",
+          "https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=06851",
+          "https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=00301",
+          "https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=00543",
+          "https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=06726",
+          "https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=06694",
+          "https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=06790",
+          "https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=00121",
+          "https://cutshort.io/profile/all-jobs?minexp=1&maxexp=2&skills=00360"
+        ],
+        "limits": {
+          "maxPerRun": 10,
+          "maxPerDay": 30,
+          "delaySeconds": [
+            20,
+            45
+          ],
+          "maxPages": 10
+        }
       }
     }
   };
