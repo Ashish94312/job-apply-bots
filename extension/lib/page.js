@@ -235,7 +235,10 @@
 
   JB.page = {
     norm,
+    isVisible,
+    click,
     firstVisible,
+    APPLIED_TEXT_RE,
     fields,
     fillForm,
     exists: css => !!document.querySelector(css),

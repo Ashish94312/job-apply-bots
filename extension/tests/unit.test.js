@@ -6,7 +6,7 @@ const path = require("node:path");
 
 globalThis.JB = {};
 globalThis.chrome = { storage: { local: {} } }; // store.js only touches it when called
-for (const file of ["lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/store.js", "sites/hirist.js"]) {
+for (const file of ["lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/store.js", "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js"]) {
   require(path.join(__dirname, "..", file));
 }
 const cases = require("./cases.json");
@@ -76,4 +76,27 @@ test("settings: defaults fill gaps, a site's answers come before the shared ones
   assert.equal(cfg.coverNote, "Hi");
   assert.deepEqual(cfg.keywords, s.sites.hirist.keywords);
   assert.equal(store.normalize(undefined).savedAt, null);
+});
+
+test("Instahyre and Wellfound search pages match the Python bots", () => {
+  for (const c of cases.siteUrls) assert.deepEqual(sites[c.site].searchUrls(c.cfg), c.expected, `${c.site} ${JSON.stringify(c.cfg)}`);
+});
+
+test("Wellfound's experience reads like the Python bot's", () => {
+  for (const c of cases.withRange) assert.equal(sites.wellfound.withRange(c.text), c.expected, c.text);
+});
+
+test("Instahyre and Wellfound job ids and paging", () => {
+  assert.equal(sites.instahyre.jobId("https://www.instahyre.com/job-298311-ml-engineer-at-acme-bangalore/"), "298311");
+  assert.equal(sites.instahyre.searchPageUrl("https://www.instahyre.com/search-jobs?skills=x&years=1", 2), null);
+  assert.equal(sites.wellfound.jobId("https://wellfound.com/jobs/3119876-machine-learning-engineer"), "3119876");
+  assert.equal(sites.wellfound.searchPageUrl("https://wellfound.com/role/l/ai-engineer/india", 2), "https://wellfound.com/role/l/ai-engineer/india?page=2");
+  assert.ok(!sites.instahyre.paged && sites.wellfound.paged && sites.hirist.paged);
+});
+
+test("defaults have each site's own settings", () => {
+  const s = store.normalize(undefined);
+  assert.ok(s.sites.instahyre.limits.maxScrolls >= 0 && s.sites.instahyre.limits.maxPages === undefined);
+  assert.deepEqual(s.sites.wellfound.locations, ["india", "remote"]);
+  assert.ok(s.sites.wellfound.limits.maxPages >= 1);
 });

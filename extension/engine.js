@@ -293,7 +293,7 @@
 
     async loggedIn() {
       this.step(`Checking you're logged in to ${this.site.label}`);
-      await this.goto(this.site.loginUrl);
+      await this.goto(this.site.loginCheckUrl || this.site.loginUrl);
       await this.clearChallenge();
       await this.sleep(3000); // let the page finish drawing its header
       return !!(await this.exec("site.isLoggedIn"));
@@ -305,7 +305,7 @@
       if (!ask) return false;
       await this.ask(
         "Log in, then continue",
-        `Log in to ${this.site.label} in the bot's window (OTP, password or Google all work there).`,
+        `Log in to ${this.site.label} in the bot's window (${this.site.loginHint || "any way it offers"}).`,
         CONTINUE,
       );
       return this.loggedIn();
@@ -378,7 +378,8 @@
       let done = 0;
       for (const search of searches) {
         const listed = new Set();
-        for (let n = 1; n <= limits.maxPages && done < budget; n++) {
+        const pages = this.site.paged ? limits.maxPages : 1;
+        for (let n = 1; n <= pages && done < budget; n++) {
           const url = this.site.searchPageUrl(search, n);
           const where = searchLabel(search);
           this.log();
@@ -387,15 +388,20 @@
           let links;
           try {
             await this.goto(url);
-            links = (await this.ensureLoaded(this.site.jobLinkCss)) ? await this.exec("collectLinks", this.site.maxScrolls) : [];
+            const own = this.site.page.collectLinks ? "site.collectLinks" : "collectLinks";
+            links = (await this.ensureLoaded(this.site.jobLinkCss)) ? await this.exec(own, limits.maxScrolls ?? this.site.maxScrolls ?? 0) : [];
           } catch (e) {
             if (e instanceof Stopped || e instanceof WindowClosed) throw e;
             this.log(`  Couldn't load search page: ${firstLine(e)}`);
             break;
           }
+          if (links && links.skip) { // e.g. Wellfound has no page for that role
+            this.log(`  ${links.skip}, skipping.`);
+            break;
+          }
           const urls = links.map(([u]) => u);
           if (!urls.some(u => !listed.has(u))) { // empty, or a page past the end repeating earlier jobs
-            this.log("  No more jobs for this search.");
+            this.log(this.site.paged ? "  No more jobs for this search." : "  No jobs on this search.");
             break;
           }
           urls.forEach(u => listed.add(u));
@@ -497,6 +503,8 @@
         chrome.tabs.onCreated.removeListener(onCreated);
       }
       if (newTab === false) return [S.MANUAL, "no apply button found"];
+      const blocked = await this.exec("site.cannotApply"); // e.g. "company doesn't hire from your location"
+      if (blocked) return [S.SKIPPED, blocked];
       const wanted = newTab || (await this.inMainWorld(() => (window.__jobBotsOpened || []).pop()));
       if (opened.length || wanted) {
         await chrome.tabs.remove(opened).catch(() => {});
@@ -508,7 +516,7 @@
       const note = JB.answers.coverNote(cfg.coverNote, job);
       for (let i = 0; i < 4; i++) { // fill what we can, submit, repeat (multi-step forms)
         await this.loaded({ fresh: false });
-        await this.exec("site.dismissExtras");
+        await this.dismissExtras();
         if (await this.exec("isApplied")) return [S.APPLIED, ""];
         this.step(`Filling in the application for ${named(job)}`);
         const step = await this.exec("formStep", cfg.answers, note);
@@ -518,9 +526,14 @@
         await this.sleep(2500);
       }
       await this.loaded({ fresh: false });
-      await this.exec("site.dismissExtras");
+      await this.dismissExtras();
       if (await this.exec("isApplied")) return [S.APPLIED, ""];
       return [S.MANUAL, "couldn't confirm the application went through"];
+    }
+
+    /** Close what a site pops up after applying (e.g. Instahyre's "Apply to N similar jobs"). */
+    async dismissExtras() {
+      if (await this.exec("site.dismissExtras")) await this.sleep(1000);
     }
   }
 

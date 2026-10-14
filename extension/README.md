@@ -1,10 +1,10 @@
 # Sendoff
 
 Sends your job applications off for you. It's the bots in this repo as a Chrome extension: no Python, no terminal. It runs in your own Chrome, with your own logins, and
-keeps everything (settings, history) in that Chrome. **Hirist** works so far; the other sites are still the
-Python bots in this repo.
+keeps everything (settings, history) in that Chrome. **Hirist**, **Instahyre** and **Wellfound** work so far;
+Cutshort and LinkedIn are still the Python bots in this repo.
 
-It does what the Python Hirist bot does: searches with your keywords and experience range, skips jobs that don't
+On each site it does what the Python bot does: searches with your keywords and experience range, skips jobs that don't
 fit your filters, answers the screening questions it has answers for, applies, and never applies to the same job
 twice. When it needs you (a login, a check, a question it can't answer) it asks on its dashboard.
 
@@ -29,9 +29,15 @@ Your settings and history stay.
      `.venv/bin/python tools/export_for_extension.py`, then on the dashboard pick the `extension-import.json`
      it writes (Settings > Bring over from the Python bots). The history makes the extension skip the jobs the
      Python bot already handled. Delete the file afterwards: it has your answers in it.
-2. **Log in** to Hirist once: click **Log in** on the Hirist card and sign in in the window that opens (OTP,
-   password or Google all work: it's your normal Chrome). Chrome remembers it.
-3. **Dry run** lists what it would apply to, without applying. Then **Apply**.
+2. **Log in** to each site once: pick the site in the sidebar, click **Log in** and sign in in the window that
+   opens (any way the site offers works, Google included: it's your normal Chrome). Chrome remembers it. No
+   passwords are stored by the extension.
+3. **Dry run** lists what it would apply to, without applying. Then **Apply**. Each site runs on its own, so you
+   can run several at once, each in its own window.
+
+Per site, in Settings > Sites: the search keywords (Hirist: any words; Instahyre: skills, searched once per year
+of your experience range; Wellfound: role names, plus the places to search, like `india` or `remote`) and how
+many applications per run and per day. Which jobs to take, your answers and the cover note are shared by all sites.
 
 While it runs, the bot works in its own Chrome window: leave that window open (you can use other windows
 meanwhile). It closes the window when it's done. **Stop** stops it after the current step.
@@ -46,7 +52,8 @@ screenshots if you turn them on. Nothing is sent anywhere. **Download backup** s
 
 Chrome asks for:
 
-- **Read and change your data on hirist.tech**: to search, read jobs and fill in applications there.
+- **Read and change your data on hirist.tech, instahyre.com and wellfound.com**: to search, read jobs and fill in
+  applications there.
 - **Read your browsing history** (Chrome's wording for the `tabs` permission): to see the bot window's address,
   e.g. to notice an apply button that leads to another site.
 - **Screenshots** are off by default. Turning them on (Settings > Screenshots) asks for access to all sites,
@@ -54,7 +61,7 @@ Chrome asks for:
 
 ## How it differs from the Python bot
 
-- No separate login window: it uses your Chrome's Hirist login.
+- No separate login window and no passwords in a file: it uses your Chrome's logins.
 - A dry run works without logging in.
 - An apply button that opens the company's own site is recorded as **External site** with that link (Chrome
   doesn't let an extension open new tabs on a site's behalf, so it doesn't follow it).
@@ -78,13 +85,15 @@ Plain JavaScript, Manifest V3, no build step.
 | `lib/filters.js`, `lib/answers.js` | Which jobs to apply to, answers to questions (from `core.py`) |
 | `lib/store.js` | Settings and history in `chrome.storage.local` |
 | `lib/defaults.js` | Default settings, generated from the bots' `config.example.yaml` |
-| `sites/hirist.js` | Everything Hirist-specific (from `hirist/portal.py`) |
+| `sites/<site>.js` | Everything specific to one site (from `<site>/portal.py`): its search pages, how to read a job, its quirks |
 | `dashboard.*` | The dashboard page |
 | `fonts/` | Archivo, the dashboard's typeface (SIL Open Font License, `fonts/OFL.txt`) |
 
 A run's state (log, the question it's waiting on) lives in `chrome.storage.session` as `run:<site>`, which the
-dashboard watches. A new site is a `sites/<name>.js` like Hirist's, plus its host in `manifest.json`, its
-defaults in `tools/export_for_extension.py`, and an entry in the dashboard's `SITES`.
+dashboard watches. A new site is a `sites/<name>.js` like the others (`paged` for sites with page 2, 3...;
+otherwise results are scrolled; optional `page` hooks such as `collectLinks`, `isApplied`, `cannotApply` and
+`dismissExtras`), plus its hosts in `manifest.json`, `importScripts` in `background.js`, a `<script>` in
+`dashboard.html`, an entry in the dashboard's `SITES`, and the site in `tools/export_for_extension.py`.
 
 Tests:
 
@@ -92,6 +101,7 @@ Tests:
 node --test extension/tests/                     # filters and answers, checked against the Python bots
 .venv/bin/python extension/tests/make_cases.py   # after changing core.py's filters: refresh those cases
 .venv/bin/python extension/tests/e2e.py          # the extension in Chromium, applying on a fake Hirist
+.venv/bin/python extension/tests/e2e_sites.py    # ...and on fake Instahyre and Wellfound
 .venv/bin/python tools/export_for_extension.py --defaults   # after changing a config.example.yaml
 ```
 

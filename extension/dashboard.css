@@ -113,6 +113,7 @@ h1, h2, h3 { margin: 0; }
   padding: 7px 10px; border-radius: 8px; color: var(--ink); text-decoration: none; font-size: 14.5px;
 }
 .sites li a:hover { background: color-mix(in srgb, var(--surface) 70%, transparent); }
+.sites li a[aria-current] { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); font-weight: 600; }
 .site-state { color: var(--muted); font-size: 12.5px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--line-strong); }
 .dot[data-state="running"] { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
@@ -366,6 +367,15 @@ textarea[name="profile.coverNote"] { font-family: var(--sans); font-size: 14.5px
 .answers input { height: 32px; padding: 4px 8px; }
 .answers input[data-key="pattern"] { font-family: var(--mono); font-size: 12.5px; background: var(--sunk); }
 .inline { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.site-tabs { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--quiet); width: fit-content; }
+.site-tabs button {
+  height: 32px; padding: 0 14px; border: 0; border-radius: 8px; background: transparent; cursor: pointer;
+  color: var(--ink-2); font-size: 14px; font-weight: 500;
+}
+.site-tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
+.site-panel { display: grid; gap: 16px; }
+.site-panel h3 { font-size: 15px; font-weight: 600; margin-top: 4px; }
+#history-site { height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface); }
 .saved { color: var(--ink-2); font-size: 13.5px; }
 .saved.err { color: var(--failed); }
 

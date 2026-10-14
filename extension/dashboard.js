@@ -1,7 +1,13 @@
 // The dashboard: start and watch runs, answer the bot's questions, see the history, edit the settings.
 // Runs happen in the background worker; this page shows their state (chrome.storage.session "run:<site>").
-const SITES = { hirist: { name: "Hirist" } };
-const SITE = "hirist"; // the site the overview shows; the only one so far
+const SITES = {
+  hirist: { name: "Hirist", keywords: "One per line. Each one is its own Hirist search.", pages: "20 jobs each" },
+  instahyre: { name: "Instahyre", keywords: "Skills, one per line, like machine learning. Each is searched once for every year of your experience range." },
+  wellfound: {
+    name: "Wellfound", keywords: "Wellfound role names, one per line, like machine learning engineer. Roles it doesn't have are skipped.",
+    pages: "25-30 jobs each", locations: true,
+  },
+};
 const STATUS = {
   applied: "Applied",
   needs_manual: "Needs you",
@@ -16,8 +22,9 @@ const CHIPS = [["applied", "Applied"], ["needs_manual", "Needs you"], ["external
 const FORMAT = "job-apply-bots/1";
 const HISTORY_LIMIT = 300;
 
-const state = { run: null, stopping: false, error: "", logKey: "", stripKey: "", eventsKey: "" };
-const filter = { status: "applied", text: "" };
+const runs = {}; // site -> its latest run, as the background worker saved it
+const ui = { stopping: {}, error: {}, logKey: "", stripKey: "", eventsKey: "" };
+const filter = { status: "applied", text: "", site: "" };
 let settings = null; // as last saved
 let jobs = {};
 
@@ -31,6 +38,8 @@ function remember(key, value) {
     return null;
   }
 }
+
+let site = SITES[remember("site")] ? remember("site") : Object.keys(SITES)[0]; // the site the overview shows
 
 function el(tag, props = {}, ...kids) {
   const e = Object.assign(document.createElement(tag), props);
@@ -123,7 +132,9 @@ function tipOn(target, title, text) {
 // ---------------------------------------------------------------- pages
 
 function showPage(name) {
-  if (!["overview", "history", "settings"].includes(name)) name = "overview";
+  const [page, which] = name.split("/");
+  name = ["overview", "history", "settings"].includes(page) ? page : "overview";
+  if (name === "overview" && SITES[which]) selectSite(which);
   for (const page of document.querySelectorAll(".page")) page.hidden = page.id !== `page-${name}`;
   for (const link of document.querySelectorAll(".nav a")) {
     if (link.dataset.page === name) link.setAttribute("aria-current", "page");
@@ -146,24 +157,24 @@ function options() {
 }
 
 async function start(action) {
-  state.error = "";
-  state.stopping = false;
+  ui.error[site] = "";
+  ui.stopping[site] = false;
   panel().querySelector("details.opts").open = false;
   try {
-    await send({ type: "start", site: SITE, action, opts: options() });
+    await send({ type: "start", site: site, action, opts: options() });
   } catch (e) {
-    state.error = e.message;
+    ui.error[site] = e.message;
   }
   renderRun();
 }
 
 async function stop() {
-  state.stopping = true;
+  ui.stopping[site] = true;
   renderRun();
   try {
-    await send({ type: "stop", site: SITE });
+    await send({ type: "stop", site: site });
   } catch (e) {
-    state.error = e.message;
+    ui.error[site] = e.message;
     renderRun();
   }
 }
@@ -171,19 +182,38 @@ async function stop() {
 async function answer(id, value) {
   panel().querySelector(".prompt").hidden = true;
   try {
-    await send({ type: "answer", site: SITE, id, value });
+    await send({ type: "answer", site: site, id, value });
   } catch (e) {
-    state.error = e.message;
+    ui.error[site] = e.message;
     renderRun();
   }
 }
 
-function buildRunPanel() {
-  const opts = remember(`opts.${SITE}`) || {};
+function loadOptions() {
+  const opts = remember(`opts.${site}`) || {};
   for (const input of panel().querySelectorAll(".opts input")) {
     if (input.type === "checkbox") input.checked = !!opts[input.name];
     else input.value = opts[input.name] || "";
-    input.addEventListener("change", () => remember(`opts.${SITE}`, options()));
+  }
+}
+
+/** Show this site on the overview. */
+function selectSite(name) {
+  if (!SITES[name]) return;
+  site = name;
+  remember("site", name);
+  $("site-name").textContent = SITES[name].name;
+  ui.logKey = ui.stripKey = ui.eventsKey = "";
+  loadOptions();
+  if (settings) {
+    renderRun();
+    renderRail();
+  }
+}
+
+function buildRunPanel() {
+  for (const input of panel().querySelectorAll(".opts input")) {
+    input.addEventListener("change", () => remember(`opts.${site}`, options()));
   }
   panel().addEventListener("click", e => {
     const act = e.target.closest("[data-act]")?.dataset.act;
@@ -207,9 +237,9 @@ function finished(run) {
 }
 
 function renderRun() {
-  const run = state.run;
+  const run = runs[site];
   const running = !!run?.running;
-  if (!running) state.stopping = false;
+  if (!running) ui.stopping[site] = false;
   const p = panel();
   p.dataset.state = !running ? "idle" : run.prompt ? "waiting" : "running";
 
@@ -220,8 +250,8 @@ function renderRun() {
   p.querySelector('[data-act="stop"]').hidden = !running;
 
   let [text, isError] = ["", false];
-  if (state.error) [text, isError] = [state.error, true];
-  else if (state.stopping && running) text = "Stopping after this step, then closing its window…";
+  if (ui.error[site]) [text, isError] = [ui.error[site], true];
+  else if (ui.stopping[site] && running) text = "Stopping after this step, then closing its window…";
   else if (running && run.prompt) text = "Waiting for you.";
   else if (running && run.action === "dry-run") text = "Going through jobs without applying, in its own window.";
   else if (running && run.action === "login") text = "Waiting for you to log in, in its own window.";
@@ -241,7 +271,7 @@ function renderRun() {
 }
 
 function renderPrompt() {
-  const run = state.run;
+  const run = runs[site];
   const box = panel().querySelector(".prompt");
   const p = run?.running ? run.prompt : null;
   const key = p ? String(p.id) : "";
@@ -256,12 +286,12 @@ function renderPrompt() {
 }
 
 function renderStrip() {
-  const run = state.run;
+  const run = runs[site];
   const page = run?.page;
   const key = JSON.stringify([run?.id, run?.running, page?.cells?.map(c => c.state)]);
   $("now").textContent = run?.running ? run.now || "" : "";
-  if (key === state.stripKey) return;
-  state.stripKey = key;
+  if (key === ui.stripKey) return;
+  ui.stripKey = key;
   $("run-title").textContent = page && !run.running ? "Last page of results" : "Current page of results";
   const strip = $("strip");
   strip.replaceChildren();
@@ -282,10 +312,10 @@ function renderStrip() {
 }
 
 function renderEvents() {
-  const events = state.run?.events || [];
-  const key = `${state.run?.id}:${events.length}`;
-  if (key === state.eventsKey) return;
-  state.eventsKey = key;
+  const events = runs[site]?.events || [];
+  const key = `${runs[site]?.id}:${events.length}`;
+  if (key === ui.eventsKey) return;
+  ui.eventsKey = key;
   const list = $("events");
   list.replaceChildren();
   if (!events.length) {
@@ -320,10 +350,10 @@ function lineClass(line) {
 }
 
 function renderLog() {
-  const log = state.run?.log || [];
-  const key = `${state.run?.id}:${log.length}:${log[log.length - 1] || ""}`;
-  if (key === state.logKey) return;
-  state.logKey = key;
+  const log = runs[site]?.log || [];
+  const key = `${runs[site]?.id}:${log.length}:${log[log.length - 1] || ""}`;
+  if (key === ui.logKey) return;
+  ui.logKey = key;
   const pre = panel().querySelector(".log");
   const atBottom = pre.scrollHeight - pre.scrollTop - pre.clientHeight < 40;
   pre.replaceChildren();
@@ -335,26 +365,31 @@ function renderLog() {
   if (atBottom) pre.scrollTop = pre.scrollHeight;
 }
 
+function siteState(name) {
+  const run = runs[name];
+  return !run?.running ? "idle" : run.prompt ? "waiting" : "running";
+}
+
 function renderSites() {
-  const run = state.run;
-  const running = !!run?.running;
-  const list = $("site-list");
-  const s = !running ? "idle" : run.prompt ? "waiting" : "running";
-  const label = { idle: "Idle", running: "Running", waiting: "Needs you" }[s];
-  list.replaceChildren(...Object.entries(SITES).map(([, info]) => el("li", {},
-    el("a", { href: "#overview" }, el("span", { className: "dot" }), info.name, el("span", { className: "site-state", textContent: label })))));
-  list.querySelector(".dot").dataset.state = s;
+  const label = { idle: "Idle", running: "Running", waiting: "Needs you" };
+  $("site-list").replaceChildren(...Object.entries(SITES).map(([name, info]) => {
+    const dot = el("span", { className: "dot" });
+    dot.dataset.state = siteState(name);
+    const link = el("a", { href: `#overview/${name}` }, dot, info.name, el("span", { className: "site-state", textContent: label[siteState(name)] }));
+    if (name === site) link.setAttribute("aria-current", "true");
+    return el("li", {}, link);
+  }));
 }
 
 function renderTitle() {
-  const run = state.run;
-  document.title = run?.running && run.prompt ? "Needs you – Sendoff" : run?.running ? "Running – Sendoff" : "Sendoff";
+  const states = Object.keys(SITES).map(siteState);
+  document.title = states.includes("waiting") ? "Needs you – Sendoff" : states.includes("running") ? "Running – Sendoff" : "Sendoff";
 }
 
 // ---------------------------------------------------------------- the rail: today, last 14 days, needs you, totals
 
 function counts() {
-  const rows = Object.values(jobs).filter(r => r.site === SITE);
+  const rows = Object.values(jobs).filter(r => r.site === site);
   const by = {};
   for (const r of rows) by[r.status] = (by[r.status] || 0) + 1;
   return { rows, by };
@@ -362,7 +397,7 @@ function counts() {
 
 function renderRail() {
   const { rows, by } = counts();
-  const limits = settings?.sites[SITE]?.limits;
+  const limits = settings?.sites[site]?.limits;
   const n = rows.filter(r => r.status === "applied" && String(r.ts).startsWith(today())).length;
   const max = limits?.maxPerDay || 0;
   $("today-n").textContent = n;
@@ -488,6 +523,9 @@ function buildHistory() {
     $("chips").append(chip);
   }
   $("history-search").addEventListener("input", e => { filter.text = e.target.value.trim().toLowerCase(); renderHistory(); });
+  const pick = $("history-site");
+  for (const [name, info] of Object.entries(SITES)) pick.add(new Option(info.name, name));
+  pick.onchange = () => { filter.site = pick.value; renderHistory(); };
   $("recheck").onclick = recheckSkipped;
 }
 
@@ -500,7 +538,7 @@ async function showShot(r) {
 }
 
 function renderHistory() {
-  const all = Object.values(jobs).sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
+  const all = Object.values(jobs).filter(r => !filter.site || r.site === filter.site).sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
   for (const chip of document.querySelectorAll(".chip")) {
     chip.querySelector(".n").textContent = chip.dataset.status ? all.filter(r => r.status === chip.dataset.status).length : all.length;
   }
@@ -540,9 +578,55 @@ async function recheckSkipped() {
 
 const form = $("settings-form");
 const LIST_FIELDS = new Set([
-  "sites.hirist.keywords", "sites.hirist.searchUrls", "profile.filters.includeTitle", "profile.filters.requireRole",
-  "profile.filters.excludeTitle", "profile.filters.excludeCompanies", "profile.filters.excludeText",
+  "profile.filters.includeTitle", "profile.filters.requireRole", "profile.filters.excludeTitle",
+  "profile.filters.excludeCompanies", "profile.filters.excludeText",
+  ...Object.entries(SITES).flatMap(([name, info]) => [
+    `sites.${name}.keywords`, `sites.${name}.searchUrls`, ...(info.locations ? [`sites.${name}.locations`] : []),
+  ]),
 ]);
+
+/** One site's search and limits fields. */
+function sitePanel(name, info) {
+  const base = `sites.${name}`;
+  const field = (cls, label, hint, control) => el("label", { className: cls }, label, hint ? el("small", { textContent: hint }) : null, control);
+  const area = (path, rows) => el("textarea", { name: path, rows, spellcheck: false });
+  const num = (path, min) => el("input", { type: "number", name: path, min, step: 1 });
+  const depth = JB.sites[name].paged
+    ? field("field narrow", "Pages per search", info.pages, num(`${base}.limits.maxPages`, 1))
+    : field("field narrow", "Scrolls per search", "Each loads more results", num(`${base}.limits.maxScrolls`, 0));
+  const box = el("div", { className: "site-panel", id: `site-panel-${name}`, role: "tabpanel" },
+    el("div", { className: "two" },
+      field("field", "Search keywords", info.keywords, area(`${base}.keywords`, 12)),
+      field("field", "Extra search pages", `Optional. Whole ${info.name} search addresses, one per line.`, area(`${base}.searchUrls`, 12))),
+    info.locations ? field("field", "Places", "One per line: a country or city, like india, or remote.", area(`${base}.locations`, 3)) : null,
+    el("h3", { textContent: "How many" }),
+    el("div", { className: "row-fields" },
+      field("field narrow", "Per run", null, num(`${base}.limits.maxPerRun`, 1)),
+      field("field narrow", "Per day", null, num(`${base}.limits.maxPerDay`, 1)),
+      depth),
+    el("div", { className: "row-fields" },
+      field("field narrow", "Pause, at least", "seconds", num(`${base}.limits.delaySeconds.0`, 0)),
+      field("field narrow", "Pause, at most", "seconds", num(`${base}.limits.delaySeconds.1`, 0))),
+    el("p", { className: "hint", textContent: "After each application the bot waits a random time in this range, like a person would." }));
+  box.setAttribute("aria-labelledby", `site-tab-${name}`);
+  return box;
+}
+
+function showSiteSettings(name) {
+  for (const tab of $("site-tabs").children) tab.setAttribute("aria-selected", tab.dataset.site === name);
+  for (const box of $("site-panels").children) box.hidden = box.id !== `site-panel-${name}`;
+}
+
+function buildSiteSettings() {
+  for (const [name, info] of Object.entries(SITES)) {
+    const tab = el("button", { type: "button", id: `site-tab-${name}`, textContent: info.name, onclick: () => showSiteSettings(name) });
+    tab.setAttribute("role", "tab");
+    tab.dataset.site = name;
+    $("site-tabs").append(tab);
+    $("site-panels").append(sitePanel(name, info));
+  }
+  showSiteSettings(site);
+}
 
 const getPath = (obj, path) => path.split(".").reduce((o, k) => (o == null ? o : o[k]), obj);
 function setPath(obj, path, value) {
@@ -630,21 +714,25 @@ function check(s) {
   const most = s.profile.filters.maxExperienceRequired;
   if (most != null && !(most >= 0)) { bad("profile.filters.maxExperienceRequired"); errors.push("Most experience a job may ask for can't be negative."); }
 
-  for (const [site, info] of Object.entries(SITES)) {
-    const base = `sites.${site}.limits`;
-    const ok = [whole(`${base}.maxPerRun`, 1), whole(`${base}.maxPerDay`, 1), whole(`${base}.maxPages`, 1)];
-    if (ok.includes(false)) errors.push(`${info.name}: per run, per day and pages per search are whole numbers, at least 1.`);
-    const [lo, hi] = s.sites[site].limits.delaySeconds;
+  for (const [name, info] of Object.entries(SITES)) {
+    const base = `sites.${name}.limits`;
+    const depth = JB.sites[name].paged ? whole(`${base}.maxPages`, 1) : whole(`${base}.maxScrolls`, 0);
+    if (![whole(`${base}.maxPerRun`, 1), whole(`${base}.maxPerDay`, 1), depth].every(Boolean)) {
+      errors.push(`${info.name}: per run and per day are whole numbers, at least 1; so is how far to go through results.`);
+    }
+    const [lo, hi] = s.sites[name].limits.delaySeconds;
     if (![lo, hi].every(v => v != null && v >= 0) || lo > hi) {
       bad(`${base}.delaySeconds.0`);
       bad(`${base}.delaySeconds.1`);
       errors.push(`${info.name}: the pause is two numbers of seconds, the first not more than the second.`);
     }
-    if (s.sites[site].searchUrls.some(u => !JB.sites[site].searchHost.test(u))) {
-      bad(`sites.${site}.searchUrls`);
-      errors.push(`${info.name}: extra search pages must be ${info.name} pages, starting ${JB.sites[site].loginUrl}`);
+    if (s.sites[name].searchUrls.some(u => !JB.sites[name].searchHost.test(u))) {
+      bad(`sites.${name}.searchUrls`);
+      errors.push(`${info.name}: extra search pages must be ${info.name} pages, starting ${JB.sites[name].loginUrl}`);
     }
   }
+  const firstBad = $("site-panels").querySelector('[aria-invalid="true"]');
+  if (firstBad) showSiteSettings(firstBad.closest(".site-panel").id.replace("site-panel-", ""));
 
   let broken = 0;
   for (const tr of document.querySelectorAll("#answer-rows tr")) {
@@ -680,6 +768,7 @@ async function save(e) {
 }
 
 function buildSettings() {
+  buildSiteSettings();
   form.addEventListener("input", dirty);
   form.addEventListener("submit", save);
   $("discard").onclick = () => fillForm(settings);
@@ -768,11 +857,14 @@ async function init() {
     link.addEventListener("click", e => { e.preventDefault(); goto(link.dataset.goto); });
   }
   window.addEventListener("hashchange", () => showPage(location.hash.slice(1)));
+  selectSite(site);
   showPage(location.hash.slice(1));
 
   settings = await JB.store.getSettings();
   jobs = await JB.store.jobs();
-  state.run = (await chrome.storage.session.get(`run:${SITE}`))[`run:${SITE}`] || null;
+  for (const [k, run] of Object.entries(await chrome.storage.session.get(null))) {
+    if (k.startsWith("run:") && SITES[k.slice(4)]) runs[k.slice(4)] = run;
+  }
   fillForm(settings);
   $("first-run").hidden = !!settings.savedAt;
   renderRun();
@@ -780,9 +872,12 @@ async function init() {
   renderHistory();
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "session" && changes[`run:${SITE}`]) {
-      state.run = changes[`run:${SITE}`].newValue || null;
-      if (state.run?.running) state.error = "";
+    if (area === "session") {
+      for (const [k, { newValue }] of Object.entries(changes)) {
+        if (!k.startsWith("run:") || !SITES[k.slice(4)]) continue;
+        runs[k.slice(4)] = newValue || null;
+        if (newValue?.running) ui.error[k.slice(4)] = "";
+      }
       renderRun();
     } else if (area === "local") {
       if (changes.jobs) {

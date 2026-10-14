@@ -13,7 +13,9 @@
     jobReadyCss: "h1",
     jobUrlRe: /hirist\.tech\/j\/(?:[^/?#]*-)?(\d+)(?:[/?#]|$)/,
     applyRe: /^\s*apply( now)?\s*$/i,
-    maxScrolls: 0, // 20 jobs per page, no infinite scroll
+    paged: true, // 20 jobs per page, later pages are &page=N
+    maxScrolls: 0,
+    loginHint: "OTP, password or Google",
     searchHost: /^https:\/\/(www\.)?hirist\.tech\//,
 
     jobId(url) {

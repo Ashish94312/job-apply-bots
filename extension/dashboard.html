@@ -19,7 +19,7 @@
     <section class="sites" aria-labelledby="sites-title">
       <h2 id="sites-title">Sites</h2>
       <ul id="site-list"></ul>
-      <p class="later">Instahyre, Wellfound, Cutshort and LinkedIn still run as the Python bots for now.</p>
+      <p class="later">Cutshort and LinkedIn still run as the Python bots for now.</p>
     </section>
     <p class="side-foot">Your settings and history stay in this Chrome.</p>
   </aside>
@@ -32,10 +32,10 @@
     </p>
 
     <!-- ===================================================== overview -->
-    <section class="page bot" id="page-overview" data-site="hirist" data-state="idle" aria-labelledby="site-name">
+    <section class="page bot" id="page-overview" data-state="idle" aria-labelledby="site-name">
       <header class="site-head">
         <div>
-          <h1 id="site-name">Hirist</h1>
+          <h1 id="site-name"></h1>
           <p class="status" aria-live="polite"></p>
         </div>
         <div class="actions">
@@ -47,7 +47,7 @@
               <label>Stop after <input type="number" name="max" min="1" step="1"> applications this run</label>
             </div>
           </details>
-          <button class="btn" data-act="login" title="Open Hirist so you can log in">Log in</button>
+          <button class="btn" data-act="login" title="Open the site so you can log in">Log in</button>
           <button class="btn" data-act="dry-run" title="List the jobs it would apply to, without applying">Dry run</button>
           <button class="btn primary" data-act="apply">Apply</button>
           <button class="btn stop" data-act="stop" hidden>Stop</button>
@@ -128,6 +128,7 @@
       </header>
       <div class="filters">
         <div class="chips" id="chips"></div>
+        <select id="history-site" aria-label="Site"><option value="">All sites</option></select>
         <input type="search" id="history-search" placeholder="Find a title or company" aria-label="Find a title or company">
         <button class="btn" id="recheck" title="Forget the jobs the filters skipped, so the next run looks at them again">Re-check skipped jobs</button>
       </div>
@@ -148,12 +149,11 @@
       </header>
       <div class="settings">
         <nav class="toc" aria-label="Settings sections">
-          <a href="#settings" data-goto="search">What to search for</a>
+          <a href="#settings" data-goto="search">Sites</a>
           <a href="#settings" data-goto="experience">Your experience</a>
           <a href="#settings" data-goto="jobs">Which jobs</a>
           <a href="#settings" data-goto="answers">Answers</a>
           <a href="#settings" data-goto="message">Message to recruiters</a>
-          <a href="#settings" data-goto="limits">How many</a>
           <a href="#settings" data-goto="screenshots">Screenshots</a>
           <a href="#settings" data-goto="bring-over">Bring over, back up</a>
         </nav>
@@ -161,13 +161,10 @@
         <div class="settings-body">
           <form id="settings-form" novalidate>
             <section class="set" id="set-search" aria-labelledby="search-title">
-              <h2 id="search-title">What to search for <small>Hirist</small></h2>
-              <div class="two">
-                <label class="field">Search keywords <small>One per line. Each one is its own Hirist search.</small>
-                  <textarea name="sites.hirist.keywords" rows="12" spellcheck="false"></textarea></label>
-                <label class="field">Extra search pages <small>Optional. Whole Hirist search addresses, one per line.</small>
-                  <textarea name="sites.hirist.searchUrls" rows="12" spellcheck="false"></textarea></label>
-              </div>
+              <h2 id="search-title">Sites</h2>
+              <p class="hint">What to search for on each site, and how many applications it may send.</p>
+              <div class="site-tabs" id="site-tabs" role="tablist" aria-label="Site"></div>
+              <div id="site-panels"></div>
             </section>
 
             <section class="set" id="set-experience" aria-labelledby="experience-title">
@@ -178,7 +175,7 @@
                 <label class="field">Most a job may ask for <small>Skips a job asking for more ("3 - 6 years" counts as 3). Empty: no limit.</small>
                   <input type="number" name="profile.filters.maxExperienceRequired" min="0" step="0.5"></label>
               </div>
-              <p class="hint">Hirist only searches jobs in your range.</p>
+              <p class="hint">Hirist and Instahyre only search jobs in your range.</p>
             </section>
 
             <section class="set" id="set-jobs" aria-labelledby="jobs-title">
@@ -219,20 +216,6 @@
               <h2 id="message-title">Message to recruiters <small>All sites</small></h2>
               <label class="field">For "note to the recruiter" and "your message" boxes <small>{title} and {company} are filled in. Empty: apply without a message.</small>
                 <textarea name="profile.coverNote" rows="5"></textarea></label>
-            </section>
-
-            <section class="set" id="set-limits" aria-labelledby="limits-title">
-              <h2 id="limits-title">How many <small>Hirist</small></h2>
-              <div class="row-fields">
-                <label class="field narrow">Per run<input type="number" name="sites.hirist.limits.maxPerRun" min="1" step="1"></label>
-                <label class="field narrow">Per day<input type="number" name="sites.hirist.limits.maxPerDay" min="1" step="1"></label>
-                <label class="field narrow">Pages per search <small>20 jobs each</small><input type="number" name="sites.hirist.limits.maxPages" min="1" step="1"></label>
-              </div>
-              <div class="row-fields">
-                <label class="field narrow">Pause, at least <small>seconds</small><input type="number" name="sites.hirist.limits.delaySeconds.0" min="0" step="1"></label>
-                <label class="field narrow">Pause, at most <small>seconds</small><input type="number" name="sites.hirist.limits.delaySeconds.1" min="0" step="1"></label>
-              </div>
-              <p class="hint">After each application the bot waits a random time in this range, like a person would.</p>
             </section>
 
             <div class="savebar" id="savebar">
@@ -282,6 +265,8 @@
 <script src="lib/answers.js"></script>
 <script src="lib/store.js"></script>
 <script src="sites/hirist.js"></script>
+<script src="sites/instahyre.js"></script>
+<script src="sites/wellfound.js"></script>
 <script src="dashboard.js"></script>
 </body>
 </html>

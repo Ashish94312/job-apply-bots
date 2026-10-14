@@ -21,7 +21,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
-SITES = ("hirist",)  # what the extension can run so far
+SITES = ("hirist", "instahyre", "wellfound")  # what the extension can run so far
 PROFILE_SITE = "hirist"  # whose filters and answers become the profile every site shares
 FORMAT = "job-apply-bots/1"
 SHOT_RE = re.compile(r"\s*\[[\w.-]+\.png\]")
@@ -35,16 +35,22 @@ def text(value):
 
 def site_settings(cfg):
     search, limits = cfg.get("search") or {}, cfg.get("limits") or {}
-    return {
+    out = {
         "keywords": list(search.get("keywords") or []),
         "searchUrls": list(cfg.get("search_urls") or []),
         "limits": {
             "maxPerRun": limits.get("max_per_run", 10),
             "maxPerDay": limits.get("max_per_day", 30),
             "delaySeconds": list(limits.get("delay_seconds") or [20, 45]),
-            "maxPages": limits.get("max_pages", 5),
         },
     }
+    if "max_scrolls" in limits:  # a site whose results load as you scroll (Instahyre)
+        out["limits"]["maxScrolls"] = limits["max_scrolls"]
+    else:
+        out["limits"]["maxPages"] = limits.get("max_pages", 5)
+    if "locations" in search:  # a site searched by place (Wellfound)
+        out["locations"] = list(search.get("locations") or [])
+    return out
 
 
 def profile_settings(cfg):

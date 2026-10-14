@@ -1,4 +1,105 @@
 {
+ "siteUrls": [
+  {
+   "site": "instahyre",
+   "cfg": {
+    "keywords": [
+     "machine learning",
+     "AI/ML engineer",
+     "python"
+    ],
+    "minExperience": 1,
+    "maxExperience": 2,
+    "searchUrls": []
+   },
+   "expected": [
+    "https://www.instahyre.com/search-jobs?skills=machine%20learning&years=1",
+    "https://www.instahyre.com/search-jobs?skills=machine%20learning&years=2",
+    "https://www.instahyre.com/search-jobs?skills=AI/ML%20engineer&years=1",
+    "https://www.instahyre.com/search-jobs?skills=AI/ML%20engineer&years=2",
+    "https://www.instahyre.com/search-jobs?skills=python&years=1",
+    "https://www.instahyre.com/search-jobs?skills=python&years=2"
+   ]
+  },
+  {
+   "site": "instahyre",
+   "cfg": {
+    "keywords": [
+     "data science"
+    ],
+    "minExperience": 0,
+    "maxExperience": 0,
+    "searchUrls": [
+     "https://www.instahyre.com/search-jobs?skills=X"
+    ]
+   },
+   "expected": [
+    "https://www.instahyre.com/search-jobs?skills=data%20science&years=0",
+    "https://www.instahyre.com/search-jobs?skills=X"
+   ]
+  },
+  {
+   "site": "wellfound",
+   "cfg": {
+    "keywords": [
+     "Machine Learning Engineer",
+     "ai engineer"
+    ],
+    "locations": [
+     "india",
+     "Remote",
+     "New Delhi"
+    ],
+    "searchUrls": []
+   },
+   "expected": [
+    "https://wellfound.com/role/l/machine-learning-engineer/india",
+    "https://wellfound.com/role/r/machine-learning-engineer",
+    "https://wellfound.com/role/l/machine-learning-engineer/new-delhi",
+    "https://wellfound.com/role/l/ai-engineer/india",
+    "https://wellfound.com/role/r/ai-engineer",
+    "https://wellfound.com/role/l/ai-engineer/new-delhi"
+   ]
+  },
+  {
+   "site": "wellfound",
+   "cfg": {
+    "keywords": [
+     "backend engineer"
+    ],
+    "locations": [],
+    "searchUrls": [
+     "https://wellfound.com/jobs?x=1"
+    ]
+   },
+   "expected": [
+    "https://wellfound.com/role/l/backend-engineer/india",
+    "https://wellfound.com/jobs?x=1"
+   ]
+  }
+ ],
+ "withRange": [
+  {
+   "text": "Acme ML Engineer 3 years of exp Remote",
+   "expected": "3 - 3 years. Acme ML Engineer 3 years of exp Remote"
+  },
+  {
+   "text": "Beta 10+ years of exp",
+   "expected": "10 - 10 years. Beta 10+ years of exp"
+  },
+  {
+   "text": "Gamma 1 year of exp",
+   "expected": "1 - 1 years. Gamma 1 year of exp"
+  },
+  {
+   "text": "no experience given",
+   "expected": "no experience given"
+  },
+  {
+   "text": "",
+   "expected": ""
+  }
+ ],
  "filters": {
   "includeTitle": [
    "machine learning",

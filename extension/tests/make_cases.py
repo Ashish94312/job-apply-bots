@@ -55,7 +55,45 @@ WORDS = [("AI/ML Engineer", "ai"), ("Email engineer", "ai"), ("Sr. ML", "sr"), (
          ("Full-Stack", "full stack"), ("Full-Stack", "full-stack"), ("C++ Dev", "c++"), ("Ingénieur IA", "ia"),
          ("naïve", "na"), ("RAG/LLM", "rag"), ("drag", "rag")]
 
+def bot_module(bot, name):
+    """Import <bot>/<name>.py on its own: every bot has a core.py and portal.py of the same names."""
+    import importlib
+    for m in ("core", "portal"):
+        sys.modules.pop(m, None)
+    sys.path.insert(0, str(ROOT / bot))
+    try:
+        return importlib.import_module(name)
+    finally:
+        sys.path.pop(0)
+
+
+SEARCHES = [
+    {"keywords": ["machine learning", "AI/ML engineer", "python"], "minExperience": 1, "maxExperience": 2, "searchUrls": []},
+    {"keywords": ["data science"], "minExperience": 0, "maxExperience": 0, "searchUrls": ["https://www.instahyre.com/search-jobs?skills=X"]},
+]
+PLACES = [
+    {"keywords": ["Machine Learning Engineer", "ai engineer"], "locations": ["india", "Remote", "New Delhi"], "searchUrls": []},
+    {"keywords": ["backend engineer"], "locations": [], "searchUrls": ["https://wellfound.com/jobs?x=1"]},
+]
+
+
+def python_cfg(c):
+    return {"search": {"keywords": c["keywords"], "min_experience": c.get("minExperience"), "max_experience": c.get("maxExperience"),
+                       "locations": c.get("locations")}, "search_urls": c["searchUrls"]}
+
+
+instahyre = bot_module("instahyre", "portal").PORTAL
+wellfound_portal = bot_module("wellfound", "portal")
+site_urls = [{"site": "instahyre", "cfg": c, "expected": instahyre.search_urls(None, python_cfg(c))} for c in SEARCHES]
+site_urls += [{"site": "wellfound", "cfg": c, "expected": wellfound_portal.PORTAL.search_urls(None, python_cfg(c))} for c in PLACES]
+with_range = [{"text": x, "expected": wellfound_portal.with_range(x)}
+              for x in ["Acme ML Engineer 3 years of exp Remote", "Beta 10+ years of exp", "Gamma 1 year of exp", "no experience given", ""]]
+sys.modules.pop("core", None)
+sys.modules.pop("portal", None)
+
 cases = {
+    "siteUrls": site_urls,
+    "withRange": with_range,
     "filters": {
         "includeTitle": filters["include_title"], "requireRole": filters["require_role"],
         "excludeTitle": filters["exclude_title"], "excludeCompanies": filters["exclude_companies"],

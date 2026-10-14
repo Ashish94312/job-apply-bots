@@ -242,6 +242,116 @@
           ],
           "maxPages": 5
         }
+      },
+      "instahyre": {
+        "keywords": [
+          "generative ai",
+          "agentic ai",
+          "llm",
+          "ai engineer",
+          "machine learning",
+          "artificial intelligence",
+          "nlp",
+          "deep learning",
+          "computer vision",
+          "mlops",
+          "rag",
+          "langchain",
+          "data science",
+          "python developer",
+          "backend engineer",
+          "backend developer",
+          "software engineer",
+          "software developer",
+          "sde",
+          "full stack developer",
+          "python",
+          "software development engineer",
+          "sde 1",
+          "sde 2",
+          "ml engineer",
+          "genai engineer",
+          "llm engineer",
+          "agentic ai engineer",
+          "ai agents",
+          "langgraph",
+          "nlp engineer",
+          "computer vision engineer",
+          "data scientist",
+          "applied scientist",
+          "research engineer",
+          "django",
+          "fastapi",
+          "flask",
+          "python backend developer",
+          "full stack engineer",
+          "founding engineer",
+          "product engineer"
+        ],
+        "searchUrls": [
+          "https://www.instahyre.com/search-jobs?skills=Machine%20Learning&years=1",
+          "https://www.instahyre.com/search-jobs?skills=Machine%20Learning&years=2",
+          "https://www.instahyre.com/search-jobs?skills=Artificial%20Intelligence&years=1",
+          "https://www.instahyre.com/search-jobs?skills=Artificial%20Intelligence&years=2",
+          "https://www.instahyre.com/search-jobs?skills=Generative%20AI&years=1",
+          "https://www.instahyre.com/search-jobs?skills=Generative%20AI&years=2",
+          "https://www.instahyre.com/search-jobs?skills=LLM&years=1",
+          "https://www.instahyre.com/search-jobs?skills=LLM&years=2",
+          "https://www.instahyre.com/search-jobs?skills=NLP&years=1",
+          "https://www.instahyre.com/search-jobs?skills=NLP&years=2",
+          "https://www.instahyre.com/search-jobs?skills=Computer%20Vision&years=1",
+          "https://www.instahyre.com/search-jobs?skills=Computer%20Vision&years=2",
+          "https://www.instahyre.com/search-jobs?skills=PyTorch&years=1",
+          "https://www.instahyre.com/search-jobs?skills=PyTorch&years=2",
+          "https://www.instahyre.com/search-jobs?skills=Data%20Science&years=1",
+          "https://www.instahyre.com/search-jobs?skills=Data%20Science&years=2",
+          "https://www.instahyre.com/search-jobs?skills=Python&years=1",
+          "https://www.instahyre.com/search-jobs?skills=Python&years=2"
+        ],
+        "limits": {
+          "maxPerRun": 10,
+          "maxPerDay": 30,
+          "delaySeconds": [
+            20,
+            45
+          ],
+          "maxScrolls": 5
+        }
+      },
+      "wellfound": {
+        "keywords": [
+          "machine learning engineer",
+          "ai engineer",
+          "artificial intelligence engineer",
+          "data scientist",
+          "software engineer",
+          "backend engineer",
+          "full stack engineer",
+          "python developer",
+          "deep learning engineer",
+          "nlp engineer",
+          "computer vision engineer",
+          "mlops engineer",
+          "generative ai engineer",
+          "llm engineer",
+          "research engineer",
+          "django developer",
+          "founding engineer"
+        ],
+        "searchUrls": [],
+        "limits": {
+          "maxPerRun": 10,
+          "maxPerDay": 30,
+          "delaySeconds": [
+            20,
+            45
+          ],
+          "maxPages": 4
+        },
+        "locations": [
+          "india",
+          "remote"
+        ]
       }
     }
   };

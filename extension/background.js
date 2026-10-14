@@ -1,5 +1,9 @@
 // The extension's background worker: runs the bots (engine.js) and takes requests from the dashboard.
-importScripts("lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/store.js", "sites/hirist.js", "engine.js");
+importScripts(
+  "lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/store.js",
+  "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js",
+  "engine.js",
+);
 
 const DASHBOARD = chrome.runtime.getURL("dashboard.html");
 
