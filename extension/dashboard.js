@@ -174,11 +174,24 @@ async function start(action) {
   ui.stopping[site] = false;
   panel().querySelector("details.opts").open = false;
   try {
-    await send({ type: "start", site: site, action, opts: options() });
+    await send({ type: "start", site, action, opts: options() });
   } catch (e) {
     ui.error[site] = e.message;
+    if (/^Unknown site/.test(e.message)) $("outdated").hidden = false; // an old background part from before this site
   }
   renderRun();
+}
+
+/** After the files change (an unpacked extension being updated), Chrome keeps running the old background part
+ * until the extension is reloaded; offer that, rather than let runs fail with "Unknown site". */
+async function checkWorker() {
+  let sites = [];
+  try {
+    sites = (await send({ type: "hello" })).sites || [];
+  } catch {
+    sites = []; // one from before it could answer this
+  }
+  $("outdated").hidden = Object.keys(SITES).every(s => sites.includes(s));
 }
 
 async function stop() {
@@ -1040,6 +1053,8 @@ async function init() {
     link.addEventListener("click", e => { e.preventDefault(); goto(link.dataset.goto); });
   }
   window.addEventListener("hashchange", () => showPage(location.hash.slice(1)));
+  $("reload-sendoff").onclick = () => chrome.runtime.reload(); // closes this tab; open the dashboard again from the icon
+  checkWorker();
   selectSite(site);
   showPage(location.hash.slice(1));
 

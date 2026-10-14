@@ -30,6 +30,7 @@ chrome.runtime.onInstalled.addListener(async ({ reason }) => {
 });
 
 const handlers = {
+  hello: () => ({ sites: Object.keys(JB.sites), version: chrome.runtime.getManifest().version }),
   start: m => JB.engine.start(m.site, m.action, m.opts),
   stop: m => JB.engine.stop(m.site),
   answer: m => JB.engine.answer(m.site, m.id, m.value),
