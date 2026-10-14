@@ -12,3 +12,5 @@ config.yaml
 extension-import.json
 # The extension's end-to-end test downloads React here.
 extension/tests/.cache/
+# Chrome Web Store packages: tools/package_extension.py
+dist/

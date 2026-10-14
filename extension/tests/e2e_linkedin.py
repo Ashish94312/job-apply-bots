@@ -284,7 +284,7 @@ def main():
         dash.evaluate("""async () => {
             const s = await JB.store.getSettings();
             Object.assign(s.sites.linkedin.referral, { message: "Hi {first_name}, I applied for {title} at {company}: {job_url}. Would you refer me?",
-              connectNote: "Hi {first_name}, I'm applying to {company}. Open to connecting?", perCompany: 2, forJobs: ["applied", "external"] });
+              connectNote: "Hi {first_name}, I'm applying to {company}. Open to connecting?", perCompany: 2, forJobs: ["applied", "external"], sendMode: "review" });
             await JB.store.saveSettings(s);
         }""")
         check.overview("linkedin")
@@ -303,7 +303,25 @@ def main():
 
         if os.environ.get("SHOW_LOGS"):
             print(log)
-        print("\nReferrals: ask")
+        print("\nReferrals: shown to you first (the default)")
+        dash.click('.bot [data-act="refer"]')
+        check.wait_prompt("Send this?")
+        box = dash.locator(".bot .prompt").inner_text()
+        check("Message Priya Sharma" in box and "Would you refer me?" in box, "shows who it goes to and the exact text")
+        check.answer("Skip")
+        check.wait_prompt("Send this?")
+        check("Invite Rahul Verma" in dash.locator(".bot .prompt").inner_text(), "then the next person")
+        check.answer("Stop run")
+        check.wait_done("linkedin")
+        check(not li.messages and not li.invites, "nothing sent without your Send")
+        dash.evaluate("""async () => {
+            const s = await JB.store.getSettings();
+            s.sites.linkedin.referral.sendMode = "direct";
+            await JB.store.saveSettings(s);
+            await chrome.storage.local.set({ contacts: {}, referralJobs: {} }); // the skipped ones may be asked again
+        }""")
+
+        print("\nReferrals: sent straight away (chosen in Settings)")
         dash.click('.bot [data-act="refer"]')
         s = check.wait_done("linkedin")
         log = "\n".join(s["log"])
@@ -349,8 +367,10 @@ def main():
         dash.locator("#skill-rows-linkedin tr:last-child [data-key=years]").fill("1")
         dash.locator('[data-list="sites.linkedin.workTypes"] input[value="remote"]').check()
         dash.select_option('[name="sites.linkedin.postedWithin"]', "day")
+        dash.check('[name="sites.linkedin.referral.sendMode"][value="review"]')
         dash.click("#save")
         saved = dash.evaluate("async () => (await JB.store.getSettings()).sites.linkedin")
+        check(saved["referral"]["sendMode"] == "review", "the review-or-send choice is saved")
         check(saved["skillYears"].get("pytorch") == 1 and saved["workTypes"] == ["remote"] and saved["postedWithin"] == "day",
               f"saved ({saved['skillYears']}, {saved['workTypes']}, {saved['postedWithin']})")
         check(not errors, f"no errors on the dashboard page {errors}")

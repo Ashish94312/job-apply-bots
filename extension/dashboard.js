@@ -296,7 +296,8 @@ function renderReferBox() {
   const all = Object.values(people);
   const asked = all.filter(c => c.status === "messaged").length;
   const waiting = all.filter(c => c.status === "invited").length;
-  const plan = `It asks up to ${rc.perCompany ?? 2} people per company you applied to in the last ${rc.withinDays ?? 14} days.`;
+  const plan = `It asks up to ${rc.perCompany ?? 2} people per company you applied to in the last ${rc.withinDays ?? 14} days`
+    + (rc.sendMode === "direct" ? ", sending without asking you." : ", showing you each message first.");
   const sofar = all.length ? ` So far: ${asked} asked, ${waiting} invite${waiting === 1 ? "" : "s"} waiting to be accepted.` : "";
   const ready = !(rc.message || "").trim() ? " Write your referral message in Settings first."
     : /<[^<>\n]+>/.test(rc.message) ? " Your message still has a <…> part to write in Settings; Preview works meanwhile." : "";
@@ -700,6 +701,9 @@ function referralSettings(base, field, checks, tick) {
     field("field", "Invite note", "To people you're not connected with yet. Free accounts get a few notes a month.", note),
     counter,
     tick(`${r}.inviteWithoutNote`, "Invite without a note once the free notes run out"),
+    field("field", "Before each message or invite", null, el("div", { className: "checks" },
+      el("label", {}, el("input", { type: "radio", name: `${r}.sendMode`, value: "review" }), "Show it to me first, with who it goes to (recommended)"),
+      el("label", {}, el("input", { type: "radio", name: `${r}.sendMode`, value: "direct" }), "Send it straight away"))),
     field("field", "Which jobs to ask about", null, checks(`${r}.forJobs`, [["applied", "Jobs it applied to"], ["external", "Jobs that apply on the company's site"]])),
     el("div", { className: "row-fields" },
       field("field narrow", "From the last", "days", num(`${r}.withinDays`, 1)),
@@ -819,7 +823,8 @@ const readAnswers = id => rowsOf(id)
 function fillForm(s) {
   for (const input of form.querySelectorAll("[name]")) {
     const value = getPath(s, input.name);
-    if (input.type === "checkbox") input.checked = !!value;
+    if (input.type === "radio") input.checked = input.value === (value || "review");
+    else if (input.type === "checkbox") input.checked = !!value;
     else input.value = LIST_FIELDS.has(input.name) ? (value || []).join("\n") : value ?? "";
     input.removeAttribute("aria-invalid");
   }
@@ -839,6 +844,7 @@ function readForm() {
   const s = structuredClone(settings);
   for (const input of form.querySelectorAll("[name]")) {
     let value;
+    if (input.type === "radio" && !input.checked) continue; // the chosen one of the group sets the value
     if (LIST_FIELDS.has(input.name)) value = input.value.split("\n").map(l => l.trim()).filter(Boolean);
     else if (input.type === "checkbox") value = input.checked;
     else if (input.type === "number") value = input.value.trim() === "" ? null : Number(input.value);

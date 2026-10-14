@@ -93,6 +93,34 @@ default (25 a day, 30 to 60 seconds apart), and the [Python bot's notes on it](.
 apply just the same. Referral messages go to real people in your name; preview them, and keep *Ask me before
 each* on until you trust the wording.
 
+## Publishing
+
+The first version goes up by hand: [store/LISTING.md](../store/LISTING.md) has everything the Chrome Web Store
+asks for, ready to paste, and the images are in `store/`. After that, each update is one command:
+
+```bash
+.venv/bin/python tools/publish_extension.py            # raise the version, build, upload, submit for review
+.venv/bin/python tools/publish_extension.py --status   # where the review is
+```
+
+Google still reviews every update; it goes live by itself once that passes. The script needs access to your
+Chrome Web Store account, set up once:
+
+1. In the [Google Cloud console](https://console.cloud.google.com/), make a project, then under *APIs & Services*
+   turn on the **Chrome Web Store API**.
+2. *OAuth consent screen*: user type External, any app name (e.g. "Sendoff publisher"), your email as a test
+   user. Then **Publish app** (to "In production"): while it's "Testing", Google's tokens expire after 7 days.
+   Google may call it unverified; that's fine for your own account.
+3. *Credentials*: create an **OAuth client ID** of type **Desktop app**, and put its ID and secret in `.env` as
+   `CWS_CLIENT_ID` and `CWS_CLIENT_SECRET`.
+4. In the Developer Dashboard, copy the **Publisher ID** (*Publisher > Settings*) into `.env` as
+   `CWS_PUBLISHER_ID`, and the extension's 32-letter **item ID** (in its dashboard address) as `CWS_EXTENSION_ID`.
+5. Run `.venv/bin/python tools/publish_extension.py --setup` and sign in with the account that owns the extension;
+   it saves `CWS_REFRESH_TOKEN` in `.env`.
+
+`.env` never goes into git. If you change the extension's visibility in the dashboard, publish that change by
+hand once; the script can publish again after that.
+
 ## For developers
 
 Plain JavaScript, Manifest V3, no build step.

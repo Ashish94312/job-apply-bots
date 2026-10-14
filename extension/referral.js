@@ -221,7 +221,7 @@
       r.event({ kind: "contact", status: connected ? "would_message" : "would_invite", name, company: job.company, title: job.title, url: who.profile });
       return true;
     }
-    if (r.opts.confirm) {
+    if (r.opts.confirm || rc.sendMode !== "direct") { // you see who it goes to and the exact text, unless you chose otherwise
       const yes = await r.ask("Send this?", `${verb} ${name}${text ? `\n\n${text}` : " (no note)"}`, [["Send", "y", "primary"], ["Skip", "n"], ["Stop run", "stop", "stop"]]);
       if (yes !== "y") return false;
     }

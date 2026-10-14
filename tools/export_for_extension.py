@@ -69,6 +69,7 @@ def site_settings(cfg):
             "perCompany": rc.get("per_company", 2), "maxPerRun": rc.get("max_per_run", 8), "maxPerDay": rc.get("max_per_day", 15),
             "inviteExpiryDays": rc.get("invite_expiry_days", 21), "inviteWithoutNote": rc.get("invite_without_note", True),
             "connectNote": text(rc.get("connect_note")), "message": text(rc.get("message")),
+            "sendMode": "review",  # show each message and who it goes to before sending; "direct" sends straight away
         }
     return out
 

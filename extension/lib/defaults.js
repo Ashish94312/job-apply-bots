@@ -476,7 +476,8 @@
           "inviteExpiryDays": 21,
           "inviteWithoutNote": true,
           "connectNote": "Hi {first_name}, I'm applying to {company} and would love to connect. Would you be open to referring me? Happy to share my resume.",
-          "message": "Hi {first_name}, hope you're doing well!\n\nI'm applying for the {title} role at {company}: {job_url}\n<one or two lines about you: degree, years of experience, what you've built>\n\nWould you be open to referring me? I can send my resume and anything else you need. Thanks a lot!\n"
+          "message": "Hi {first_name}, hope you're doing well!\n\nI'm applying for the {title} role at {company}: {job_url}\n<one or two lines about you: degree, years of experience, what you've built>\n\nWould you be open to referring me? I can send my resume and anything else you need. Thanks a lot!\n",
+          "sendMode": "review"
         },
         "answers": [
           [

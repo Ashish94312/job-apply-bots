@@ -1,8 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Sendoff",
-  "version": "0.1.0",
-  "description": "Sends your job applications off for you on Hirist, Instahyre, Wellfound, Cutshort and LinkedIn, with your filters and answers to screening questions. Runs in your own Chrome.",
+  "short_name": "Sendoff",
+  "version": "1.0.0",
+  "description": "Applies to jobs for you on Hirist, Instahyre, Wellfound, Cutshort and LinkedIn, with your filters and answers.",
+  "homepage_url": "https://github.com/Ashish94312/job-apply-bots/tree/chrome-extension/extension",
   "minimum_chrome_version": "120",
   "permissions": [
     "storage",
@@ -22,6 +24,9 @@
     "https://www.linkedin.com/*",
     "https://linkedin.com/*"
   ],
+  "optional_host_permissions": [
+    "<all_urls>"
+  ],
   "background": {
     "service_worker": "background.js"
   },
@@ -37,8 +42,5 @@
     "32": "icons/32.png",
     "48": "icons/48.png",
     "128": "icons/128.png"
-  },
-  "optional_host_permissions": [
-    "<all_urls>"
-  ]
+  }
 }
