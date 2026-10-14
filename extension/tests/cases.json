@@ -1,4 +1,391 @@
 {
+ "linkedin": {
+  "answers": [
+   [
+    "notice period",
+    "30 days"
+   ],
+   [
+    "current.*(ctc|salary|compensation)|(ctc|salary|compensation).*current",
+    "800000"
+   ],
+   [
+    "expect.*(ctc|salary|compensation)|(ctc|salary|compensation).*expect",
+    "1200000"
+   ],
+   [
+    "years of (work |professional |relevant |total |it |information technology |industry |software (development |engineering )?)?experience( do you (currently )?have)?\\??$|total (years of )?experience|overall experience",
+    "2"
+   ],
+   [
+    "current (city|location)|^city$|location \\(city\\)",
+    "Bengaluru"
+   ],
+   [
+    "currently (living|located|residing|based) in (bengaluru|bangalore)",
+    "Yes"
+   ],
+   [
+    "currently (living|located|residing|based) in",
+    "No"
+   ],
+   [
+    "relocat",
+    "Yes"
+   ],
+   [
+    "commut",
+    "Yes"
+   ],
+   [
+    "(onsite|on-site|hybrid|remote) (setting|work)|work(ing)? from (the )?office",
+    "Yes"
+   ],
+   [
+    "authori[sz]ed to work|legally (allowed|eligible)",
+    "Yes"
+   ],
+   [
+    "sponsorship|visa",
+    "No"
+   ],
+   [
+    "bachelor'?s|degree",
+    "Yes"
+   ],
+   [
+    "immediate(ly)? join|join immediately|start immediately",
+    "Yes"
+   ],
+   [
+    "terms|agree|consent|privacy|acknowledge",
+    "Yes"
+   ],
+   [
+    "proficiency in english|english proficiency",
+    "Professional"
+   ],
+   [
+    "country code",
+    "India (+91)"
+   ],
+   [
+    "phone|mobile",
+    "9876543210"
+   ],
+   [
+    "linkedin",
+    ""
+   ],
+   [
+    "undergraduate|college|university|institution",
+    ""
+   ]
+  ],
+  "skillYears": {
+   "python": 2,
+   "machine learning": 1,
+   "deep learning": 1,
+   "sql": 1
+  },
+  "otherSkillYears": 0,
+  "answer": [
+   {
+    "label": "How many years of work experience do you have with Python?",
+    "expected": "2"
+   },
+   {
+    "label": "Years of Java experience",
+    "expected": "0"
+   },
+   {
+    "label": "Experience with React?",
+    "expected": "0"
+   },
+   {
+    "label": "Machine Learning experience?",
+    "expected": "1"
+   },
+   {
+    "label": "How many years of total experience do you have?",
+    "expected": "2"
+   },
+   {
+    "label": "Years of experience",
+    "expected": "2"
+   },
+   {
+    "label": "How many years of experience do you have in software development?",
+    "expected": null
+   },
+   {
+    "label": "What is your current CTC?",
+    "expected": "800000"
+   },
+   {
+    "label": "Expected CTC (in INR)",
+    "expected": "1200000"
+   },
+   {
+    "label": "Notice period",
+    "expected": "30 days"
+   },
+   {
+    "label": "Are you comfortable commuting to this job's location?",
+    "expected": "Yes"
+   },
+   {
+    "label": "Do you require sponsorship?",
+    "expected": "No"
+   },
+   {
+    "label": "Mobile phone number",
+    "expected": "9876543210"
+   },
+   {
+    "label": "Phone country code",
+    "expected": "India (+91)"
+   },
+   {
+    "label": "Have you completed a Bachelor's degree?",
+    "expected": "Yes"
+   },
+   {
+    "label": "How many years of experience do you have with deep learning frameworks?",
+    "expected": "1"
+   },
+   {
+    "label": "Rate your proficiency in English",
+    "expected": "Professional"
+   },
+   {
+    "label": "How many years of experience do you have with SQL databases?",
+    "expected": "1"
+   },
+   {
+    "label": "Years of experience with Kubernetes?",
+    "expected": "0"
+   }
+  ],
+  "withRange": [
+   {
+    "text": "We want 3+ years of experience in Python.",
+    "expected": "3 - 3 years. We want 3+ years of experience in Python."
+   },
+   {
+    "text": "Experience: 2 - 5 years. Also 1+ yrs of relevant experience.",
+    "expected": "1 - 1 years. Experience: 2 - 5 years. Also 1+ yrs of relevant experience."
+   },
+   {
+    "text": "Minimum 4 years experience",
+    "expected": "4 - 4 years. Minimum 4 years experience"
+   },
+   {
+    "text": "no years here",
+    "expected": "no years here"
+   },
+   {
+    "text": "Looking for 0-1 yrs freshers with 2+ years experience",
+    "expected": "0 - 0 years. Looking for 0-1 yrs freshers with 2+ years experience"
+   }
+  ],
+  "pick": [
+   {
+    "options": [
+     "Select an option",
+     "Yes",
+     "No"
+    ],
+    "answer": "Yes",
+    "expected": 1
+   },
+   {
+    "options": [
+     "India (+91)",
+     "Indonesia (+62)"
+    ],
+    "answer": "India (+91)",
+    "expected": 0
+   },
+   {
+    "options": [
+     "Andorra (+376)",
+     "India (+91)"
+    ],
+    "answer": "india",
+    "expected": 1
+   },
+   {
+    "options": [
+     "Professional working proficiency",
+     "Native"
+    ],
+    "answer": "Professional",
+    "expected": 0
+   },
+   {
+    "options": [
+     "A",
+     "B"
+    ],
+    "answer": "",
+    "expected": null
+   },
+   {
+    "options": [
+     "Yes",
+     "No"
+    ],
+    "answer": "maybe",
+    "expected": null
+   }
+  ],
+  "firstName": [
+   {
+    "name": "Priya Sharma",
+    "expected": "Priya"
+   },
+   {
+    "name": "Dr. Anil Kumar",
+    "expected": "Anil"
+   },
+   {
+    "name": "RAHUL VERMA",
+    "expected": "Rahul"
+   },
+   {
+    "name": "sneha",
+    "expected": "Sneha"
+   },
+   {
+    "name": "Mr. ",
+    "expected": "There"
+   },
+   {
+    "name": "Jean-Luc O'Neil",
+    "expected": "Jean-Luc"
+   },
+   {
+    "name": "Prof. R. K. Gupta",
+    "expected": "R."
+   },
+   {
+    "name": "D'Souza, Maria",
+    "expected": "D'Souza"
+   },
+   {
+    "name": "José Álvarez",
+    "expected": "José"
+   },
+   {
+    "name": "",
+    "expected": "There"
+   }
+  ],
+  "render": [
+   {
+    "template": "Hi {first_name}, I'm applying for {title} at {company}: {job_url}. Thanks, {name}!",
+    "name": "Priya Sharma",
+    "job": {
+     "url": "https://www.linkedin.com/jobs/view/4001/",
+     "jobId": "4001",
+     "title": "ML Engineer",
+     "company": "Acme"
+    },
+    "expected": "Hi Priya, I'm applying for ML Engineer at Acme: https://www.linkedin.com/jobs/view/4001/. Thanks, Priya Sharma!"
+   },
+   {
+    "template": "Hi {first_name}, I'm applying for {title} at {company}: {job_url}. Thanks, {name}!",
+    "name": "dr. SNEHA",
+    "job": {
+     "url": "https://www.linkedin.com/jobs/view/4001/",
+     "jobId": "4001",
+     "title": "ML Engineer",
+     "company": "Acme"
+    },
+    "expected": "Hi Sneha, I'm applying for ML Engineer at Acme: https://www.linkedin.com/jobs/view/4001/. Thanks, dr. SNEHA!"
+   },
+   {
+    "template": "  plain  ",
+    "name": "Priya Sharma",
+    "job": {
+     "url": "https://www.linkedin.com/jobs/view/4001/",
+     "jobId": "4001",
+     "title": "ML Engineer",
+     "company": "Acme"
+    },
+    "expected": "plain"
+   },
+   {
+    "template": "  plain  ",
+    "name": "dr. SNEHA",
+    "job": {
+     "url": "https://www.linkedin.com/jobs/view/4001/",
+     "jobId": "4001",
+     "title": "ML Engineer",
+     "company": "Acme"
+    },
+    "expected": "plain"
+   },
+   {
+    "template": "",
+    "name": "Priya Sharma",
+    "job": {
+     "url": "https://www.linkedin.com/jobs/view/4001/",
+     "jobId": "4001",
+     "title": "ML Engineer",
+     "company": "Acme"
+    },
+    "expected": ""
+   },
+   {
+    "template": "",
+    "name": "dr. SNEHA",
+    "job": {
+     "url": "https://www.linkedin.com/jobs/view/4001/",
+     "jobId": "4001",
+     "title": "ML Engineer",
+     "company": "Acme"
+    },
+    "expected": ""
+   },
+   {
+    "template": "Hi {first_name} at {company} for {title}",
+    "name": "X",
+    "job": {
+     "url": "u",
+     "jobId": "1",
+     "title": "",
+     "company": ""
+    },
+    "expected": "Hi X at your company for the open role"
+   }
+  ],
+  "peopleUrl": [
+   {
+    "ids": [
+     "1234"
+    ],
+    "keywords": "software engineer",
+    "expected": "https://www.linkedin.com/search/results/people/?currentCompany=%5B%221234%22%5D&network=%5B%22F%22%2C%22S%22%5D&keywords=software%20engineer&origin=FACETED_SEARCH"
+   },
+   {
+    "ids": [
+     "11",
+     "22"
+    ],
+    "keywords": "Indian Institute of Technology (IIT), Jodhpur",
+    "expected": "https://www.linkedin.com/search/results/people/?currentCompany=%5B%2211%22%2C%2222%22%5D&network=%5B%22F%22%2C%22S%22%5D&keywords=Indian%20Institute%20of%20Technology%20%28IIT%29%2C%20Jodhpur&origin=FACETED_SEARCH"
+   },
+   {
+    "ids": [
+     "5"
+    ],
+    "keywords": "ML/AI & data",
+    "expected": "https://www.linkedin.com/search/results/people/?currentCompany=%5B%225%22%5D&network=%5B%22F%22%2C%22S%22%5D&keywords=ML%2FAI%20%26%20data&origin=FACETED_SEARCH"
+   }
+  ]
+ },
  "siteUrls": [
   {
    "site": "instahyre",
@@ -112,6 +499,57 @@
    },
    "expected": [
     "https://cutshort.io/profile/all-jobs?skills=00543"
+   ]
+  },
+  {
+   "site": "linkedin",
+   "cfg": {
+    "keywords": [
+     "machine learning engineer",
+     "AI/ML"
+    ],
+    "locations": [
+     "India",
+     "Bengaluru, Karnataka"
+    ],
+    "easyApplyOnly": true,
+    "experienceLevels": [
+     "entry level",
+     "Associate"
+    ],
+    "workTypes": [
+     "remote",
+     "hybrid",
+     "onsite"
+    ],
+    "postedWithin": "week",
+    "searchUrls": []
+   },
+   "expected": [
+    "https://www.linkedin.com/jobs/search/?keywords=machine+learning+engineer&location=India&f_AL=true&f_E=2%2C3&f_WT=1%2C2%2C3&f_TPR=r604800&sortBy=DD",
+    "https://www.linkedin.com/jobs/search/?keywords=machine+learning+engineer&location=Bengaluru%2C+Karnataka&f_AL=true&f_E=2%2C3&f_WT=1%2C2%2C3&f_TPR=r604800&sortBy=DD",
+    "https://www.linkedin.com/jobs/search/?keywords=AI%2FML&location=India&f_AL=true&f_E=2%2C3&f_WT=1%2C2%2C3&f_TPR=r604800&sortBy=DD",
+    "https://www.linkedin.com/jobs/search/?keywords=AI%2FML&location=Bengaluru%2C+Karnataka&f_AL=true&f_E=2%2C3&f_WT=1%2C2%2C3&f_TPR=r604800&sortBy=DD"
+   ]
+  },
+  {
+   "site": "linkedin",
+   "cfg": {
+    "keywords": [
+     "sde"
+    ],
+    "locations": [],
+    "easyApplyOnly": false,
+    "experienceLevels": [],
+    "workTypes": [],
+    "postedWithin": "",
+    "searchUrls": [
+     "https://www.linkedin.com/jobs/search/?keywords=x"
+    ]
+   },
+   "expected": [
+    "https://www.linkedin.com/jobs/search/?keywords=sde&location=India&sortBy=DD",
+    "https://www.linkedin.com/jobs/search/?keywords=x"
    ]
   }
  ],

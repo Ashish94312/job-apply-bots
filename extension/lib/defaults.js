@@ -401,6 +401,165 @@
           ],
           "maxPages": 10
         }
+      },
+      "linkedin": {
+        "keywords": [
+          "machine learning engineer",
+          "ai engineer",
+          "data scientist",
+          "software engineer",
+          "backend developer",
+          "python developer",
+          "sde",
+          "generative ai engineer",
+          "llm engineer",
+          "agentic ai engineer",
+          "ai agent developer",
+          "nlp engineer",
+          "computer vision engineer",
+          "mlops engineer",
+          "applied scientist",
+          "backend engineer",
+          "full stack developer",
+          "software development engineer",
+          "django developer",
+          "founding engineer"
+        ],
+        "searchUrls": [],
+        "limits": {
+          "maxPerRun": 10,
+          "maxPerDay": 25,
+          "delaySeconds": [
+            30,
+            60
+          ],
+          "maxPages": 3
+        },
+        "locations": [
+          "India"
+        ],
+        "easyApplyOnly": true,
+        "experienceLevels": [
+          "entry level",
+          "associate"
+        ],
+        "workTypes": [],
+        "postedWithin": "week",
+        "skillYears": {
+          "python": 2,
+          "machine learning": 1,
+          "deep learning": 1,
+          "sql": 1
+        },
+        "otherSkillYears": 0,
+        "followCompanies": false,
+        "referral": {
+          "forJobs": [
+            "applied",
+            "external"
+          ],
+          "withinDays": 14,
+          "jobs": [],
+          "school": "",
+          "peopleKeywords": [
+            "software engineer",
+            "machine learning"
+          ],
+          "skipHeadline": [
+            "intern",
+            "student",
+            "trainee"
+          ],
+          "perCompany": 2,
+          "maxPerRun": 8,
+          "maxPerDay": 15,
+          "inviteExpiryDays": 21,
+          "inviteWithoutNote": true,
+          "connectNote": "Hi {first_name}, I'm applying to {company} and would love to connect. Would you be open to referring me? Happy to share my resume.",
+          "message": "Hi {first_name}, hope you're doing well!\n\nI'm applying for the {title} role at {company}: {job_url}\n<one or two lines about you: degree, years of experience, what you've built>\n\nWould you be open to referring me? I can send my resume and anything else you need. Thanks a lot!\n"
+        },
+        "answers": [
+          [
+            "notice period",
+            "30 days"
+          ],
+          [
+            "current.*(ctc|salary|compensation)|(ctc|salary|compensation).*current",
+            "800000"
+          ],
+          [
+            "expect.*(ctc|salary|compensation)|(ctc|salary|compensation).*expect",
+            "1200000"
+          ],
+          [
+            "years of (work |professional |relevant |total |it |information technology |industry |software (development |engineering )?)?experience( do you (currently )?have)?\\??$|total (years of )?experience|overall experience",
+            "2"
+          ],
+          [
+            "current (city|location)|^city$|location \\(city\\)",
+            "Bengaluru"
+          ],
+          [
+            "currently (living|located|residing|based) in (bengaluru|bangalore)",
+            "Yes"
+          ],
+          [
+            "currently (living|located|residing|based) in",
+            "No"
+          ],
+          [
+            "relocat",
+            "Yes"
+          ],
+          [
+            "commut",
+            "Yes"
+          ],
+          [
+            "(onsite|on-site|hybrid|remote) (setting|work)|work(ing)? from (the )?office",
+            "Yes"
+          ],
+          [
+            "authori[sz]ed to work|legally (allowed|eligible)",
+            "Yes"
+          ],
+          [
+            "sponsorship|visa",
+            "No"
+          ],
+          [
+            "bachelor'?s|degree",
+            "Yes"
+          ],
+          [
+            "immediate(ly)? join|join immediately|start immediately",
+            "Yes"
+          ],
+          [
+            "terms|agree|consent|privacy|acknowledge",
+            "Yes"
+          ],
+          [
+            "proficiency in english|english proficiency",
+            "Professional"
+          ],
+          [
+            "country code",
+            "India (+91)"
+          ],
+          [
+            "phone|mobile",
+            ""
+          ],
+          [
+            "linkedin",
+            ""
+          ],
+          [
+            "undergraduate|college|university|institution",
+            ""
+          ]
+        ]
       }
     }
   };

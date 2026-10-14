@@ -95,10 +95,62 @@ FEEDS = [
     {"keywords": ["deep learning"], "minExperience": None, "maxExperience": None, "searchUrls": []},
 ]
 site_urls += [{"site": "cutshort", "cfg": c, "expected": cutshort.PORTAL.search_urls(None, python_cfg(c))} for c in FEEDS]
+linkedin = bot_module("linkedin", "portal")
+li_cfg = yaml.safe_load((ROOT / "linkedin" / "config.example.yaml").read_text())
+SEARCHES_LI = [
+    {"keywords": ["machine learning engineer", "AI/ML"], "locations": ["India", "Bengaluru, Karnataka"], "easyApplyOnly": True,
+     "experienceLevels": ["entry level", "Associate"], "workTypes": ["remote", "hybrid", "onsite"], "postedWithin": "week", "searchUrls": []},
+    {"keywords": ["sde"], "locations": [], "easyApplyOnly": False, "experienceLevels": [], "workTypes": [], "postedWithin": "",
+     "searchUrls": ["https://www.linkedin.com/jobs/search/?keywords=x"]},
+]
+for c in SEARCHES_LI:
+    py = {"search": {"keywords": c["keywords"], "locations": c["locations"], "easy_apply_only": c["easyApplyOnly"],
+                     "experience_levels": c["experienceLevels"], "work_types": c["workTypes"], "posted_within": c["postedWithin"]},
+          "search_urls": c["searchUrls"]}
+    site_urls.append({"site": "linkedin", "cfg": c, "expected": linkedin.PORTAL.search_urls(None, py)})
+li_answers = dict(li_cfg["answers"], **{"phone|mobile": "9876543210"})
+LI_LABELS = [
+    "How many years of work experience do you have with Python?", "Years of Java experience", "Experience with React?",
+    "Machine Learning experience?", "How many years of total experience do you have?", "Years of experience",
+    "How many years of experience do you have in software development?", "What is your current CTC?",
+    "Expected CTC (in INR)", "Notice period", "Are you comfortable commuting to this job's location?",
+    "Do you require sponsorship?", "Mobile phone number", "Phone country code", "Have you completed a Bachelor's degree?",
+    "How many years of experience do you have with deep learning frameworks?", "Rate your proficiency in English",
+    "How many years of experience do you have with SQL databases?", "Years of experience with Kubernetes?",
+]
+li = {
+    "answers": [[k, "" if v is None else str(v)] for k, v in li_answers.items()],
+    "skillYears": {str(k): v for k, v in li_cfg["skill_years"].items()},
+    "otherSkillYears": li_cfg["other_skill_years"],
+    "answer": [{"label": l, "expected": linkedin.PORTAL.answer(l, dict(li_cfg, answers=li_answers))} for l in LI_LABELS],
+    "withRange": [{"text": x, "expected": linkedin.with_range(x)} for x in [
+        "We want 3+ years of experience in Python.", "Experience: 2 - 5 years. Also 1+ yrs of relevant experience.",
+        "Minimum 4 years experience", "no years here", "Looking for 0-1 yrs freshers with 2+ years experience"]],
+    "pick": [{"options": o, "answer": a, "expected": linkedin.pick(o, a)} for o, a in [
+        (["Select an option", "Yes", "No"], "Yes"), (["India (+91)", "Indonesia (+62)"], "India (+91)"),
+        (["Andorra (+376)", "India (+91)"], "india"), (["Professional working proficiency", "Native"], "Professional"),
+        (["A", "B"], ""), (["Yes", "No"], "maybe")]],
+}
+referral = bot_module("linkedin", "referral")
+from urllib.parse import quote, urlencode  # noqa: E402
+NAMES = ["Priya Sharma", "Dr. Anil Kumar", "RAHUL VERMA", "sneha", "Mr. ", "Jean-Luc O'Neil", "Prof. R. K. Gupta", "D'Souza, Maria", "José Álvarez", ""]
+JOB = referral.Job("https://www.linkedin.com/jobs/view/4001/", "4001", "ML Engineer", "Acme")
+li["firstName"] = [{"name": n, "expected": referral.first_name(n)} for n in NAMES]
+li["render"] = [{"template": tpl, "name": n, "job": {"url": JOB.url, "jobId": JOB.job_id, "title": JOB.title, "company": JOB.company},
+                 "expected": referral.render(tpl, n, JOB)}
+                for tpl in ["Hi {first_name}, I'm applying for {title} at {company}: {job_url}. Thanks, {name}!", "  plain  ", ""]
+                for n in ["Priya Sharma", "dr. SNEHA"]]
+li["render"].append({"template": "Hi {first_name} at {company} for {title}", "name": "X", "job": {"url": "u", "jobId": "1", "title": "", "company": ""},
+                     "expected": referral.render("Hi {first_name} at {company} for {title}", "X", referral.Job("u", "1", "", ""))})
+compact = lambda value: json.dumps(value, separators=(",", ":"))
+li["peopleUrl"] = [{"ids": ids, "keywords": k, "expected": f"{referral.BASE}/search/results/people/?" + urlencode(
+    {"currentCompany": compact(ids), "network": compact(["F", "S"]), "keywords": k, "origin": "FACETED_SEARCH"}, quote_via=quote)}
+    for ids, k in [(["1234"], "software engineer"), (["11", "22"], "Indian Institute of Technology (IIT), Jodhpur"), (["5"], "ML/AI & data")]]
 sys.modules.pop("core", None)
 sys.modules.pop("portal", None)
 
 cases = {
+    "linkedin": li,
     "siteUrls": site_urls,
     "withRange": with_range,
     "filters": {

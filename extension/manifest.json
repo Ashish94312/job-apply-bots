@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Sendoff",
   "version": "0.1.0",
-  "description": "Sends your job applications off for you: applies on Hirist, Instahyre, Wellfound and Cutshort with your filters and answers to screening questions. Runs in your own Chrome.",
+  "description": "Sends your job applications off for you on Hirist, Instahyre, Wellfound, Cutshort and LinkedIn, with your filters and answers to screening questions. Runs in your own Chrome.",
   "minimum_chrome_version": "120",
   "permissions": [
     "storage",
@@ -18,7 +18,9 @@
     "https://wellfound.com/*",
     "https://www.wellfound.com/*",
     "https://cutshort.io/*",
-    "https://www.cutshort.io/*"
+    "https://www.cutshort.io/*",
+    "https://www.linkedin.com/*",
+    "https://linkedin.com/*"
   ],
   "background": {
     "service_worker": "background.js"

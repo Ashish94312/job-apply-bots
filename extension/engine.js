@@ -71,7 +71,8 @@
       this.site = JB.sites[siteName];
       this.action = action;
       this.opts = opts || {};
-      this.dry = action === "dry-run";
+      this.dry = action === "dry-run" || action === "refer-dry-run";
+      if (action === "refer-dry-run") this.action = "refer";
       this.stopping = false;
       this.tabId = null;
       this.windowId = null;
@@ -140,6 +141,11 @@
     stop() {
       this.stopping = true;
       if (this.reply) this.reply("stop");
+    }
+
+    /** Stopped by you, or the window closed: anything that has to end the whole run. */
+    isStop(e) {
+      return e instanceof Stopped || e instanceof WindowClosed;
     }
 
     async sleep(ms) {
@@ -348,11 +354,19 @@
       const cfg = JB.store.effective(await JB.store.getSettings(), this.site.name);
       const fixed = this.site.searches ? null : this.site.searchUrls(cfg); // Cutshort looks its searches up once logged in
       const nothing = fixed ? !fixed.length : !(cfg.keywords || []).length && !(cfg.searchUrls || []).length;
-      if (this.action !== "login" && nothing) {
+      if (!["login", "refer"].includes(this.action) && nothing) {
         this.log("Nothing to search for: add keywords in Settings first.");
         return;
       }
       await this.openWindow();
+      if (this.action === "refer") { // LinkedIn: ask people at the companies applied to for a referral (referral.js)
+        if (!(await this.login(true))) {
+          this.log(`Not logged in to ${this.site.label}, stopping.`);
+          return;
+        }
+        await JB.referral.run(this, cfg);
+        return;
+      }
       if (this.action === "login") {
         const ok = await this.login(true);
         this.log(ok ? "Logged in. Chrome remembers it; the bot uses that login." : "Still not logged in - try again.");
@@ -437,7 +451,10 @@
           try {
             await this.goto(url);
             const own = this.site.page.collectLinks ? "site.collectLinks" : "collectLinks";
-            links = (await this.ensureLoaded(this.site.jobLinkCss)) ? await this.exec(own, limits.maxScrolls ?? this.site.maxScrolls ?? 0) : [];
+            const ready = this.site.page.searchReady // e.g. LinkedIn says "No matching jobs" instead of listing none
+              ? (await this.clearChallenge()) && (await this.waitForTrue("site.searchReady", 20000))
+              : await this.ensureLoaded(this.site.jobLinkCss);
+            links = ready ? await this.exec(own, limits.maxScrolls ?? this.site.maxScrolls ?? 0) : [];
           } catch (e) {
             if (e instanceof Stopped || e instanceof WindowClosed) throw e;
             this.log(`  Couldn't load search page: ${firstLine(e)}`);
@@ -475,6 +492,12 @@
               [status, job, note] = await this.handleJob(job, cfg);
             } catch (e) {
               if (e instanceof Stopped || e instanceof WindowClosed) throw e;
+              if (e.stopRun) { // e.g. LinkedIn's daily Easy Apply limit: nothing more to do today
+                this.mark(u, { state: "pending" });
+                this.log();
+                this.log(e.stopRun);
+                return done;
+              }
               [status, note] = [S.FAILED, firstLine(e)];
             }
             done += await this.finish(job, status, note, budget, done, limits);
@@ -606,7 +629,7 @@
       this.step("Opening the next job");
       await this.goto(job.url);
       await this.ensureLoaded(this.site.jobReadyCss);
-      await this.sleep(1500); // let the apply button render
+      await this.sleep(this.site.settleMs || 1500); // let the apply button render
       job = { ...job, ...(await this.exec("site.readJob")) };
       this.step(`Checking ${named(job)}`);
 
@@ -632,6 +655,7 @@
 
     /** Click apply and walk through any form. Returns [status, note]. */
     async applyJob(cfg, job) {
+      if (this.site.apply) return this.site.apply(this, cfg, job); // a site with its own way, e.g. LinkedIn's Easy Apply
       if (await this.exec("isApplied")) return [S.ALREADY, ""];
       const opened = [];
       const onCreated = tab => {
@@ -684,7 +708,8 @@
   JB.engine = {
     start(site, action, opts) {
       if (!JB.sites[site]) throw new Error(`Unknown site "${site}".`);
-      if (!["apply", "dry-run", "login"].includes(action)) throw new Error(`Unknown action "${action}".`);
+      if (!["apply", "dry-run", "login", "refer", "refer-dry-run"].includes(action)) throw new Error(`Unknown action "${action}".`);
+      if (action.startsWith("refer") && !JB.sites[site].refers) throw new Error(`${JB.sites[site].label} has no referrals.`);
       if (runs[site]) throw new Error(`${JB.sites[site].label} is already running.`);
       new Run(site, action, opts).start();
     },

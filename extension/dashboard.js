@@ -11,7 +11,14 @@ const SITES = {
     name: "Cutshort", keywords: "Cutshort skill names, one per line, like machine learning. Each is looked up once in Cutshort's Skills filter; skills it doesn't have are skipped.",
     pages: "a few jobs each",
   },
+  linkedin: {
+    name: "LinkedIn", keywords: "What you'd type in LinkedIn's job search, one per line, like machine learning engineer.",
+    pages: "25 jobs each", locations: true, linkedin: true,
+  },
 };
+const LINKEDIN_LEVELS = [["internship", "Internship"], ["entry level", "Entry level"], ["associate", "Associate"],
+  ["mid-senior level", "Mid-senior level"], ["director", "Director"], ["executive", "Executive"]];
+const LINKEDIN_WORK = [["on-site", "On-site"], ["remote", "Remote"], ["hybrid", "Hybrid"]];
 const STATUS = {
   applied: "Applied",
   needs_manual: "Needs you",
@@ -22,6 +29,7 @@ const STATUS = {
   would_apply: "Would apply",
 };
 const CELL = { seen: "Handled before", filtered: "Skipped by your filters", pending: "Not reached", working: "Working on it now" };
+const CONTACT = { messaged: "Asked", invited: "Invite sent", not_accepted: "Didn't accept", failed: "Failed" };
 const CHIPS = [["applied", "Applied"], ["needs_manual", "Needs you"], ["external", "Other site"], ["skipped", "Skipped"], ["failed", "Failed"], ["", "All"]];
 const FORMAT = "job-apply-bots/1";
 const HISTORY_LIMIT = 300;
@@ -31,6 +39,7 @@ const ui = { stopping: {}, error: {}, logKey: "", stripKey: "", eventsKey: "" };
 const filter = { status: "applied", text: "", site: "" };
 let settings = null; // as last saved
 let jobs = {};
+let people = {}; // everyone asked for a referral (LinkedIn), by profile
 
 // ---------------------------------------------------------------- small helpers
 
@@ -248,9 +257,10 @@ function renderRun() {
   p.dataset.state = !running ? "idle" : run.prompt ? "waiting" : "running";
 
   const apply = p.querySelector('[data-act="apply"]');
-  apply.textContent = !running ? "Apply" : run.action === "apply" ? "Applying…" : run.action === "dry-run" ? "Checking…" : "Logging in…";
+  const busy = { apply: "Applying…", "dry-run": "Checking…", login: "Logging in…", refer: "Asking…", "refer-dry-run": "Previewing…" };
+  apply.textContent = !running ? "Apply" : busy[run.action] || "Working…";
   apply.classList.toggle("busy", running);
-  for (const b of p.querySelectorAll('[data-act="apply"], [data-act="dry-run"], [data-act="login"]')) b.disabled = running;
+  for (const b of p.querySelectorAll('[data-act="apply"], [data-act="dry-run"], [data-act="login"], [data-act^="refer"]')) b.disabled = running;
   p.querySelector('[data-act="stop"]').hidden = !running;
 
   let [text, isError] = ["", false];
@@ -259,6 +269,8 @@ function renderRun() {
   else if (running && run.prompt) text = "Waiting for you.";
   else if (running && run.action === "dry-run") text = "Going through jobs without applying, in its own window.";
   else if (running && run.action === "login") text = "Waiting for you to log in, in its own window.";
+  else if (running && run.action === "refer") text = "Asking for referrals in its own Chrome window. Leave that window open.";
+  else if (running && run.action === "refer-dry-run") text = "Finding who it would ask, without sending anything, in its own window.";
   else if (running) text = "Applying in its own Chrome window. Leave that window open.";
   else if (run) [text, isError] = finished(run);
   else text = "Ready. A dry run first shows what it would apply to.";
@@ -272,6 +284,23 @@ function renderRun() {
   renderLog();
   renderSites();
   renderTitle();
+  renderReferBox();
+}
+
+/** LinkedIn's referral box on the overview: what it would do, and how it's gone so far. */
+function renderReferBox() {
+  const box = $("refer-box");
+  box.hidden = !JB.sites[site].refers;
+  if (box.hidden || !settings) return;
+  const rc = settings.sites[site].referral || {};
+  const all = Object.values(people);
+  const asked = all.filter(c => c.status === "messaged").length;
+  const waiting = all.filter(c => c.status === "invited").length;
+  const plan = `It asks up to ${rc.perCompany ?? 2} people per company you applied to in the last ${rc.withinDays ?? 14} days.`;
+  const sofar = all.length ? ` So far: ${asked} asked, ${waiting} invite${waiting === 1 ? "" : "s"} waiting to be accepted.` : "";
+  const ready = !(rc.message || "").trim() ? " Write your referral message in Settings first."
+    : /<[^<>\n]+>/.test(rc.message) ? " Your message still has a <…> part to write in Settings; Preview works meanwhile." : "";
+  $("refer-summary").textContent = plan + sofar + ready;
 }
 
 function renderPrompt() {
@@ -328,6 +357,17 @@ function renderEvents() {
   }
   for (const e of events.slice(-60).reverse()) {
     const t = el("span", { className: "t", textContent: clock(new Date(e.ts)) });
+    if (e.kind === "contact") {
+      const what = {
+        messaged: `Asked for a referral${e.title ? ` for ${e.title}` : ""}`, invited: `Invited to connect, ${e.note || ""}`.replace(/, $/, ""),
+        would_message: "Would message them (preview)", would_invite: "Would invite them to connect (preview)", failed: `Couldn't reach them: ${e.note || "?"}`,
+      }[e.status] || e.status;
+      const link = /^https?:\/\//.test(e.url || "") ? el("a", { className: "open", href: e.url, target: "_blank", rel: "noopener", textContent: "Profile" }) : el("span");
+      list.append(el("li", {}, t, glyph(e.status),
+        el("span", { className: "what" }, el("b", { textContent: e.name }), e.company ? el("span", { textContent: ` at ${e.company}` }) : null, el("small", { textContent: what })),
+        link));
+      continue;
+    }
     if (e.kind === "search") {
       const where = `Searched “${e.label}”${e.n > 1 ? `, page ${e.n}` : ""}: ${e.listed} jobs, ${e.fresh} new and matching.`;
       list.append(el("li", { className: "search" }, t, el("span", { className: "what", textContent: where })));
@@ -569,6 +609,24 @@ function renderHistory() {
   const more = $("history-more");
   more.hidden = rows.length <= HISTORY_LIMIT;
   more.textContent = `Showing the latest ${HISTORY_LIMIT} of ${rows.length}.`;
+  renderReferrals();
+}
+
+function renderReferrals() {
+  const all = Object.values(people).sort((a, b) => String(b.updated).localeCompare(String(a.updated)));
+  $("referrals").hidden = !all.length || (filter.site && filter.site !== "linkedin");
+  const link = (href, text) => {
+    const a = el("a", { target: "_blank", rel: "noopener", textContent: text });
+    if (/^https?:\/\//.test(href || "")) a.href = href;
+    return a;
+  };
+  $("referral-rows").replaceChildren(...all.slice(0, HISTORY_LIMIT).map(c => el("tr", {},
+    el("td", { className: "when", textContent: when(c.updated) }),
+    el("td", { className: "job" }, link(c.profile, c.name || "?"), el("span", { textContent: c.headline || "" })),
+    el("td", { className: "job" }, link(c.jobUrl, c.title || "Job"), el("span", { textContent: c.company || "" })),
+    el("td", { className: "result" }, el("span", { className: "result-tag" }, glyph(c.status), CONTACT[c.status] || c.status)),
+    el("td", { className: "note", textContent: c.status === "invited" ? "Gets your message once they accept" : c.note || "" }),
+  )));
 }
 
 async function recheckSkipped() {
@@ -587,6 +645,7 @@ const LIST_FIELDS = new Set([
   ...Object.entries(SITES).flatMap(([name, info]) => [
     `sites.${name}.keywords`, `sites.${name}.searchUrls`, ...(info.locations ? [`sites.${name}.locations`] : []),
   ]),
+  "sites.linkedin.referral.peopleKeywords", "sites.linkedin.referral.skipHeadline", "sites.linkedin.referral.jobs",
 ]);
 
 /** One site's search and limits fields. */
@@ -611,9 +670,81 @@ function sitePanel(name, info) {
     el("div", { className: "row-fields" },
       field("field narrow", "Pause, at least", "seconds", num(`${base}.limits.delaySeconds.0`, 0)),
       field("field narrow", "Pause, at most", "seconds", num(`${base}.limits.delaySeconds.1`, 0))),
-    el("p", { className: "hint", textContent: "After each application the bot waits a random time in this range, like a person would." }));
+    el("p", { className: "hint", textContent: "After each application the bot waits a random time in this range, like a person would." }),
+    info.linkedin ? linkedinSettings(base, field) : null);
   box.setAttribute("aria-labelledby", `site-tab-${name}`);
   return box;
+}
+
+/** Asking people at the companies applied to for a referral. */
+function referralSettings(base, field, checks, tick) {
+  const r = `${base}.referral`;
+  const area = (path, rows, extra = {}) => el("textarea", { name: path, rows, spellcheck: false, ...extra });
+  const num = (path, min) => el("input", { type: "number", name: path, min, step: 1 });
+  const note = area(`${r}.connectNote`, 3);
+  note.style.fontFamily = "var(--sans)";
+  const counter = el("span", { className: "counter" });
+  const count = () => {
+    counter.textContent = `${note.value.length} of 300 characters`;
+    counter.classList.toggle("over", note.value.length > 300);
+  };
+  note.addEventListener("input", count);
+  note.dataset.counted = "1";
+  note.count = count;
+  const message = area(`${r}.message`, 8);
+  message.style.fontFamily = "var(--sans)";
+  return el("div", { className: "site-extra" },
+    el("h3", { textContent: "Asking for referrals" }),
+    el("p", { className: "hint", textContent: "For jobs it applied to, it finds people at the company among your 1st and 2nd-degree connections (alumni of your college first). People you're connected with get the message; the others get an invite with the note, and the message once they accept. Nobody is contacted twice." }),
+    field("field", "Message", "{first_name}, {name}, {company}, {title} and {job_url} are filled in. Write the <…> part in your own words: until then it won't send referrals.", message),
+    field("field", "Invite note", "To people you're not connected with yet. Free accounts get a few notes a month.", note),
+    counter,
+    tick(`${r}.inviteWithoutNote`, "Invite without a note once the free notes run out"),
+    field("field", "Which jobs to ask about", null, checks(`${r}.forJobs`, [["applied", "Jobs it applied to"], ["external", "Jobs that apply on the company's site"]])),
+    el("div", { className: "row-fields" },
+      field("field narrow", "From the last", "days", num(`${r}.withinDays`, 1)),
+      field("field narrow", "People per company", null, num(`${r}.perCompany`, 1)),
+      field("field narrow", "Per run", "messages + invites", num(`${r}.maxPerRun`, 1)),
+      field("field narrow", "Per day", "LinkedIn allows ~100 invites a week", num(`${r}.maxPerDay`, 1)),
+      field("field narrow", "Stop waiting after", "days without an accept", num(`${r}.inviteExpiryDays`, 1))),
+    el("div", { className: "two" },
+      field("field", "Your college", "Its alumni are asked first. Optional.", el("input", { name: `${r}.school` })),
+      field("field", "Search people with", "One per line, like software engineer.", area(`${r}.peopleKeywords`, 3))),
+    el("div", { className: "two" },
+      field("field", "Skip people whose headline has", "One per line, like intern.", area(`${r}.skipHeadline`, 3)),
+      field("field", "Also ask about these jobs", "LinkedIn job links, one per line, e.g. ones you applied to elsewhere.", area(`${r}.jobs`, 3))));
+}
+
+/** LinkedIn's own search filters, Easy Apply questions and answers. */
+function linkedinSettings(base, field) {
+  const checks = (path, options) => {
+    const group = el("div", { className: "checks" }, ...options.map(([value, text]) => el("label", {}, el("input", { type: "checkbox", value }), text)));
+    group.dataset.list = path;
+    return group;
+  };
+  const tick = (path, text, hint) => el("label", { className: "tick" }, el("input", { type: "checkbox", name: path }), el("span", {}, text, hint ? el("small", { textContent: hint }) : null));
+  const table = (id, head) => el("div", { className: "table-wrap" }, el("table", { className: "answers" },
+    el("thead", {}, el("tr", {}, ...head.map(h => el("th", { textContent: h })))), el("tbody", { id })));
+  const posted = el("select", { name: `${base}.postedWithin` }, ...[["", "Any time"], ["day", "Past day"], ["week", "Past week"], ["month", "Past month"]]
+    .map(([v, t]) => new Option(t, v)));
+  return el("div", { className: "site-extra" },
+    el("h3", { textContent: "LinkedIn's search filters" }),
+    field("field", "Experience level", "LinkedIn's own levels. None ticked: any.", checks(`${base}.experienceLevels`, LINKEDIN_LEVELS)),
+    field("field", "Where you work", "None ticked: any.", checks(`${base}.workTypes`, LINKEDIN_WORK)),
+    field("field narrow", "Posted within", null, posted),
+    tick(`${base}.easyApplyOnly`, "Easy Apply jobs only", "The bot can only apply through Easy Apply; other jobs are listed as Other site."),
+    el("h3", { textContent: "Years of experience with a skill" }),
+    el("p", { className: "hint", textContent: "For questions like \"How many years of experience do you have with Python?\". The skill is matched as a whole word." }),
+    table("skill-rows-linkedin", ["Skill", "Years", ""]),
+    el("div", { className: "inline" },
+      el("button", { type: "button", className: "btn", textContent: "Add a skill", onclick: () => { $("skill-rows-linkedin").append(skillRow()); dirty(); } }),
+      field("field wide-hint", "Any other skill", "0 is honest for ones you haven't used. Empty: ask you.", el("input", { type: "number", name: `${base}.otherSkillYears`, min: 0, step: 0.5 }))),
+    tick(`${base}.followCompanies`, "Follow the company when applying", "LinkedIn ticks this on every application; off unticks it."),
+    referralSettings(base, field, checks, tick),
+    el("h3", { textContent: "Answers for LinkedIn" }),
+    el("p", { className: "hint", textContent: "LinkedIn uses these instead of the shared answers: some of its questions are number boxes, so salaries are plain rupee amounts, and the phone number goes without +91 because the country code is its own dropdown." }),
+    table("answer-rows-linkedin", ["When the question matches", "Answer", ""]),
+    el("div", {}, el("button", { type: "button", className: "btn", textContent: "Add an answer", onclick: () => { $("answer-rows-linkedin").append(answerRow()); dirty(); } })));
 }
 
 function showSiteSettings(name) {
@@ -667,13 +798,39 @@ function answerRow(pattern = "", answerText = "") {
   return tr;
 }
 
+function skillRow(skill = "", years = "") {
+  const tr = el("tr");
+  const name = el("input", { value: skill, spellcheck: false });
+  name.dataset.key = "skill";
+  name.setAttribute("aria-label", "Skill");
+  const n = el("input", { type: "number", min: 0, step: 0.5, value: years ?? "" });
+  n.dataset.key = "years";
+  n.setAttribute("aria-label", "Years");
+  tr.append(el("td", {}, name), el("td", {}, n),
+    el("td", {}, el("button", { type: "button", className: "btn icon", textContent: "✕", title: "Remove", onclick: () => { tr.remove(); dirty(); } })));
+  return tr;
+}
+
+const rowsOf = id => [...document.querySelectorAll(`#${id} tr`)];
+const readAnswers = id => rowsOf(id)
+  .map(tr => [tr.querySelector('[data-key="pattern"]').value.trim(), tr.querySelector('[data-key="answer"]').value.trim()])
+  .filter(([p, a]) => p || a);
+
 function fillForm(s) {
   for (const input of form.querySelectorAll("[name]")) {
     const value = getPath(s, input.name);
-    input.value = LIST_FIELDS.has(input.name) ? (value || []).join("\n") : value ?? "";
+    if (input.type === "checkbox") input.checked = !!value;
+    else input.value = LIST_FIELDS.has(input.name) ? (value || []).join("\n") : value ?? "";
     input.removeAttribute("aria-invalid");
   }
+  for (const group of form.querySelectorAll("[data-list]")) {
+    const chosen = getPath(s, group.dataset.list) || [];
+    for (const box of group.querySelectorAll("input")) box.checked = chosen.includes(box.value);
+  }
   $("answer-rows").replaceChildren(...s.profile.answers.map(([p, a]) => answerRow(p, a)));
+  $("answer-rows-linkedin").replaceChildren(...(s.sites.linkedin.answers || []).map(([p, a]) => answerRow(p, a)));
+  $("skill-rows-linkedin").replaceChildren(...Object.entries(s.sites.linkedin.skillYears || {}).map(([k, v]) => skillRow(k, v)));
+  for (const area of form.querySelectorAll("[data-counted]")) area.count();
   setDirty(false);
   $("errors").textContent = "";
 }
@@ -683,13 +840,20 @@ function readForm() {
   for (const input of form.querySelectorAll("[name]")) {
     let value;
     if (LIST_FIELDS.has(input.name)) value = input.value.split("\n").map(l => l.trim()).filter(Boolean);
+    else if (input.type === "checkbox") value = input.checked;
     else if (input.type === "number") value = input.value.trim() === "" ? null : Number(input.value);
     else value = input.value;
     setPath(s, input.name, value);
   }
-  s.profile.answers = [...document.querySelectorAll("#answer-rows tr")]
-    .map(tr => [tr.querySelector('[data-key="pattern"]').value.trim(), tr.querySelector('[data-key="answer"]').value.trim()])
-    .filter(([p, a]) => p || a);
+  for (const group of form.querySelectorAll("[data-list]")) {
+    setPath(s, group.dataset.list, [...group.querySelectorAll("input:checked")].map(box => box.value));
+  }
+  s.profile.answers = readAnswers("answer-rows");
+  s.sites.linkedin.answers = readAnswers("answer-rows-linkedin");
+  s.sites.linkedin.skillYears = Object.fromEntries(rowsOf("skill-rows-linkedin")
+    .map(tr => [tr.querySelector('[data-key="skill"]').value.trim(), tr.querySelector('[data-key="years"]').value.trim()])
+    .filter(([k]) => k)
+    .map(([k, v]) => [k, v === "" ? null : Number(v)]));
   return s;
 }
 
@@ -735,11 +899,20 @@ function check(s) {
       errors.push(`${info.name}: extra search pages must be ${info.name} pages, starting ${JB.sites[name].loginUrl}`);
     }
   }
+  const rc = s.sites.linkedin.referral || {};
+  const base = "sites.linkedin.referral";
+  const counts = ["withinDays", "perCompany", "maxPerRun", "maxPerDay", "inviteExpiryDays"].map(k => whole(`${base}.${k}`, 1));
+  if (!counts.every(Boolean)) errors.push("LinkedIn referrals: the days and how many are whole numbers, at least 1.");
+  if ((rc.connectNote || "").length > 300) { bad(`${base}.connectNote`); errors.push("LinkedIn referrals: the invite note can be 300 characters at most."); }
+  if ((rc.jobs || []).some(u => !JB.sites.linkedin.jobUrlRe.test(u))) { bad(`${base}.jobs`); errors.push("LinkedIn referrals: the extra jobs must be LinkedIn job links (linkedin.com/jobs/view/…)."); }
+  const other = s.sites.linkedin.otherSkillYears;
+  if (other != null && !(other >= 0)) { bad("sites.linkedin.otherSkillYears"); errors.push("LinkedIn: years for other skills can't be negative."); }
+  if (Object.values(s.sites.linkedin.skillYears).some(v => v != null && !(v >= 0))) errors.push("LinkedIn: years with a skill can't be negative.");
   const firstBad = $("site-panels").querySelector('[aria-invalid="true"]');
   if (firstBad) showSiteSettings(firstBad.closest(".site-panel").id.replace("site-panel-", ""));
 
   let broken = 0;
-  for (const tr of document.querySelectorAll("#answer-rows tr")) {
+  for (const tr of document.querySelectorAll("#answer-rows tr, #answer-rows-linkedin tr")) {
     const input = tr.querySelector('[data-key="pattern"]');
     const used = input.value.trim() || tr.querySelector('[data-key="answer"]').value.trim();
     if (used && JB.answers.badPatterns([[input.value.trim(), ""]]).length) {
@@ -833,7 +1006,7 @@ async function importFile(e) {
   }
   if (!confirm(`Replace your settings with the ones in ${file.name}, and add its ${data.history.length} past jobs to the history?`)) return;
   try {
-    const { added } = await send({ type: "import", settings: data.settings, history: data.history, cache: data.cache });
+    const { added } = await send({ type: "import", settings: data.settings, history: data.history, cache: data.cache, contacts: data.contacts, referralJobs: data.referralJobs });
     status.textContent = `Done: settings replaced, ${added} past jobs added${added < data.history.length ? ` (${data.history.length - added} were already here)` : ""}.`;
   } catch (err) {
     status.classList.add("err");
@@ -866,6 +1039,7 @@ async function init() {
 
   settings = await JB.store.getSettings();
   jobs = await JB.store.jobs();
+  people = await JB.store.contacts();
   for (const [k, run] of Object.entries(await chrome.storage.session.get(null))) {
     if (k.startsWith("run:") && SITES[k.slice(4)]) runs[k.slice(4)] = run;
   }
@@ -889,11 +1063,17 @@ async function init() {
         renderRail();
         renderHistory();
       }
+      if (changes.contacts) {
+        people = changes.contacts.newValue || {};
+        renderReferrals();
+        renderReferBox();
+      }
       if (changes.settings) {
         settings = JB.store.normalize(changes.settings.newValue);
         if (!$("savebar").classList.contains("dirty")) fillForm(settings);
         $("first-run").hidden = !!settings.savedAt;
         renderRail();
+        renderReferBox();
       }
     }
   });

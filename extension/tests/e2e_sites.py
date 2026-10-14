@@ -313,7 +313,7 @@ class Check:
 
     def overview(self, site):
         self.dash.evaluate(f"location.hash = '#overview/{site}'")
-        self.dash.wait_for_function(f"document.getElementById('site-name').textContent === {json.dumps(site.capitalize())}")
+        self.dash.wait_for_function(f"document.getElementById('site-name').textContent.toLowerCase() === {json.dumps(site)}")
 
     def start(self, site, act):
         self.overview(site)
@@ -329,7 +329,8 @@ class Check:
             if s and not s["running"]:
                 return s
             time.sleep(0.5)
-        raise AssertionError(f"{site} run didn't finish:\n" + "\n".join((self.run(site) or {}).get("log", [])))
+        s = self.run(site) or {}
+        raise AssertionError(f"{site} run didn't finish (doing: {s.get('now')!r}, asking: {s.get('prompt')}):\n" + "\n".join(s.get("log", [])))
 
     def wait_prompt(self, title):
         box = self.dash.locator(".bot .prompt")
@@ -382,7 +383,7 @@ def main():
 
         print("\nThe dashboard has every site")
         names = dash.eval_on_selector_all("#site-list li a", "els => els.map(a => a.childNodes[1].textContent)")
-        check(names == ["Hirist", "Instahyre", "Wellfound", "Cutshort"], f"sidebar lists the sites ({names})")
+        check(names == ["Hirist", "Instahyre", "Wellfound", "Cutshort", "LinkedIn"], f"sidebar lists the sites ({names})")
         check.overview("instahyre")
         check(dash.locator("#site-list a[aria-current]").inner_text().startswith("Instahyre"), "sidebar marks the site shown")
 
@@ -472,7 +473,7 @@ def main():
         print("\nSettings for each site")
         dash.evaluate("location.hash = '#settings'")
         tabs = dash.eval_on_selector_all("#site-tabs button", "els => els.map(b => b.textContent)")
-        check(tabs == ["Hirist", "Instahyre", "Wellfound", "Cutshort"], "a tab per site")
+        check(tabs == ["Hirist", "Instahyre", "Wellfound", "Cutshort", "LinkedIn"], "a tab per site")
         dash.click("#site-tab-wellfound")
         check(dash.locator('[name="sites.wellfound.locations"]').is_visible(), "Wellfound has places to search")
         dash.fill('[name="sites.wellfound.locations"]', "india\nremote\nbangalore")

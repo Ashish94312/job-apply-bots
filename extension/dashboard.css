@@ -233,6 +233,25 @@ details.opts[open] summary, details.opts summary:hover { color: var(--ink); back
 .glyph.s-pending { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line-strong); }
 .glyph.s-would_apply { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); color: var(--accent); }
 
+.refer {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px 24px; flex-wrap: wrap;
+  margin-top: 16px; padding: 14px 22px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--line);
+}
+.refer h2 { font-size: 15px; font-weight: 600; }
+.refer .hint { margin-top: 2px; }
+.referrals { margin-top: 34px; }
+.referrals h2 { font-size: 19px; font-weight: 650; font-stretch: 88%; margin-bottom: 12px; }
+.glyph.s-messaged { background: var(--applied); }
+.glyph.s-invited { background: var(--accent); }
+.glyph.s-not_accepted { color: var(--quiet-ink); }
+.glyph.s-would_message, .glyph.s-would_invite { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); color: var(--accent); }
+.s-messaged::before { content: "✓"; }
+.s-invited::before { content: "+"; }
+.s-not_accepted::before { content: "–"; }
+.s-would_message::before, .s-would_invite::before { content: "→"; }
+.counter { color: var(--muted); font-size: 12.5px; font-weight: 400; }
+.counter.over { color: var(--failed); font-weight: 600; }
+
 /* ---------------------------------------------------------------- activity + rail */
 
 .cols { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 44px; margin-top: 34px; align-items: start; }
@@ -375,6 +394,14 @@ textarea[name="profile.coverNote"] { font-family: var(--sans); font-size: 14.5px
 .site-tabs button[aria-selected="true"] { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
 .site-panel { display: grid; gap: 16px; }
 .site-panel h3 { font-size: 15px; font-weight: 600; margin-top: 4px; }
+.site-extra { display: grid; gap: 14px; margin-top: 6px; padding-top: 18px; border-top: 1px solid var(--line); }
+.checks { display: flex; flex-wrap: wrap; gap: 8px 18px; font-weight: 400; }
+.checks label { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; white-space: nowrap; }
+.field .checks input, .tick input { width: auto; height: auto; padding: 0; margin: 0; flex: none; }
+.field.wide-hint { width: 280px; }
+.tick { display: flex; gap: 10px; align-items: baseline; font-size: 14px; font-weight: 500; }
+.tick small { display: block; color: var(--muted); font-weight: 400; font-size: 12.5px; }
+.field select { height: 36px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface); font-weight: 400; }
 #history-site { height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface); }
 .saved { color: var(--ink-2); font-size: 13.5px; }
 .saved.err { color: var(--failed); }

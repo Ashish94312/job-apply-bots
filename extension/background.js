@@ -1,8 +1,8 @@
 // The extension's background worker: runs the bots (engine.js) and takes requests from the dashboard.
 importScripts(
   "lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/store.js",
-  "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js", "sites/cutshort.js",
-  "engine.js",
+  "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js", "sites/cutshort.js", "sites/linkedin.js",
+  "engine.js", "referral.js",
 );
 
 const DASHBOARD = chrome.runtime.getURL("dashboard.html");
@@ -41,7 +41,8 @@ const handlers = {
       const have = (await chrome.storage.local.get(key))[key] || {};
       await chrome.storage.local.set({ [key]: { ...found, ...have } });
     }
-    return { added: await JB.store.importHistory(m.history) };
+    const people = await JB.store.importReferrals(m.contacts, m.referralJobs);
+    return { added: await JB.store.importHistory(m.history), people };
   },
 };
 

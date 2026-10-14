@@ -15,6 +15,7 @@
   const ROLE_CSS = {
     button: "button, [role=button], input[type=submit], input[type=button]",
     link: "a[href], [role=link]",
+    menuitem: "[role=menuitem]",
   };
   const nameOf = e => norm(e.getAttribute("aria-label") || e.innerText || e.value || e.getAttribute("title"));
 
@@ -243,6 +244,7 @@
     APPLIED_TEXT_RE,
     fields,
     fillForm,
+    chooseOption,
     setValue,
     visibleDialog,
     whenEnabled,

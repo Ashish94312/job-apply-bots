@@ -19,7 +19,6 @@
     <section class="sites" aria-labelledby="sites-title">
       <h2 id="sites-title">Sites</h2>
       <ul id="site-list"></ul>
-      <p class="later">LinkedIn still runs as the Python bot for now.</p>
     </section>
     <p class="side-foot">Your settings and history stay in this Chrome.</p>
   </aside>
@@ -75,6 +74,17 @@
           <li><span class="glyph s-seen" aria-hidden="true"></span>Handled before</li>
           <li><span class="glyph s-pending" aria-hidden="true"></span>Not reached</li>
         </ul>
+      </section>
+
+      <section class="refer" id="refer-box" aria-labelledby="refer-title" hidden>
+        <div>
+          <h2 id="refer-title">Referrals</h2>
+          <p class="hint" id="refer-summary"></p>
+        </div>
+        <div class="actions">
+          <button class="btn" data-act="refer-dry-run" title="See who it would ask and the messages, without sending anything">Preview</button>
+          <button class="btn" data-act="refer" title="Message people at the companies you applied to, asking for a referral">Ask for referrals</button>
+        </div>
       </section>
 
       <div class="cols">
@@ -139,6 +149,16 @@
         </table>
       </div>
       <p class="more" id="history-more" hidden></p>
+
+      <section class="referrals" id="referrals" aria-labelledby="referrals-title" hidden>
+        <h2 id="referrals-title">People asked for a referral</h2>
+        <div class="table-wrap">
+          <table class="history">
+            <thead><tr><th>When</th><th>Person</th><th>Asked about</th><th>Status</th><th>Note</th></tr></thead>
+            <tbody id="referral-rows"></tbody>
+          </table>
+        </div>
+      </section>
     </section>
 
     <!-- ===================================================== settings -->
@@ -198,7 +218,7 @@
             </section>
 
             <section class="set" id="set-answers" aria-labelledby="answers-title">
-              <h2 id="answers-title">Answers to screening questions <small>All sites</small></h2>
+              <h2 id="answers-title">Answers to screening questions <small>All sites but LinkedIn, which has its own</small></h2>
               <p class="hint">Each question is matched against these patterns from the top, and the first match answers it.
                 A pattern is a few words or a regular expression, any case. For yes/no questions the answer has to be one of
                 the options, like "Yes". Leave an answer empty to keep that question for yourself: the job is then marked
@@ -268,6 +288,7 @@
 <script src="sites/instahyre.js"></script>
 <script src="sites/wellfound.js"></script>
 <script src="sites/cutshort.js"></script>
+<script src="sites/linkedin.js"></script>
 <script src="dashboard.js"></script>
 </body>
 </html>

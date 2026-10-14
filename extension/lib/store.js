@@ -35,10 +35,11 @@
     await local.set({ settings: { ...normalize(settings), savedAt: now() } });
   }
 
-  /** What one site's run uses: the shared profile with that site's own settings on top. */
+  /** What one site's run uses: the shared profile with that site's own settings on top. A site with answers of
+   * its own (LinkedIn: number boxes, phone without +91) uses those instead of the shared ones. */
   function effective(settings, site) {
     const own = settings.sites[site] || {};
-    return { ...settings.profile, ...own, answers: [...(own.answers || []), ...settings.profile.answers] };
+    return { ...settings.profile, ...own, answers: own.answers && own.answers.length ? own.answers : settings.profile.answers };
   }
 
   // ------------------------------------------------------------ history
@@ -109,8 +110,78 @@
     });
   }
 
+  // ------------------------------------------------------------ referrals (LinkedIn)
+
+  const CONTACT_STATUSES = ["messaged", "invited", "not_accepted", "failed"];
+  const contacts = async () => (await local.get("contacts")).contacts || {}; // profile URL -> who, about which job, status
+  const referralJobs = async () => (await local.get("referralJobs")).referralJobs || {}; // job id -> asked about it
+
+  const daysAgo = ts => (Date.now() - new Date(String(ts).replace(" ", "T")).getTime()) / 86400000;
+
+  /** Jobs with one of these statuses from the last `days` days, newest first, not asked about yet. */
+  async function jobsToAsk(site, statuses, days) {
+    const asked = await referralJobs();
+    return Object.values(await jobs())
+      .filter(r => r.site === site && statuses.includes(r.status) && daysAgo(r.ts) <= days && !asked[r.jobId])
+      .sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
+  }
+
+  function jobDone(job, status, note = "") {
+    return serial(async () => {
+      const all = await referralJobs();
+      all[job.jobId] = { jobId: job.jobId, url: job.url, title: job.title || "", company: job.company || "", status, note, ts: now() };
+      await local.set({ referralJobs: all });
+    });
+  }
+
+  const askedAbout = async jobId => !!(await referralJobs())[jobId];
+  const knownContact = async profile => !!(await contacts())[profile];
+  const askedAt = async companyUrl => Object.values(await contacts()).filter(c => c.companyUrl === companyUrl && ["messaged", "invited"].includes(c.status)).length;
+  const sentToday = async () => Object.values(await contacts()).filter(c => ["messaged", "invited"].includes(c.status) && String(c.updated).startsWith(now().slice(0, 10))).length;
+
+  /** Invites not accepted yet, oldest first, with how many days ago they went. */
+  async function pendingInvites() {
+    return Object.values(await contacts()).filter(c => c.status === "invited")
+      .sort((a, b) => String(a.ts).localeCompare(String(b.ts))).map(c => ({ ...c, age: daysAgo(c.ts) }));
+  }
+
+  /** Add someone, or update their status (keeping when they were first contacted). */
+  function saveContact(person, job, companyUrl, status, note = "") {
+    return serial(async () => {
+      const all = await contacts();
+      const was = all[person.profile];
+      all[person.profile] = {
+        profile: person.profile, name: person.name, headline: person.headline || "", company: job.company || "", companyUrl,
+        jobId: job.jobId, jobUrl: job.url, title: job.title || "", status, note, ts: was ? was.ts : now(), updated: now(),
+      };
+      await local.set({ contacts: all });
+    });
+  }
+
+  /** Add contacts and asked-about jobs (from the Python bot's export) that aren't here yet. */
+  function importReferrals(people, asked) {
+    return serial(async () => {
+      const all = await contacts();
+      const done = await referralJobs();
+      let added = 0;
+      for (const c of people || []) {
+        if (!c || !c.profile || all[c.profile] || !CONTACT_STATUSES.includes(c.status)) continue;
+        all[c.profile] = c;
+        added++;
+      }
+      for (const j of asked || []) if (j && j.jobId && !done[j.jobId]) done[j.jobId] = j;
+      await local.set({ contacts: all, referralJobs: done });
+      return added;
+    });
+  }
+
   const saveShot = (site, jobId, dataUrl) => local.set({ [shotKey(site, jobId)]: dataUrl });
   const shot = async (site, jobId) => (await local.get(shotKey(site, jobId)))[shotKey(site, jobId)] || null;
 
-  JB.store = { STATUSES, now, normalize, getSettings, saveSettings, effective, jobs, seen, record, appliedToday, forget, importHistory, saveShot, shot };
+  JB.store = {
+    STATUSES, now, normalize, getSettings, saveSettings, effective, jobs, seen, record, appliedToday, forget, importHistory,
+    saveShot, shot,
+    CONTACT_STATUSES, contacts, referralJobs, jobsToAsk, jobDone, askedAbout, knownContact, askedAt, sentToday, pendingInvites,
+    saveContact, importReferrals,
+  };
 })(globalThis.JB = globalThis.JB || {});

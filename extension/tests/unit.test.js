@@ -6,7 +6,7 @@ const path = require("node:path");
 
 globalThis.JB = {};
 globalThis.chrome = { storage: { local: {} } }; // store.js only touches it when called
-for (const file of ["lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/store.js", "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js", "sites/cutshort.js"]) {
+for (const file of ["referral.js", "lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/store.js", "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js", "sites/cutshort.js", "sites/linkedin.js"]) {
   require(path.join(__dirname, "..", file));
 }
 const cases = require("./cases.json");
@@ -69,10 +69,10 @@ test("settings: defaults fill gaps, a site's answers come before the shared ones
   assert.equal(s.sites.hirist.limits.maxPerDay, JB.DEFAULTS.sites.hirist.limits.maxPerDay);
   assert.deepEqual(s.sites.hirist.keywords, JB.DEFAULTS.sites.hirist.keywords);
 
+  assert.deepEqual(store.effective(s, "hirist").answers, s.profile.answers); // no answers of its own: the shared ones
   s.sites.hirist.answers = [["notice", "15 days"]];
   const cfg = store.effective(s, "hirist");
-  assert.equal(cfg.answers[0][1], "15 days");
-  assert.equal(cfg.answers.length, s.profile.answers.length + 1);
+  assert.deepEqual(cfg.answers, [["notice", "15 days"]]); // its own replace the shared ones
   assert.equal(cfg.coverNote, "Hi");
   assert.deepEqual(cfg.keywords, s.sites.hirist.keywords);
   assert.equal(store.normalize(undefined).savedAt, null);
@@ -126,4 +126,23 @@ test("defaults have each site's own settings", () => {
   assert.ok(s.sites.instahyre.limits.maxScrolls >= 0 && s.sites.instahyre.limits.maxPages === undefined);
   assert.deepEqual(s.sites.wellfound.locations, ["india", "remote"]);
   assert.ok(s.sites.wellfound.limits.maxPages >= 1);
+});
+
+test("LinkedIn reads experience, answers questions and picks options like the Python bot", () => {
+  const li = cases.linkedin;
+  for (const c of li.withRange) assert.equal(sites.linkedin.withRange(c.text), c.expected, c.text);
+  const fill = { answers: li.answers, skillYears: li.skillYears, otherSkillYears: li.otherSkillYears };
+  for (const c of li.answer) assert.equal(sites.linkedin.answer(c.label, fill), c.expected, c.label);
+  for (const c of li.pick) assert.equal(sites.linkedin.pick(c.options, c.answer), c.expected, `${c.answer} in ${c.options}`);
+  assert.equal(sites.linkedin.searchPageUrl("https://www.linkedin.com/jobs/search/?keywords=x", 3), "https://www.linkedin.com/jobs/search/?keywords=x&start=50");
+  assert.equal(sites.linkedin.jobId("https://www.linkedin.com/jobs/view/senior-ml-engineer-at-x-4012345678/?trk=1"), "4012345678");
+  assert.equal(sites.linkedin.searchLabel("https://www.linkedin.com/jobs/search/?keywords=ai+engineer&location=India"), "ai engineer, India");
+});
+
+test("referrals name people, fill in messages and search like the Python bot", () => {
+  const li = cases.linkedin;
+  for (const c of li.firstName) assert.equal(JB.referral.firstName(c.name), c.expected, c.name);
+  for (const c of li.render) assert.equal(JB.referral.render(c.template, c.name, c.job), c.expected, `${c.template} / ${c.name}`);
+  for (const c of li.peopleUrl) assert.equal(JB.referral.peopleUrl(c.ids, c.keywords), c.expected, c.keywords);
+  assert.equal(JB.referral.slugOf("https://www.linkedin.com/in/Priya-Sharma-%C3%A9/?x=1"), "priya-sharma-é");
 });
