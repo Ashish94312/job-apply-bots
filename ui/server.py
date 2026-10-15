@@ -284,6 +284,30 @@ def save_referral_text(bot, note, message):
     path.write_text(updated)
 
 
+def save_daily_limit(bot, n):
+    """Write limits.max_per_day into the bot's config.yaml, leaving the rest of the file (and its comments) as it is.
+    Checks the result reads back as exactly that, else leaves the file alone."""
+    path = ROOT / bot / "config.yaml"
+    lines = path.read_text().split("\n")
+    start = next((i for i, line in enumerate(lines) if re.match(r"^limits:\s*(#.*)?$", line)), None)
+    if start is None:
+        raise ValueError(f"{bot}/config.yaml has no limits: section.")
+    end = next((i for i in range(start + 1, len(lines)) if re.match(r"^[^\s#]", lines[i])), len(lines))
+    k = next((i for i in range(start + 1, end) if re.match(r"^\s+max_per_day:", lines[i])), None)
+    if k is None:
+        raise ValueError("couldn't find limits.max_per_day in config.yaml.")
+    lines[k] = re.sub(r"^(\s+max_per_day:[ \t]*)[^#\s]*", rf"\g<1>{n}", lines[k])  # keeps a comment after it
+
+    updated = "\n".join(lines)
+    try:
+        limits = (yaml.safe_load(updated) or {}).get("limits") or {}
+    except yaml.YAMLError as e:
+        raise ValueError(f"couldn't save: {e}")
+    if limits.get("max_per_day") != n:
+        raise ValueError("couldn't save the limit; change limits.max_per_day in config.yaml by hand.")
+    path.write_text(updated)
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
@@ -360,6 +384,11 @@ class Handler(BaseHTTPRequestHandler):
                 if not message:
                     return self._send(400, {"error": "the message can't be empty"})
                 save_referral_text(bot, note, message)
+            elif self.path == "/api/daily-limit":
+                n = body.get("max_per_day")
+                if type(n) is not int or not 1 <= n <= 500:
+                    return self._send(400, {"error": "the daily limit is a whole number from 1 to 500"})
+                save_daily_limit(bot, n)
             else:
                 return self._send(404, {"error": "not found"})
         except (ValueError, OSError) as e:

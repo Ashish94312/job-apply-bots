@@ -60,7 +60,7 @@ line. A change applies from the next run.
 | Which job titles to apply to | `<bot>/config.yaml` | `filters.include_title` (must have one), `filters.require_role` (must be an engineering role), `filters.exclude_title` |
 | Companies to skip | `<bot>/config.yaml` | `filters.exclude_companies` |
 | Most experience a job may ask for | `<bot>/config.yaml` | `filters.max_experience_required` |
-| How many applications | `<bot>/config.yaml` | `limits.max_per_run`, `limits.max_per_day`, `limits.delay_seconds` |
+| How many applications | `<bot>/config.yaml` (daily limit also: dashboard → site card → **Options**) | `limits.max_per_run`, `limits.max_per_day`, `limits.delay_seconds` |
 | Answers to screening questions (salary, notice period, phone, city, college, yes/no questions) | `<bot>/config.yaml` | `answers`: a pattern of the question → your answer |
 | LinkedIn's "years of experience with *X*?" | `linkedin/config.yaml` | `skill_years`, `other_skill_years` |
 | Text for "message to the recruiter" / cover letter boxes | `<bot>/config.yaml` | `cover_note` |

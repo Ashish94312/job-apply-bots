@@ -235,7 +235,7 @@
         ],
         "limits": {
           "maxPerRun": 10,
-          "maxPerDay": 30,
+          "maxPerDay": 50,
           "delaySeconds": [
             20,
             45
@@ -310,7 +310,7 @@
         ],
         "limits": {
           "maxPerRun": 10,
-          "maxPerDay": 30,
+          "maxPerDay": 50,
           "delaySeconds": [
             20,
             45
@@ -341,7 +341,7 @@
         "searchUrls": [],
         "limits": {
           "maxPerRun": 10,
-          "maxPerDay": 30,
+          "maxPerDay": 50,
           "delaySeconds": [
             20,
             45
@@ -394,7 +394,7 @@
         ],
         "limits": {
           "maxPerRun": 10,
-          "maxPerDay": 30,
+          "maxPerDay": 50,
           "delaySeconds": [
             20,
             45
@@ -428,7 +428,7 @@
         "searchUrls": [],
         "limits": {
           "maxPerRun": 10,
-          "maxPerDay": 25,
+          "maxPerDay": 50,
           "delaySeconds": [
             30,
             60

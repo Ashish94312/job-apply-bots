@@ -40,7 +40,7 @@ def site_settings(cfg):
         "searchUrls": list(cfg.get("search_urls") or []),
         "limits": {
             "maxPerRun": limits.get("max_per_run", 10),
-            "maxPerDay": limits.get("max_per_day", 30),
+            "maxPerDay": limits.get("max_per_day", 50),
             "delaySeconds": list(limits.get("delay_seconds") or [20, 45]),
         },
     }

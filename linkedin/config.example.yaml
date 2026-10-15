@@ -150,7 +150,7 @@ filters:
 
 limits:
   max_per_run: 10
-  max_per_day: 25
+  max_per_day: 50
   delay_seconds: [30, 60]  # random pause after each application
   max_pages: 3             # result pages to go through per search (25 jobs each)
 

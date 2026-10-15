@@ -183,7 +183,7 @@ filters:
 
 limits:
   max_per_run: 10
-  max_per_day: 30
+  max_per_day: 50
   delay_seconds: [20, 45]  # random pause after each application
   max_scrolls: 5           # how far to scroll each search page for more results
 

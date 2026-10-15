@@ -118,6 +118,10 @@
   .opts-body input[type="number"] {
     width: 4.5em; padding: 2px 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--sunk);
   }
+  .per-day { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+  .per-day .btn { padding: 2px 10px; font-size: 14px; }
+  .per-day .saved { color: var(--muted); }
+  .per-day .saved.err { color: var(--bad); }
 
   /* ---------- referral message editor */
   .refer-text .opts-body label { display: grid; gap: 4px; }
@@ -279,6 +283,10 @@
         <label><input type="checkbox" name="confirm"> Ask me before each application</label>
         <label><input type="checkbox" name="assist"> Pause on questions it can't answer, so I can fill them in</label>
         <label>Stop after <input type="number" name="max" min="1" step="1"> applications</label>
+        <div class="per-day">
+          <label>At most <input type="number" name="per-day" min="1" max="500" step="1"> applications a day</label>
+          <button class="btn" data-act="save-limit">Save</button><span class="saved" aria-live="polite"></span>
+        </div>
       </div>
     </details>
     <details class="opts refer-text" hidden>
@@ -357,15 +365,19 @@ function build(names) {
     el.querySelector("h2").textContent = info.name;
     el.querySelector(".how").textContent = info.how;
     const opts = store(`opts.${bot}`) || {};
-    for (const input of el.querySelectorAll(".opts input")) {
+    for (const input of el.querySelectorAll('.opts input:not([name="per-day"])')) {  // the daily limit lives in config.yaml
       if (input.type === "checkbox") input.checked = !!opts[input.name];
       else input.value = opts[input.name] || "";
       input.addEventListener("change", () => store(`opts.${bot}`, options(bot)));
     }
+    const perDay = el.querySelector('[name="per-day"]');
+    perDay.addEventListener("input", () => { perDay.dataset.dirty = "1"; setLimitSaved(bot, ""); });
+    perDay.addEventListener("keydown", e => { if (e.key === "Enter") saveLimit(bot); });
     el.addEventListener("click", e => {
       const act = e.target.closest("[data-act]")?.dataset.act;
       if (act === "stop") stop(bot);
       else if (act === "save-text") saveText(bot);
+      else if (act === "save-limit") saveLimit(bot);
       else if (act) start(bot, act);
     });
     for (const area of el.querySelectorAll(".refer-text textarea")) {
@@ -448,6 +460,38 @@ async function saveText(bot) {
   } catch (e) {
     setSaved(bot, e.message, true);
   }
+}
+
+// ---------------------------------------------------------------- daily limit
+
+function setLimitSaved(bot, text, isError = false) {
+  const el = view[bot].el.querySelector(".per-day .saved");
+  el.textContent = text;
+  el.classList.toggle("err", isError);
+}
+
+function renderDailyLimit(bot, s) {
+  const input = view[bot].el.querySelector('[name="per-day"]');
+  if (input.dataset.dirty !== "1" && document.activeElement !== input) input.value = s.max_per_day ?? "";  // don't overwrite your edit
+  view[bot].el.querySelector('[data-act="save-limit"]').disabled = !s.config_ok;
+}
+
+async function saveLimit(bot) {
+  const input = view[bot].el.querySelector('[name="per-day"]');
+  const n = Number(input.value);
+  if (!input.value.trim() || !Number.isInteger(n) || n < 1 || n > 500) {
+    setLimitSaved(bot, "A whole number from 1 to 500.", true);
+    return;
+  }
+  setLimitSaved(bot, "Saving…");
+  try {
+    await post("/api/daily-limit", { bot, max_per_day: n });
+    input.dataset.dirty = "";
+    setLimitSaved(bot, view[bot].state?.run?.running ? "Saved. The next run uses it." : "Saved to config.yaml.");
+  } catch (e) {
+    setLimitSaved(bot, e.message, true);
+  }
+  poll(true);
 }
 
 function setStatus(bot, text, isError = false) {
@@ -582,6 +626,7 @@ function renderBot(bot, s) {
   }
   v.el.querySelector('[data-act="refer"]').hidden = !s.can_refer;
   renderReferralText(bot, s);
+  renderDailyLimit(bot, s);
   v.el.querySelector('[data-act="stop"]').hidden = !running;
   const max = v.el.querySelector('.opts [name="max"]');
   max.placeholder = s.max_per_run ?? "";
