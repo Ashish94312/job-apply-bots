@@ -156,9 +156,13 @@
   const NOTE_RE = /note|cover|message|pitch|recruiter|why|introduc|about (you|yourself)|interests? you|good fit/i;
   const IGNORED_TYPES = new Set(["hidden", "submit", "button", "file", "search", "checkbox", "image", "reset"]);
 
-  /** Fill what we have answers for. Returns the questions we couldn't answer (empty = ready to submit). */
+  const optionTexts = select => [...select.options].map(o => norm(o.text)).filter(t => t && !/^(select|choose|pick)\b|^-+$/i.test(t));
+
+  /** Fill what we have answers for. Returns the questions we couldn't answer, each { q, kind, options } with kind
+   * text, number, long, choice (one of the options), several (any of them) or search (a box that suggests). Empty:
+   * ready to submit. */
   async function fillForm(root, answers, note) {
-    const { answerFor, numberAnswer } = JB.answers;
+    const { answerFor, numberAnswer, pick, pickDuration } = JB.answers;
     const inputs = [...root.querySelectorAll("input, textarea, select")];
     const missing = [];
     const radioGroups = new Map();
@@ -174,15 +178,24 @@
       }
       if (f.combo) {
         if (!f.chosen && !(await chooseOption(inputs[f.i], answerFor(f.label, answers)))) {
-          missing.push(f.label.slice(0, 60) || "dropdown");
+          missing.push({ q: f.label || "dropdown", kind: "search" });
         }
         continue;
       }
-      if (!f.visible || f.value) continue;
+      if (!f.visible) continue;
       if (f.tag === "select") {
-        missing.push(f.label.slice(0, 60) || "dropdown");
+        const select = inputs[f.i];
+        const chosen = select.options[select.selectedIndex];
+        if (chosen && chosen.value && optionTexts(select).includes(norm(chosen.text))) continue; // already picked
+        const options = optionTexts(select);
+        const given = answerFor(f.label, answers);
+        const k = pick(options, given) ?? pickDuration(options, given);
+        const option = k == null ? null : [...select.options].find(o => norm(o.text) === options[k]);
+        if (option) setValue(select, option.value);
+        else missing.push({ q: f.label || "dropdown", kind: "choice", options });
         continue;
       }
+      if (f.value) continue;
       let answer = answerFor(f.label, answers);
       const isMessageBox = f.tag === "textarea" && (!f.label || NOTE_RE.test(f.label));
       if (answer == null && isMessageBox) {
@@ -190,7 +203,7 @@
         answer = note;
       }
       if (answer == null) {
-        missing.push(f.label.slice(0, 60) || f.name || f.tag);
+        missing.push({ q: f.label || f.name || f.tag, kind: f.tag === "textarea" ? "long" : f.type === "number" ? "number" : "text" });
         continue;
       }
       setValue(inputs[f.i], f.type === "number" ? numberAnswer(answer) : answer);
@@ -198,12 +211,12 @@
     for (const group of radioGroups.values()) {
       if (group.checked) continue;
       const answer = (answerFor(group.label, answers) || "").toLowerCase();
-      const pick = group.options.find(([, option]) => answer && option.toLowerCase() === answer);
-      if (!pick) {
-        missing.push(group.label.slice(0, 60) || "choice");
+      const chosen = group.options.find(([, option]) => answer && option.toLowerCase() === answer);
+      if (!chosen) {
+        missing.push({ q: group.label || "choice", kind: "choice", options: group.options.map(([, option]) => option) });
         continue;
       }
-      inputs[pick[0]].click(); // radios are often hidden behind custom styling
+      inputs[chosen[0]].click(); // radios are often hidden behind custom styling
     }
     return missing;
   }

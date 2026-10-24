@@ -1,4 +1,5 @@
-// Settings, history, screenshots and applications, kept in chrome.storage.local (the replacement for config.yaml and jobs.db).
+// Settings, history, screenshots, applications and the answers you gave, kept in chrome.storage.local (the
+// replacement for config.yaml and jobs.db).
 // Loaded in the background worker and the dashboard. History changes go through the worker, one at a time.
 (function (JB) {
   const local = chrome.storage.local;
@@ -36,10 +37,12 @@
   }
 
   /** What one site's run uses: the shared profile with that site's own settings on top. A site with answers of
-   * its own (LinkedIn: number boxes, phone without +91) uses those instead of the shared ones. */
-  function effective(settings, site) {
+   * its own (LinkedIn: number boxes, phone without +91) uses those instead of the shared ones. Answers you gave
+   * when it asked (`kept`, see learn) come first, each for its own question. */
+  function effective(settings, site, kept = {}) {
     const own = settings.sites[site] || {};
-    return { ...settings.profile, ...own, answers: own.answers && own.answers.length ? own.answers : settings.profile.answers };
+    const answers = own.answers && own.answers.length ? own.answers : settings.profile.answers;
+    return { ...settings.profile, ...own, answers: [...Object.entries(kept).map(([k, a]) => [`=${k}`, a.answer]), ...answers] };
   }
 
   // ------------------------------------------------------------ history
@@ -175,6 +178,88 @@
     });
   }
 
+  // ------------------------------------------------------------ answers you gave when it asked
+
+  // question key (JB.answers.questionKey) -> { q, answer, kind, options, site, ts }
+  const kept = async () => (await local.get("kept")).kept || {};
+  // question key -> { q, kind, options, site, jobs: ["site:jobId" left for you over it], ts }: not answered yet
+  const waiting = async () => (await local.get("waiting")).waiting || {};
+
+  /** Keep answers you gave, each { q, answer, kind, options }, for next time. A job left for you only over
+   * questions answered now is forgotten, so the next run tries it again. Returns how many that is. */
+  function learn(items, site = "") {
+    return serial(async () => {
+      const all = await kept();
+      const open = await waiting();
+      const history = await jobs();
+      const touched = new Set();
+      for (const it of items) {
+        const k = JB.answers.questionKey(it.q);
+        if (!k || it.answer == null || String(it.answer).trim() === "") continue;
+        all[k] = { q: it.q, answer: String(it.answer).trim(), kind: it.kind || "text", options: it.options || [], site: site || all[k]?.site || "", ts: now() };
+        for (const jk of open[k]?.jobs || []) touched.add(jk);
+        delete open[k];
+      }
+      const stillWaiting = new Set(Object.values(open).flatMap(w => w.jobs));
+      const retry = [...touched].filter(jk => !stillWaiting.has(jk) && history[jk]?.status === "needs_manual");
+      for (const jk of retry) delete history[jk];
+      await local.set({ kept: all, waiting: open, jobs: history });
+      await local.remove(retry.map(jk => shotKey(...jk.split(":"))));
+      return retry.length;
+    });
+  }
+
+  /** Forget answers you gave, by question key. */
+  function unlearn(keys) {
+    return serial(async () => {
+      const all = await kept();
+      for (const k of keys) delete all[k];
+      await local.set({ kept: all });
+    });
+  }
+
+  /** Questions a job was left for you over ([{ q, kind, options }]), to answer on the dashboard. */
+  function noteQuestions(site, job, missing) {
+    return serial(async () => {
+      const open = await waiting();
+      const have = await kept();
+      for (const m of missing) {
+        const k = JB.answers.questionKey(m.q);
+        if (!k || have[k]) continue;
+        const was = open[k];
+        open[k] = {
+          q: m.q, kind: m.kind || "text", options: m.options && m.options.length ? m.options : was?.options || [], site,
+          jobs: [...new Set([...(was?.jobs || []), key(site, job.jobId)])], ts: was?.ts || now(),
+        };
+      }
+      await local.set({ waiting: open });
+    });
+  }
+
+  /** Stop asking about questions, by key: the jobs stay left for you. */
+  function dropQuestions(keys) {
+    return serial(async () => {
+      const open = await waiting();
+      for (const k of keys) delete open[k];
+      await local.set({ waiting: open });
+    });
+  }
+
+  /** Add answers (from a backup) for questions that have none here yet. */
+  function importKept(rows) {
+    return serial(async () => {
+      const all = await kept();
+      let added = 0;
+      for (const [k, a] of Object.entries(rows || {})) {
+        if (!k || all[k] || !a || typeof a.answer !== "string") continue;
+        all[k] = a;
+        added++;
+      }
+      await local.set({ kept: all });
+      return added;
+    });
+  }
+
   // ------------------------------------------------------------ applications (lib/tracker.js)
 
   const tracks = async () => (await local.get("track")).track || {};
@@ -235,5 +320,6 @@
     saveShot, shot,
     CONTACT_STATUSES, contacts, referralJobs, jobsToAsk, jobDone, askedAbout, knownContact, askedAt, sentToday, pendingInvites,
     saveContact, importReferrals, tracks, saveTracks, importTracks, markApplied,
+    kept, waiting, learn, unlearn, noteQuestions, dropQuestions, importKept,
   };
 })(globalThis.JB = globalThis.JB || {});

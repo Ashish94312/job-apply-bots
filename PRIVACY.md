@@ -13,6 +13,8 @@ All of it is kept in your browser's extension storage (`chrome.storage`) on your
 - **Your settings:** the jobs to search for, your filters, and the answers you write for screening questions.
   These can include personal details you choose to enter, such as your phone number, city, college, notice
   period and salary.
+- **Answers you gave when it asked:** each application-form question you answered on the dashboard, with your
+  answer, and the questions still waiting for one (with the jobs they held up).
 - **Your history:** each job Sendoff looked at (title, company, link, the date, and what happened).
 - **Your applications:** what you note about the jobs you applied to: when and how a company replied and who,
   the rounds and their dates, how it ended, your notes, and jobs you add yourself.
@@ -49,7 +51,7 @@ code from the internet: everything it runs is in the extension you installed.
 ## Your control
 
 - See and change everything on the dashboard: Settings for what you entered, History for what it did.
-- **Download backup** saves your settings, history and applications to a file on your computer; nothing is uploaded.
+- **Download backup** saves your settings, history, applications and answers to a file on your computer; nothing is uploaded.
 - Removing the extension from Chrome deletes everything it kept. You can also turn screenshots off at any time
   in Settings.
 

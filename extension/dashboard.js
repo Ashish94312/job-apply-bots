@@ -47,6 +47,8 @@ let settings = null; // as last saved
 let jobs = {};
 let people = {}; // everyone asked for a referral (LinkedIn), by profile
 let track = {}; // what you've noted about each application (lib/tracker.js), by key
+let kept = {}; // answers you gave when the bot asked, by question key (lib/store.js learn)
+let waiting = {}; // questions jobs were left for you over, not answered yet
 
 // ---------------------------------------------------------------- small helpers
 
@@ -334,8 +336,22 @@ function renderPrompt() {
   box.hidden = !p;
   if (!p) return;
   box.querySelector(".prompt-q").replaceChildren(el("small", { textContent: p.title }), p.text);
+  const fields = (p.fields || []).map(field => [field, answerBox(field)]);
+  box.querySelector(".prompt-fields").replaceChildren(...fields.map(([field, control]) =>
+    el("div", { className: "prompt-field" }, el("span", { textContent: shownQuestion(field.q, field.options) }), control)));
+  const err = box.querySelector(".prompt-err");
+  err.textContent = "";
+  const reply = value => {
+    if (value !== "save") return answer(p.id, value);
+    const answers = fields.map(([field, control]) => ({ ...field, answer: control.read() }));
+    if (answers.some(a => !a.answer)) {
+      err.textContent = "Answer each one, or pick another way below.";
+      return;
+    }
+    answer(p.id, { answers });
+  };
   box.querySelector(".prompt-answers").replaceChildren(
-    ...p.choices.map(([label, value, kind]) => el("button", { className: `btn ${kind || ""}`, textContent: label, onclick: () => answer(p.id, value) })),
+    ...p.choices.map(([label, value, kind]) => el("button", { className: `btn ${kind || ""}`, textContent: label, onclick: () => reply(value) })),
   );
 }
 
@@ -488,6 +504,13 @@ function renderRail() {
   if (needs.length > 5) {
     list.append(el("li", {}, el("a", { className: "all", href: "#history", textContent: `All ${needs.length} in History`, onclick: () => setFilter("needs_manual") })));
   }
+  const asks = Object.keys(waiting).length;
+  if (asks) {
+    list.append(el("li", {}, el("a", {
+      className: "all", href: "#settings", textContent: `Answer the ${asks} question${asks > 1 ? "s" : ""} it got stuck on`,
+      onclick: e => { e.preventDefault(); goto("your-answers"); },
+    })));
+  }
   const badge = $("nav-needs");
   badge.hidden = !needs.length;
   badge.textContent = needs.length;
@@ -620,6 +643,9 @@ function renderHistory() {
     if (/^https?:\/\//.test(r.url || "")) link.href = r.url;
     const note = el("td", { className: "note" }, r.note ? describe(r.status, r.note) : "");
     if (r.shot) note.append(r.note ? " " : "", el("button", { textContent: "Screenshot", onclick: () => showShot(r) }));
+    if (r.status === "needs_manual" && Object.values(waiting).some(w => w.jobs.includes(`${r.site}:${r.jobId}`))) {
+      note.append(" ", el("button", { textContent: "Answer its questions", onclick: () => goto("your-answers") }));
+    }
     if (["needs_manual", "external"].includes(r.status)) {
       note.append(note.textContent ? " " : "", el("button", { textContent: "I applied myself", title: "Count it as applied, and follow it in Applications", onclick: () => selfApplied(r) }));
     }
@@ -1224,6 +1250,91 @@ function buildApps() {
   dialog.addEventListener("close", () => { openKey = ""; });
 }
 
+// ---------------------------------------------------------------- your answers: what you told it when it asked
+
+/** A question as it shows: without its options repeated at the end ("Can you relocate? Yes No"). */
+function shownQuestion(q, options = []) {
+  const tail = options.join(" ");
+  return tail && q.endsWith(tail) && q.length > tail.length ? q.slice(0, -tail.length).trim() : q;
+}
+
+let boxes = 0; // to tell groups of options apart
+
+/** A box to answer a question in: its options when it has some (a few as buttons, more as a list), else one to type
+ * in. Its read() gives the answer; several options come back comma separated, the way the bot reads them. */
+function answerBox(field, value = "") {
+  const options = field.options || [];
+  const label = shownQuestion(field.q, options);
+  const several = field.kind === "several";
+  if (options.length && (several || (field.kind === "choice" && options.length <= 4))) {
+    const chosen = new Set(several ? String(value).split(/[,;|]/).map(o => o.trim()) : [value]);
+    const name = `answer-${++boxes}`;
+    const group = el("div", { className: "answer-opts" }, ...options.map(o => el("label", {},
+      el("input", { type: several ? "checkbox" : "radio", name, value: o, checked: chosen.has(o) }), o)));
+    group.setAttribute("role", several ? "group" : "radiogroup");
+    group.setAttribute("aria-label", label);
+    group.read = () => [...group.querySelectorAll("input:checked")].map(i => i.value).join(", ");
+    return group;
+  }
+  if (options.length && field.kind === "choice") {
+    const list = el("select", {}, new Option("Pick one", ""), ...options.map(o => new Option(o, o, false, o === value)));
+    if (value && !options.includes(value)) list.add(new Option(value, value, false, true)); // kept before the options changed
+    list.setAttribute("aria-label", label);
+    list.read = () => list.value;
+    return list;
+  }
+  const box = field.kind === "long" ? el("textarea", { rows: 3, value }) : el("input", { value, inputMode: field.kind === "number" ? "decimal" : "text" });
+  box.setAttribute("aria-label", label);
+  box.read = () => box.value.trim();
+  return box;
+}
+
+function renderAnswers() {
+  const section = $("set-your-answers");
+  const typing = section.contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName)
+    && !/^(radio|checkbox)$/.test(document.activeElement.type);
+  if (typing) { // don't redraw under the cursor: once you leave the box
+    section.addEventListener("focusout", () => setTimeout(renderAnswers), { once: true });
+    return;
+  }
+  const status = $("answers-status");
+  const siteOf = name => SITES[name]?.name || name;
+  const open = Object.entries(waiting).sort(([, a], [, b]) => b.jobs.length - a.jobs.length || String(b.ts).localeCompare(String(a.ts)));
+  $("waiting-part").hidden = !open.length;
+  $("waiting-list").replaceChildren(...open.map(([k, w]) => {
+    const control = answerBox(w);
+    const save = async () => {
+      const value = control.read();
+      if (!value) {
+        status.textContent = "Type or pick the answer first.";
+        return;
+      }
+      const { retry } = await send({ type: "learn", items: [{ ...w, answer: value }] });
+      status.textContent = retry ? `Saved. ${retry} job${retry > 1 ? "s" : ""} it left for you will be tried again on the next run.` : "Saved.";
+    };
+    return el("li", {},
+      el("p", { className: "q", textContent: shownQuestion(w.q, w.options) }),
+      el("small", { textContent: `${w.jobs.length} job${w.jobs.length > 1 ? "s" : ""} left for you over it${w.site ? `, on ${siteOf(w.site)}` : ""}` }),
+      el("div", { className: "qa-row" }, control, button("Save", save, "btn"),
+        button("Don't ask again", () => send({ type: "dropQuestions", keys: [k] }), "link")));
+  }));
+  const done = Object.entries(kept).sort(([, a], [, b]) => String(b.ts).localeCompare(String(a.ts)));
+  $("kept-list").replaceChildren(...done.map(([k, a]) => {
+    const control = answerBox(a, a.answer);
+    control.addEventListener("change", async () => {
+      const value = control.read();
+      if (!value || value === a.answer) return;
+      await send({ type: "learn", items: [{ ...a, answer: value }] });
+      status.textContent = "Saved.";
+    });
+    return el("li", {},
+      el("p", { className: "q", textContent: shownQuestion(a.q, a.options) }),
+      el("small", { textContent: `${a.site ? `Asked on ${siteOf(a.site)}, ` : ""}${when(a.ts)}` }),
+      el("div", { className: "qa-row" }, control, button("Forget", () => send({ type: "unlearn", keys: [k] }), "link")));
+  }));
+  if (!done.length) $("kept-list").append(el("li", { className: "none", textContent: "None yet. When the bot asks you something on the overview, or you answer a question above, it's kept here." }));
+}
+
 // ---------------------------------------------------------------- settings
 
 const form = $("settings-form");
@@ -1660,7 +1771,8 @@ async function importFile(e) {
   if (!confirm(`Replace your settings with the ones in ${file.name}, and add its ${data.history.length} past jobs to the history?`)) return;
   try {
     const { added, apps } = await send({
-      type: "import", settings: data.settings, history: data.history, cache: data.cache, contacts: data.contacts, referralJobs: data.referralJobs, track: data.track,
+      type: "import", settings: data.settings, history: data.history, cache: data.cache, contacts: data.contacts, referralJobs: data.referralJobs,
+      track: data.track, kept: data.kept,
     });
     status.textContent = `Done: settings replaced, ${added} past jobs added${added < data.history.length ? ` (${data.history.length - added} were already here)` : ""}`
       + `${apps ? `, and ${apps} application${apps > 1 ? "s" : ""} you were following` : ""}.`;
@@ -1672,7 +1784,7 @@ async function importFile(e) {
 
 function exportBackup() {
   const history = Object.values(jobs).map(({ shot, ...r }) => r);
-  const data = { format: FORMAT, exported: new Date().toISOString(), settings, history, track };
+  const data = { format: FORMAT, exported: new Date().toISOString(), settings, history, track, kept };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: "application/json" }));
   el("a", { href: url, download: `sendoff-backup-${today()}.json` }).click();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
@@ -1700,6 +1812,8 @@ async function init() {
   jobs = await JB.store.jobs();
   people = await JB.store.contacts();
   track = await JB.store.tracks();
+  kept = await JB.store.kept();
+  waiting = await JB.store.waiting();
   ui.day = today();
   for (const [k, run] of Object.entries(await chrome.storage.session.get(null))) {
     if (k.startsWith("run:") && SITES[k.slice(4)]) runs[k.slice(4)] = run;
@@ -1710,6 +1824,7 @@ async function init() {
   renderRail();
   renderHistory();
   renderApps();
+  renderAnswers();
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "session") {
@@ -1729,6 +1844,13 @@ async function init() {
       if (changes.track) {
         track = changes.track.newValue || {};
         renderApps();
+        renderHistory();
+      }
+      if (changes.kept || changes.waiting) {
+        if (changes.kept) kept = changes.kept.newValue || {};
+        if (changes.waiting) waiting = changes.waiting.newValue || {};
+        renderAnswers();
+        renderRail();
         renderHistory();
       }
       if (changes.contacts) {

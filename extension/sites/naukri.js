@@ -112,6 +112,12 @@
         } else {
           if (++asked > MAX_QUESTIONS) return status("needs_manual", "too many questions");
           given = JB.answers.answerFor(question, cfg.answers);
+          if (given == null) {
+            const missing = [{ q: question, kind: { radio: "choice", chips: "choice", checkbox: "several" }[chat.kind] || "text", options: chat.options }];
+            const learned = await run.learn(missing, cfg, job);
+            if (learned !== true) return run.unanswered(missing, learned);
+            given = JB.answers.answerFor(question, cfg.answers);
+          }
         }
         run.step(`Answering "${clip(question)}" for ${job.title || "the job"}`);
         if (!(await run.exec("site.answerChat", given))) {
@@ -265,7 +271,7 @@
           const d = drawer();
           const state = {
             open: !!d, sent: SENT_RE.test(bodyText()), quota: QUOTA_RE.test(bodyText()),
-            question: "", kind: null, answers: 0, rejected: false, error: "",
+            question: "", kind: null, options: [], answers: 0, rejected: false, error: "",
           };
           if (!d) return state;
           const items = [...d.querySelectorAll(".chatbot_ListItem")];
@@ -277,6 +283,8 @@
           state.rejected = last >= 0 && REJECTED_RE.test(state.question);
           const c = controls(d);
           state.kind = c.radios.length ? "radio" : c.boxes.length ? "checkbox" : c.chips.length ? "chips" : c.text ? "text" : null;
+          state.options = (c.radios.length ? c.radios.map(optionText) : c.boxes.length ? c.boxes.map(optionText)
+            : c.chips.filter(e => !SKIP_CHIP_RE.test(e.innerText)).map(e => norm(e.innerText))).filter(Boolean);
           const error = [...d.querySelectorAll("[class*=error i]")].find(e => JB.page.isVisible(e) && norm(e.innerText));
           state.error = error ? norm(error.innerText).slice(0, 120) : "";
           return state;

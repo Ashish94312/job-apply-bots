@@ -14,10 +14,25 @@
     return cache.get(pattern);
   }
 
-  /** The first answer whose pattern matches the question; empty answers mean "leave it for me". */
+  /** A question the way answers you gave are kept: any case, punctuation, "*" and "(required)" aside. */
+  function questionKey(question) {
+    return (question || "").toLowerCase()
+      .replace(/\((required|optional)\)|\*/g, " ")
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s(required|optional)$/, "")
+      .trim();
+  }
+
+  /** The first answer whose pattern matches the question; empty answers mean "leave it for me". A pattern
+   * "=<question key>" is an answer you gave to that very question (store.effective puts those first). */
   function answerFor(label, answers) {
+    let key = null;
     for (const [pattern, answer] of answers || []) {
       if (answer == null || answer === "") continue;
+      if (pattern.startsWith("=")) {
+        if (pattern.slice(1) === (key ??= questionKey(label))) return String(answer);
+        continue;
+      }
       const re = compile(pattern);
       if (re && re.test(label || "")) return String(answer);
     }
@@ -95,5 +110,5 @@
     return answer.replace(/[^\d.]/g, "");
   }
 
-  JB.answers = { answerFor, badPatterns, coverNote, pick, daysRange, pickDuration, numberAnswer };
+  JB.answers = { questionKey, answerFor, badPatterns, coverNote, pick, daysRange, pickDuration, numberAnswer };
 })(globalThis.JB = globalThis.JB || {});

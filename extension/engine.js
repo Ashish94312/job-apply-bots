@@ -5,6 +5,7 @@
   const S = { APPLIED: "applied", ALREADY: "already_applied", SKIPPED: "skipped", MANUAL: "needs_manual", EXTERNAL: "external", FAILED: "failed" };
   const ICONS = { applied: "+", already_applied: "=", skipped: "-", needs_manual: "!", external: ">", failed: "x" };
   const CONTINUE = [["Done, continue", "continue", "primary"], ["Stop run", "stop", "stop"]];
+  const LEARN = [["Save and continue", "save", "primary"], ["I'll do it in Chrome", "manual"], ["Skip this job", "skip"], ["Stop run", "stop", "stop"]];
   const CHECK_RE = /just a moment|attention required|verify you are human|captcha|security check/i;
   const MAX_LOG = 3000;
   const MAX_EVENTS = 400;
@@ -78,6 +79,8 @@
       this.windowId = null;
       this.reply = null;
       this.saveTimer = null;
+      this.asked = new Set(); // questions asked about on this job (their keys): each only once
+      this.pending = null; // the questions this job is being left for you over
       this.state = {
         id: `${siteName}-${Date.now()}`, site: siteName, action, running: true, started: Date.now(), ended: null,
         stopped: false, error: "", log: [], prompt: null,
@@ -120,9 +123,10 @@
       this.save();
     }
 
-    /** Show a question on the dashboard and wait for the answer. "stop" stops the run. */
-    async ask(title, text, choices) {
-      this.state.prompt = { id: Date.now(), title, text, choices };
+    /** Show a question on the dashboard and wait for the answer. "stop" stops the run. With `fields` (questions,
+     * each { q, kind, options }) the dashboard shows a box for each, and "save" comes back as { answers }. */
+    async ask(title, text, choices, fields = null) {
+      this.state.prompt = { id: Date.now(), title, text, choices, fields };
       this.save(true);
       updateBadge();
       const value = await new Promise(resolve => { this.reply = resolve; });
@@ -141,6 +145,33 @@
     stop() {
       this.stopping = true;
       if (this.reply) this.reply("stop");
+    }
+
+    /** A form's questions with no answer yet ([{ q, kind, options }]). With "Pause on questions" on, ask you on the
+     * dashboard and keep your answers: true means fill the form again with them. Else false, or what you chose
+     * instead ("manual": do it in Chrome, "skip"). */
+    async learn(missing, cfg, job) {
+      const key = JB.answers.questionKey;
+      if (!this.opts.assist || missing.some(m => !key(m.q) || this.asked.has(key(m.q)))) return false; // asked already: it didn't take
+      missing.forEach(m => this.asked.add(key(m.q)));
+      const fields = missing.map(({ q, kind, options }) => ({ q, kind: kind || "text", options: options || [] }));
+      const reply = await this.ask(`${missing.length > 1 ? `${missing.length} questions` : "A question"} it has no answer for`,
+        `${named(job)}. Answer once and it's kept for next time (Settings > Your answers).`, LEARN, fields);
+      if (typeof reply !== "object") return reply;
+      const given = reply.answers.filter(a => String(a.answer ?? "").trim());
+      if (given.length < missing.length) return false;
+      await JB.store.learn(given, this.site.name);
+      for (const a of given) cfg.answers.unshift([`=${key(a.q)}`, String(a.answer).trim()]);
+      this.log(`  Kept ${given.length} answer${given.length > 1 ? "s" : ""} for next time`);
+      return true;
+    }
+
+    /** A job's result when questions are left unanswered: skipped if you said so, else left for you, with the
+     * questions kept to answer on the dashboard. */
+    unanswered(missing, how) {
+      if (how === "skip") return [S.SKIPPED, "declined"];
+      this.pending = missing;
+      return [S.MANUAL, `unanswered: ${missing.map(m => m.q.slice(0, 60)).join("; ")}`];
     }
 
     /** Stopped by you, or the window closed: anything that has to end the whole run. */
@@ -351,7 +382,7 @@
     }
 
     async main() {
-      const cfg = JB.store.effective(await JB.store.getSettings(), this.site.name);
+      const cfg = JB.store.effective(await JB.store.getSettings(), this.site.name, await JB.store.kept());
       const fixed = this.site.searches ? null : this.site.searchUrls(cfg); // Cutshort looks its searches up once logged in
       const nothing = fixed ? !fixed.length : !(cfg.keywords || []).length && !(cfg.searchUrls || []).length;
       if (!["login", "refer"].includes(this.action) && nothing) {
@@ -407,6 +438,9 @@
     /** Record a job's result and pause before the next one. Returns 1 if it counts towards the run's limit. */
     async finish(job, status, note, budget, done, limits) {
       const result = { title: job.title, company: job.company, url: job.url };
+      const pending = this.pending;
+      this.pending = null;
+      this.asked = new Set();
       if (status == null) { // dry run
         this.mark(job.url, { state: "would_apply", label: named(job) });
         this.event({ kind: "job", status: "would_apply", ...result });
@@ -420,6 +454,7 @@
           if (e instanceof Stopped || e instanceof WindowClosed) throw e;
         }
       }
+      if (status === S.MANUAL && pending) await JB.store.noteQuestions(this.site.name, job, pending);
       await JB.store.record(this.site.name, job, status, note, shot);
       this.log(`  ${ICONS[status]} ${status.padEnd(15)} ${label(job)}  ${note}`);
       this.mark(job.url, { state: status, label: named(job) });
@@ -595,9 +630,14 @@
       if (!(await this.exec("site.clickApply", job.jobId))) return [S.MANUAL, "card not found on the feed"];
       await this.sleep(2500);
       this.step(`Filling in the application for ${named(job)}`);
-      const step = await this.exec("site.sendApplication", job.jobId, cfg.answers, JB.answers.coverNote(cfg.coverNote, job));
+      let step;
+      for (;;) {
+        step = await this.exec("site.sendApplication", job.jobId, cfg.answers, JB.answers.coverNote(cfg.coverNote, job));
+        if (!step.dialog || !step.missing.length) break;
+        const learned = await this.learn(step.missing, cfg, job);
+        if (learned !== true) return this.unanswered(step.missing, learned);
+      }
       if (!step.dialog) return step.applied ? [S.APPLIED, ""] : [S.MANUAL, "no apply dialog appeared"];
-      if (step.missing.length) return [S.MANUAL, `unanswered: ${step.missing.join("; ")}`];
       if (!step.sent) return [S.MANUAL, "no Send button in the apply dialog"];
       await this.sleep(3500);
       if (await this.exec("site.sent", job.jobId)) return [S.APPLIED, ""];
@@ -689,7 +729,12 @@
         this.step(`Filling in the application for ${named(job)}`);
         const step = await this.exec("formStep", cfg.answers, note);
         if (!step || !step.found) break;
-        if (step.missing.length) return [S.MANUAL, `unanswered: ${step.missing.join("; ")}`];
+        if (step.missing.length) {
+          const learned = await this.learn(step.missing, cfg, job);
+          if (learned !== true) return this.unanswered(step.missing, learned);
+          i--; // the same step again, with your answers
+          continue;
+        }
         if (!step.submitted) break;
         await this.sleep(2500);
       }

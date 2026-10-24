@@ -318,3 +318,16 @@ test("applications: a calendar file for a round", () => {
   assert.ok(ics.includes(`DTSTART:${start}`));
   assert.ok(ics.includes("DTSTAMP:20261024T000000Z"));
 });
+
+test("answers you gave are kept for their own question, and tried first", () => {
+  assert.equal(answers.questionKey("4. Describe your favourite colour *"), "4 describe your favourite colour");
+  assert.equal(answers.questionKey("What is your notice period? (Required)"), "what is your notice period");
+  assert.equal(answers.questionKey("Expected CTC (in Lakhs)  Required"), "expected ctc in lakhs");
+  const s = store.normalize({ profile: { answers: [["ctc", "12 LPA"], ["notice", "30 days"]] } });
+  const cfg = store.effective(s, "hirist", { "expected ctc in lakhs": { q: "Expected CTC (in lakhs)?", answer: "14" } });
+  assert.deepEqual(cfg.answers[0], ["=expected ctc in lakhs", "14"]);
+  assert.equal(answers.answerFor("Expected CTC (in Lakhs) *", cfg.answers), "14"); // the very question: yours
+  assert.equal(answers.answerFor("Current CTC", cfg.answers), "12 LPA"); // any other: the patterns, as before
+  assert.equal(answers.answerFor("Notice period", cfg.answers), "30 days");
+  assert.deepEqual(store.effective(s, "hirist").answers, s.profile.answers);
+});

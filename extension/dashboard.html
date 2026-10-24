@@ -47,7 +47,7 @@
             <summary>Options</summary>
             <div class="opts-body">
               <label><input type="checkbox" name="confirm"> Ask me before each application</label>
-              <label><input type="checkbox" name="assist"> Pause on questions it can't answer, so I can fill them in</label>
+              <label><input type="checkbox" name="assist"> When it's stuck, ask me: questions it has no answer for (my answers are kept), or a job to finish in Chrome</label>
               <label>Stop after <input type="number" name="max" min="1" step="1"> applications this run</label>
             </div>
           </details>
@@ -60,6 +60,8 @@
 
       <div class="prompt" role="alert" hidden>
         <p class="prompt-q"></p>
+        <div class="prompt-fields"></div>
+        <p class="prompt-err"></p>
         <div class="prompt-answers"></div>
       </div>
 
@@ -236,6 +238,7 @@
           <a href="#settings" data-goto="experience">Your experience</a>
           <a href="#settings" data-goto="jobs">Which jobs</a>
           <a href="#settings" data-goto="answers">Answers</a>
+          <a href="#settings" data-goto="your-answers">Your answers</a>
           <a href="#settings" data-goto="message">Message to recruiters</a>
           <a href="#settings" data-goto="applications">Applications</a>
           <a href="#settings" data-goto="screenshots">Screenshots</a>
@@ -324,6 +327,23 @@
               <button type="submit" class="btn primary" id="save">Save</button>
             </div>
           </form>
+
+          <section class="set" id="set-your-answers" aria-labelledby="your-answers-title">
+            <h2 id="your-answers-title">Your answers</h2>
+            <p class="hint">Answers you gave when the bot asked, each kept for its own question and tried before the
+              patterns above. Change one here and it's saved straight away.</p>
+            <div class="qa-part" id="waiting-part" hidden>
+              <h2 class="sub">Waiting for an answer</h2>
+              <p class="hint">Questions jobs were left for you over. Answer one and the jobs that only needed it go again
+                on the next run.</p>
+              <ul class="qa" id="waiting-list"></ul>
+            </div>
+            <div class="qa-part">
+              <h2 class="sub">Answered</h2>
+              <ul class="qa" id="kept-list"></ul>
+            </div>
+            <span class="saved" id="answers-status" aria-live="polite"></span>
+          </section>
 
           <section class="set" id="set-screenshots" aria-labelledby="shots-title">
             <h2 id="shots-title">Screenshots</h2>

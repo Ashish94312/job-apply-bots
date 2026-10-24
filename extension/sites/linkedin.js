@@ -145,8 +145,12 @@
         const before = await run.exec("site.modalText");
         if (before == null) return (await run.exec("isApplied")) ? status("applied") : status("needs_manual", "the Easy Apply dialog didn't open");
         run.step(`Filling in step ${i + 1} of the application for ${job.title || "the job"}`);
-        const { missing, leftBlank } = await run.exec("site.fillStep", fill);
-        if (missing.length) return status("needs_manual", `unanswered: ${missing.join("; ")}`);
+        let { missing, leftBlank } = await run.exec("site.fillStep", fill);
+        while (missing.length) { // fill.answers is cfg.answers: what you answer goes in it
+          const learned = await run.learn(missing, cfg, job);
+          if (learned !== true) return run.unanswered(missing, learned);
+          ({ missing, leftBlank } = await run.exec("site.fillStep", fill));
+        }
         const changed = await run.exec("site.answeredByItself", leftBlank);
         if (changed.length) return status("needs_manual", `answered without the bot, check: ${changed.map(q => q.slice(0, 60)).join("; ")}`);
 
@@ -400,7 +404,8 @@
           return m ? norm(m.innerText) : null;
         },
 
-        /** Fill this step from your answers. Returns the required questions it has no answer for, and the choices it left blank. */
+        /** Fill this step from your answers. Returns the required questions it has no answer for ({ q, kind, options },
+         * as lib/page.js fillForm), and the choices it left blank. */
         async fillStep(fill) {
           const root = modal();
           if (!root) return { missing: [], leftBlank: [] };
@@ -425,18 +430,18 @@
             if (f.kind === "select") { // a prefilled one too: "Phone country code" starts at Andorra
               const k = pick(f.options, answer(f.label, fill));
               if (k != null && plain(f.options[k]) !== plain(f.value)) JB.page.setValue(inputs[f.i], inputs[f.i].options[k].value);
-              else if (k == null && !f.value && f.required) missing.push(f.label.slice(0, 60) || "dropdown");
+              else if (k == null && !f.value && f.required) missing.push({ q: f.label || "dropdown", kind: "choice", options: f.options.filter(o => o && !/^select\b/i.test(o)) });
               continue;
             }
             if (f.value) continue;
             let given = answer(f.label, fill);
             if (f.kind === "combo") {
-              if (!(await JB.page.chooseOption(inputs[f.i], given)) && f.required) missing.push(f.label.slice(0, 60) || "dropdown");
+              if (!(await JB.page.chooseOption(inputs[f.i], given)) && f.required) missing.push({ q: f.label || "dropdown", kind: "search" });
               continue;
             }
             if (given == null && f.kind === "textarea" && (!f.label || NOTE_RE.test(f.label))) given = fill.note || null;
             if (given == null) {
-              if (f.required) missing.push(f.label.slice(0, 60) || "text box");
+              if (f.required) missing.push({ q: f.label || "text box", kind: f.kind === "textarea" ? "long" : f.numeric ? "number" : "text" });
               continue;
             }
             JB.page.setValue(inputs[f.i], f.numeric ? JB.answers.numberAnswer(given) : given);
@@ -459,7 +464,7 @@
             for (const i of chosen) choose(inputs[i]);
             if (!chosen.length) {
               leftBlank.push(g.label);
-              if (g.required) missing.push(g.label.slice(0, 60) || "choice");
+              if (g.required) missing.push({ q: g.label || "choice", kind: g.kind === "radio" || options.length === 1 ? "choice" : "several", options });
             }
           }
           return { missing, leftBlank };

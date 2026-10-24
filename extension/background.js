@@ -38,6 +38,9 @@ const handlers = {
   forget: async m => ({ count: await JB.store.forget(m.site, m.status) }),
   track: async m => ({ apps: await JB.store.saveTracks(m.items) }),
   selfApplied: async m => ({ done: await JB.store.markApplied(m.site, m.jobId) }),
+  learn: async m => ({ retry: await JB.store.learn(m.items) }),
+  unlearn: m => JB.store.unlearn(m.keys),
+  dropQuestions: m => JB.store.dropQuestions(m.keys),
   import: async m => {
     if (m.settings) { // what the file has no settings for keeps the ones here: a site (Naukri: no Python bot),
       const mine = await JB.store.getSettings(); // and Applications (the Python bots' files have none)
@@ -50,6 +53,7 @@ const handlers = {
     }
     const people = await JB.store.importReferrals(m.contacts, m.referralJobs);
     const apps = await JB.store.importTracks(m.track);
+    await JB.store.importKept(m.kept);
     return { added: await JB.store.importHistory(m.history), people, apps };
   },
 };

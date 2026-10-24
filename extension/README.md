@@ -69,8 +69,14 @@ times. History lists everyone asked. Which jobs to take, your answers and the co
 While it runs, the bot works in its own Chrome window: leave that window open (you can use other windows
 meanwhile). It closes the window when it's done. **Stop** stops it after the current step.
 
-Options on the card: *Ask me before each application*, *Pause on questions it can't answer* (you fill them
-in in the bot's window, then click Continue), and a per-run cap.
+Options on the card: *Ask me before each application*, *When it's stuck, ask me* (below), and a per-run cap.
+
+**Questions it has no answer for are asked once.** With *When it's stuck, ask me* on, a form question none of your
+answers covers shows up on the dashboard with a box to answer in (or the form's own options to pick from). Answer it
+and the bot fills it in and carries on; the answer is kept for that question and used whenever it comes up again, on
+any site, before the patterns in Settings. You can also say you'll do that job in Chrome yourself, or skip it.
+With the option off, the job is left for you and its questions wait in **Settings > Your answers**: answer them there
+and the jobs that only needed those go again on the next run. Your answers are listed there too, to change or forget.
 
 **Applications: what happened after applying.** Every job it applied to is on the Applications page by itself.
 When a company replies, click **They replied** and say how (email, call, a message on the site, LinkedIn, a
@@ -154,7 +160,7 @@ Plain JavaScript, Manifest V3, no build step.
 | `referral.js` | Asking for referrals on LinkedIn (from `linkedin/referral.py`) |
 | `lib/page.js` | Runs inside job pages: finds buttons, reads forms, fills them (from `core.py`) |
 | `lib/filters.js`, `lib/answers.js` | Which jobs to apply to, answers to questions (from `core.py`) |
-| `lib/store.js` | Settings, history and applications in `chrome.storage.local` |
+| `lib/store.js` | Settings, history, applications and the answers you gave, in `chrome.storage.local` |
 | `lib/tracker.js` | Applications: where each one stands, what's next, the figures, round templates |
 | `lib/defaults.js` | Default settings, generated from the bots' `config.example.yaml` |
 | `sites/<site>.js` | Everything specific to one site (from `<site>/portal.py`; Naukri's is the extension's own): its search pages, how to read a job, its quirks |
@@ -179,6 +185,7 @@ node --test extension/tests/                     # filters and answers, checked 
 .venv/bin/python extension/tests/e2e_linkedin.py # ...and LinkedIn: Easy Apply and referrals
 .venv/bin/python extension/tests/e2e_naukri.py   # ...and Naukri: its questions chat and daily quota
 .venv/bin/python extension/tests/e2e_tracker.py  # the Applications page: replies, rounds, templates
+.venv/bin/python extension/tests/e2e_answers.py  # questions it asks you once, and the answers it keeps
 .venv/bin/python tools/export_for_extension.py --defaults   # after changing a config.example.yaml
 ```
 
