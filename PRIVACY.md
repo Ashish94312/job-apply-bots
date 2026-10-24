@@ -2,7 +2,7 @@
 
 *Effective 14 October 2026. Applies to the Sendoff Chrome extension.*
 
-Sendoff applies to jobs for you on Hirist, Instahyre, Wellfound, Cutshort and LinkedIn, and on LinkedIn can ask
+Sendoff applies to jobs for you on Hirist, Instahyre, Wellfound, Cutshort, LinkedIn and Naukri, and on LinkedIn can ask
 people for referrals. Everything it knows stays in your own Chrome. It has no server, no account and no
 analytics, and the developer never receives any of your data.
 
@@ -35,7 +35,7 @@ code from the internet: everything it runs is in the extension you installed.
 
 ## Permissions
 
-- **hirist.tech, instahyre.com, wellfound.com, cutshort.io, linkedin.com:** to search for jobs, read job
+- **hirist.tech, instahyre.com, wellfound.com, cutshort.io, linkedin.com, naukri.com:** to search for jobs, read job
   pages and fill in applications on those sites, and (on LinkedIn) send the referral messages you set up.
 - **Tabs and scripting:** to open the window it works in, follow where its pages go, and read and fill those
   pages.

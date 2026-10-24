@@ -561,6 +561,36 @@
             ""
           ]
         ]
+      },
+      "naukri": {
+        "keywords": [
+          "machine learning engineer",
+          "ai engineer",
+          "data scientist",
+          "generative ai engineer",
+          "llm engineer",
+          "nlp engineer",
+          "computer vision engineer",
+          "mlops engineer",
+          "python developer",
+          "backend developer",
+          "software engineer",
+          "sde",
+          "full stack developer",
+          "django developer"
+        ],
+        "searchUrls": [],
+        "limits": {
+          "maxPerRun": 10,
+          "maxPerDay": 40,
+          "delaySeconds": [
+            20,
+            45
+          ],
+          "maxPages": 3
+        },
+        "locations": [],
+        "postedWithin": "week"
       }
     }
   };

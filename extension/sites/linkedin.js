@@ -26,17 +26,7 @@
   }
 
   const plain = s => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
-
-  /** Index of the option matching the answer (ignoring case and punctuation), else of one starting with it. */
-  function pick(options, answer) {
-    const want = plain(answer);
-    if (!want) return null;
-    for (const rule of [o => o === want, o => o.startsWith(want)]) {
-      const k = options.findIndex(o => plain(o) && rule(plain(o)));
-      if (k >= 0) return k;
-    }
-    return null;
-  }
+  const pick = (options, answer) => JB.answers.pick(options, answer); // lib/answers.js
 
   // "How many years of work experience do you have with Python?", "Years of Java experience", "Experience with
   // Python?", "React experience?": the skill is the group that matched.

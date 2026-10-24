@@ -2,7 +2,8 @@
 
 Sends your job applications off for you. It's the bots in this repo as a Chrome extension: no Python, no terminal. It runs in your own Chrome, with your own logins, and
 keeps everything (settings, history) in that Chrome. It applies on **Hirist**, **Instahyre**, **Wellfound**,
-**Cutshort** and **LinkedIn** (Easy Apply), and on LinkedIn it can also **ask for referrals**.
+**Cutshort**, **LinkedIn** (Easy Apply) and **Naukri**, and on LinkedIn it can also **ask for referrals**. Naukri is in
+the extension only: there's no Python bot for it.
 
 On each site it does what the Python bot does: searches with your keywords and experience range, skips jobs that don't
 fit your filters, answers the screening questions it has answers for, applies, and never applies to the same job
@@ -37,8 +38,19 @@ Your settings and history stay.
 
 Per site, in Settings > Sites: the search keywords (Hirist: any words; Instahyre: skills, searched once per year
 of your experience range; Wellfound: role names, plus the places to search, like `india` or `remote`; Cutshort:
-skill names, each looked up once in Cutshort's Skills filter and remembered) and how many applications per run
-and per day. Cutshort applies from its logged-in feed, so it needs you logged in even for a dry run.
+skill names, each looked up once in Cutshort's Skills filter and remembered; Naukri: what you'd type in its search,
+plus the cities to search, empty for anywhere) and how many applications per run and per day. Cutshort applies from its
+logged-in feed, so it needs you logged in even for a dry run.
+
+Naukri searches jobs open to the top of your experience range, posted within the time you pick in its tab (a week to
+start with). A job's questions come in a chat, one at a time, answered from the shared answers: a text box gets the
+answer typed in (sent again as a plain number if Naukri asks for one, "8 LPA" becoming 8), and for options the answer
+has to be one of them, or how one starts. For a length of time, like the notice period, it picks the option covering
+your answer: "30 days" picks "1 Month", "15 days" picks "15 Days or less", "120 days" picks "More than 3 Months"; if
+none fits ("45 days" between "1 Month" and "2 Months") or two fit as well, it doesn't guess. A question it has no
+answer for is left for you. "Apply on company site" jobs are recorded as **Other site**, and it stops for the
+day when Naukri says your daily quota is used up. Bringing settings over from the Python bots leaves the Naukri ones as
+they are.
 
 LinkedIn has more in its tab: its own search filters (experience level, on-site/remote/hybrid, how recent),
 years of experience per skill (for "How many years of experience do you have with X?"), whether to follow the
@@ -67,7 +79,7 @@ screenshots if you turn them on. Nothing is sent anywhere. **Download backup** s
 
 Chrome asks for:
 
-- **Read and change your data on hirist.tech, instahyre.com, wellfound.com, cutshort.io and linkedin.com**: to
+- **Read and change your data on hirist.tech, instahyre.com, wellfound.com, cutshort.io, linkedin.com and naukri.com**: to
   search, read jobs, fill in applications and (on LinkedIn) send the referral messages you set up.
 - **Read your browsing history** (Chrome's wording for the `tabs` permission): to see the bot window's address,
   e.g. to notice an apply button that leads to another site.
@@ -134,7 +146,7 @@ Plain JavaScript, Manifest V3, no build step.
 | `lib/filters.js`, `lib/answers.js` | Which jobs to apply to, answers to questions (from `core.py`) |
 | `lib/store.js` | Settings and history in `chrome.storage.local` |
 | `lib/defaults.js` | Default settings, generated from the bots' `config.example.yaml` |
-| `sites/<site>.js` | Everything specific to one site (from `<site>/portal.py`): its search pages, how to read a job, its quirks |
+| `sites/<site>.js` | Everything specific to one site (from `<site>/portal.py`; Naukri's is the extension's own): its search pages, how to read a job, its quirks |
 | `dashboard.*` | The dashboard page |
 | `fonts/` | Archivo, the dashboard's typeface (SIL Open Font License, `fonts/OFL.txt`) |
 
@@ -143,7 +155,8 @@ dashboard watches. A new site is a `sites/<name>.js` like the others (`paged` fo
 otherwise results are scrolled; optional `page` hooks such as `collectLinks`, `isApplied`, `cannotApply` and
 `dismissExtras`; `flow: "feed"` for a site that applies from cards in a feed, like Cutshort; its own `apply`
 for a multi-step dialog, like LinkedIn's Easy Apply), plus its hosts in `manifest.json`, `importScripts` in `background.js`, a `<script>` in
-`dashboard.html`, an entry in the dashboard's `SITES`, and the site in `tools/export_for_extension.py`.
+`dashboard.html`, an entry in the dashboard's `SITES`, and the site in `tools/export_for_extension.py` (`SITES`, or
+`EXTENSION_ONLY` with its defaults for a site with no Python bot, like Naukri).
 
 Tests:
 
@@ -153,6 +166,7 @@ node --test extension/tests/                     # filters and answers, checked 
 .venv/bin/python extension/tests/e2e.py          # the extension in Chromium, applying on a fake Hirist
 .venv/bin/python extension/tests/e2e_sites.py    # ...and on fake Instahyre, Wellfound and Cutshort
 .venv/bin/python extension/tests/e2e_linkedin.py # ...and LinkedIn: Easy Apply and referrals
+.venv/bin/python extension/tests/e2e_naukri.py   # ...and Naukri: its questions chat and daily quota
 .venv/bin/python tools/export_for_extension.py --defaults   # after changing a config.example.yaml
 ```
 

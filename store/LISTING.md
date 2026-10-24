@@ -63,8 +63,10 @@ Sendoff is an independent tool. It is not affiliated with or endorsed by Hirist,
 | Screenshots (1280×800), in this order | `screenshot-1-overview.png`, `screenshot-2-asks-you.png`, `screenshot-3-history.png`, `screenshot-4-settings.png`, `screenshot-5-referrals.png` |
 | Small promo tile (440×280) | `promo-small-440x280.png` |
 | Marquee promo tile (1400×560), optional | `promo-marquee-1400x560.png` |
+| Global promo video, optional | a YouTube link: upload `video/sendoff-promo-4k.mp4` to YouTube (Unlisted is enough; 4K keeps it sharp there) and paste its address |
 
-`.venv/bin/python store/make_assets.py` makes them again after the dashboard changes.
+`.venv/bin/python store/make_assets.py` makes them again after the dashboard changes, and
+`.venv/bin/python store/make_promo_video.py` the video (32 seconds in 4K, no sound: add music in YouTube Studio if you like).
 
 **Additional fields**
 

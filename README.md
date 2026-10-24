@@ -117,7 +117,7 @@ Each bot folder is self-contained: its own `config.yaml`, login session, history
 
 ## Sendoff: the Chrome extension
 
-**Sendoff** is the same set of bots as a Chrome extension (every site, LinkedIn referrals included), with no Python or terminal: it runs in your own Chrome with your own logins,
+**Sendoff** is the same set of bots as a Chrome extension (every site, LinkedIn referrals included, plus **Naukri**, which only the extension does), with no Python or terminal: it runs in your own Chrome with your own logins,
 from a dashboard with settings, history and live progress. Load the `extension` folder in `chrome://extensions`
 (Developer mode > Load unpacked); [extension/README.md](extension/README.md) has the details, including how to
 bring your settings and history over from the Python bots (`tools/export_for_extension.py`).

@@ -15,10 +15,15 @@ const SITES = {
     name: "LinkedIn", keywords: "What you'd type in LinkedIn's job search, one per line, like machine learning engineer.",
     pages: "25 jobs each", locations: true, linkedin: true,
   },
+  naukri: {
+    name: "Naukri", keywords: "What you'd type in Naukri's job search, one per line, like machine learning engineer.",
+    pages: "20 jobs each", locations: true, places: "Cities, one per line, like bengaluru. Empty: anywhere.", naukri: true,
+  },
 };
 const LINKEDIN_LEVELS = [["internship", "Internship"], ["entry level", "Entry level"], ["associate", "Associate"],
   ["mid-senior level", "Mid-senior level"], ["director", "Director"], ["executive", "Executive"]];
 const LINKEDIN_WORK = [["on-site", "On-site"], ["remote", "Remote"], ["hybrid", "Hybrid"]];
+const POSTED_WITHIN = [["", "Any time"], ["day", "Past day"], ["week", "Past week"], ["month", "Past month"]];
 const STATUS = {
   applied: "Applied",
   needs_manual: "Needs you",
@@ -675,7 +680,7 @@ function sitePanel(name, info) {
     el("div", { className: "two" },
       field("field", "Search keywords", info.keywords, area(`${base}.keywords`, 12)),
       field("field", "Extra search pages", `Optional. Whole ${info.name} search addresses, one per line.`, area(`${base}.searchUrls`, 12))),
-    info.locations ? field("field", "Places", "One per line: a country or city, like india, or remote.", area(`${base}.locations`, 3)) : null,
+    info.locations ? field("field", "Places", info.places || "One per line: a country or city, like india, or remote.", area(`${base}.locations`, 3)) : null,
     el("h3", { textContent: "How many" }),
     el("div", { className: "row-fields" },
       field("field narrow", "Per run", null, num(`${base}.limits.maxPerRun`, 1)),
@@ -685,7 +690,8 @@ function sitePanel(name, info) {
       field("field narrow", "Pause, at least", "seconds", num(`${base}.limits.delaySeconds.0`, 0)),
       field("field narrow", "Pause, at most", "seconds", num(`${base}.limits.delaySeconds.1`, 0))),
     el("p", { className: "hint", textContent: "After each application the bot waits a random time in this range, like a person would." }),
-    info.linkedin ? linkedinSettings(base, field) : null);
+    info.linkedin ? linkedinSettings(base, field) : null,
+    info.naukri ? naukriSettings(base, field) : null);
   box.setAttribute("aria-labelledby", `site-tab-${name}`);
   return box;
 }
@@ -742,8 +748,7 @@ function linkedinSettings(base, field) {
   const tick = (path, text, hint) => el("label", { className: "tick" }, el("input", { type: "checkbox", name: path }), el("span", {}, text, hint ? el("small", { textContent: hint }) : null));
   const table = (id, head) => el("div", { className: "table-wrap" }, el("table", { className: "answers" },
     el("thead", {}, el("tr", {}, ...head.map(h => el("th", { textContent: h })))), el("tbody", { id })));
-  const posted = el("select", { name: `${base}.postedWithin` }, ...[["", "Any time"], ["day", "Past day"], ["week", "Past week"], ["month", "Past month"]]
-    .map(([v, t]) => new Option(t, v)));
+  const posted = el("select", { name: `${base}.postedWithin` }, ...POSTED_WITHIN.map(([v, t]) => new Option(t, v)));
   return el("div", { className: "site-extra" },
     el("h3", { textContent: "LinkedIn's search filters" }),
     field("field", "Experience level", "LinkedIn's own levels. None ticked: any.", checks(`${base}.experienceLevels`, LINKEDIN_LEVELS)),
@@ -762,6 +767,15 @@ function linkedinSettings(base, field) {
     el("p", { className: "hint", textContent: "LinkedIn uses these instead of the shared answers: some of its questions are number boxes, so salaries are plain rupee amounts, and the phone number goes without +91 because the country code is its own dropdown." }),
     table("answer-rows-linkedin", ["When the question matches", "Answer", ""]),
     el("div", {}, el("button", { type: "button", className: "btn", textContent: "Add an answer", onclick: () => { $("answer-rows-linkedin").append(answerRow()); dirty(); } })));
+}
+
+/** Naukri's own search filter, and how its questions get answered. */
+function naukriSettings(base, field) {
+  const posted = el("select", { name: `${base}.postedWithin` }, ...POSTED_WITHIN.map(([v, t]) => new Option(t, v)));
+  return el("div", { className: "site-extra" },
+    el("h3", { textContent: "Naukri's search filters" }),
+    field("field narrow", "Posted within", null, posted),
+    el("p", { className: "hint", textContent: "Naukri asks a job's questions in a chat, one at a time, and the shared answers answer them. When a question has options, the answer has to be one of them (or how one starts); for a length of time, like the notice period, the option covering it is picked: \"30 days\" picks \"1 Month\", \"15 days\" picks \"15 Days or less\". If none fits, or two fit as well, the job is left for you." }));
 }
 
 function showSiteSettings(name) {

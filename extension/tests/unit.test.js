@@ -6,7 +6,7 @@ const path = require("node:path");
 
 globalThis.JB = {};
 globalThis.chrome = { storage: { local: {} } }; // store.js only touches it when called
-for (const file of ["referral.js", "lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/store.js", "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js", "sites/cutshort.js", "sites/linkedin.js"]) {
+for (const file of ["referral.js", "lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/store.js", "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js", "sites/cutshort.js", "sites/linkedin.js", "sites/naukri.js"]) {
   require(path.join(__dirname, "..", file));
 }
 const cases = require("./cases.json");
@@ -126,6 +126,61 @@ test("defaults have each site's own settings", () => {
   assert.ok(s.sites.instahyre.limits.maxScrolls >= 0 && s.sites.instahyre.limits.maxPages === undefined);
   assert.deepEqual(s.sites.wellfound.locations, ["india", "remote"]);
   assert.ok(s.sites.wellfound.limits.maxPages >= 1);
+});
+
+test("Naukri search pages, paging, job ids", () => {
+  const naukri = sites.naukri;
+  const cfg = { keywords: ["Machine Learning Engineer", "AI/ML"], minExperience: 1, maxExperience: 2, postedWithin: "week", searchUrls: ["https://www.naukri.com/python-jobs-in-pune"] };
+  assert.deepEqual(naukri.searchUrls(cfg), [
+    "https://www.naukri.com/machine-learning-engineer-jobs?k=Machine%20Learning%20Engineer&experience=2&jobAge=7",
+    "https://www.naukri.com/ai-ml-jobs?k=AI%2FML&experience=2&jobAge=7",
+    "https://www.naukri.com/python-jobs-in-pune",
+  ]);
+  assert.deepEqual(naukri.searchUrls({ keywords: ["sde"], locations: ["Bengaluru", "delhi ncr"], postedWithin: "" }), [
+    "https://www.naukri.com/sde-jobs-in-bengaluru?k=sde&l=Bengaluru",
+    "https://www.naukri.com/sde-jobs-in-delhi-ncr?k=sde&l=delhi%20ncr",
+  ]);
+  const url = naukri.searchUrls(cfg)[0];
+  assert.equal(naukri.searchPageUrl(url, 1), url);
+  assert.equal(naukri.searchPageUrl(url, 2), "https://www.naukri.com/machine-learning-engineer-jobs-2?k=Machine%20Learning%20Engineer&experience=2&jobAge=7");
+  assert.equal(naukri.searchPageUrl("https://www.naukri.com/python-jobs-in-pune", 3), "https://www.naukri.com/python-jobs-in-pune-3");
+  assert.equal(naukri.searchLabel("https://www.naukri.com/sde-jobs-in-bengaluru?k=sde&l=Bengaluru"), "sde, Bengaluru");
+  assert.equal(naukri.searchLabel("https://www.naukri.com/python-jobs-in-pune"), null);
+  assert.equal(naukri.jobId("https://www.naukri.com/job-listings-ml-engineer-acme-bengaluru-1-to-3-years-231024500101?src=jobsearchDesk"), "231024500101");
+  assert.ok(!naukri.jobUrlRe.test("https://www.naukri.com/acme-jobs-careers-123456"));
+  assert.ok(naukri.searchHost.test("https://naukri.com/x") && !naukri.searchHost.test("https://evil.com/naukri.com/"));
+  assert.ok(filters.previewOk("ML Engineer Acme 1-3 Yrs Bengaluru", { maxExperienceRequired: 2 })); // its cards' "X-Y Yrs"
+  assert.ok(!filters.previewOk("ML Engineer Old Co 5-8 Yrs Bengaluru", { maxExperienceRequired: 2 }));
+  const s = store.normalize(undefined);
+  assert.deepEqual(s.sites.naukri.locations, []);
+  assert.ok(s.sites.naukri.limits.maxPages >= 1 && s.sites.naukri.postedWithin === "week");
+});
+
+test("an option is picked only when it is the answer, or starts with it", () => {
+  assert.equal(answers.pick(["15 Days or less", "1 Month", "2 Months"], "1 month"), 1);
+  assert.equal(answers.pick(["Yes", "No"], "yes"), 0);
+  assert.equal(answers.pick(["Yes, I am", "No"], "Yes"), 0);
+  assert.equal(answers.pick(["15 Days or less", "1 Month"], "30 days"), null);
+  assert.equal(answers.pick(["Yes", "No"], ""), null);
+});
+
+test("a length of time picks the option covering it, never a guess", () => {
+  const naukri = ["15 Days or less", "1 Month", "2 Months", "3 Months", "More than 3 Months", "Serving Notice Period"];
+  const picked = a => naukri[answers.pickDuration(naukri, a)];
+  assert.equal(picked("30 days"), "1 Month");
+  assert.equal(picked("15 days"), "15 Days or less");
+  assert.equal(picked("Immediately"), "15 Days or less");
+  assert.equal(picked("90 days"), "3 Months");
+  assert.equal(picked("120 days"), "More than 3 Months");
+  assert.equal(picked("45 days"), undefined); // between 1 and 2 months
+  assert.equal(picked("Yes"), undefined);
+  const ranges = ["0-15 days", "15-30 days", "30-60 days", "60+ days"];
+  assert.equal(ranges[answers.pickDuration(ranges, "30 days")], "15-30 days"); // the narrower of the two covering it
+  assert.equal(ranges[answers.pickDuration(ranges, "90 days")], "60+ days");
+  assert.equal(answers.pickDuration(["0-30 days", "30-60 days"], "30 days"), null); // two fit as well
+  assert.equal(answers.pickDuration(["Less than 30 days", "30 days or more"], "30 days"), 1); // "less than" leaves 30 out
+  assert.equal(answers.pickDuration(["Within 2 weeks", "1 Month"], "2 weeks"), 0);
+  assert.equal(answers.pickDuration(naukri, "15-30 days"), null); // an answer that's a range itself: no
 });
 
 test("LinkedIn reads experience, answers questions and picks options like the Python bot", () => {
