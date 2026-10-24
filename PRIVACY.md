@@ -14,6 +14,8 @@ All of it is kept in your browser's extension storage (`chrome.storage`) on your
   These can include personal details you choose to enter, such as your phone number, city, college, notice
   period and salary.
 - **Your history:** each job Sendoff looked at (title, company, link, the date, and what happened).
+- **Your applications:** what you note about the jobs you applied to: when and how a company replied and who,
+  the rounds and their dates, how it ended, your notes, and jobs you add yourself.
 - **Referrals (LinkedIn):** the people you asked for a referral (name, headline, profile link, the job asked
   about, and whether they were messaged or invited), and the message and invite note you wrote.
 - **Screenshots, only if you turn them on:** a picture of a job page that needed you.
@@ -27,7 +29,8 @@ It uses this data only to do what you start it to do:
   their application forms, which sends them to that job site, just as if you had filled in the form yourself.
 - **Referrals:** it sends the messages and invites you set up to the LinkedIn members it finds at the companies
   you applied to. By default it shows you each one, with who it goes to, and sends it only when you click Send.
-- **The dashboard:** it shows your history and progress.
+- **The dashboard:** it shows your history, your applications and progress. A round you add to your calendar is
+  downloaded as a file on your computer; nothing is sent to a calendar service.
 
 Sendoff does not send your data to the developer or to anyone else. It does not sell it, use it for
 advertising, or use it to decide creditworthiness or for any purpose unrelated to applying to jobs. It loads no
@@ -46,7 +49,7 @@ code from the internet: everything it runs is in the extension you installed.
 ## Your control
 
 - See and change everything on the dashboard: Settings for what you entered, History for what it did.
-- **Download backup** saves your settings and history to a file on your computer; nothing is uploaded.
+- **Download backup** saves your settings, history and applications to a file on your computer; nothing is uploaded.
 - Removing the extension from Chrome deletes everything it kept. You can also turn screenshots off at any time
   in Settings.
 

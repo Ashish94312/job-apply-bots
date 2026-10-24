@@ -6,11 +6,11 @@ const path = require("node:path");
 
 globalThis.JB = {};
 globalThis.chrome = { storage: { local: {} } }; // store.js only touches it when called
-for (const file of ["referral.js", "lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/store.js", "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js", "sites/cutshort.js", "sites/linkedin.js", "sites/naukri.js"]) {
+for (const file of ["referral.js", "lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/tracker.js", "lib/store.js", "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js", "sites/cutshort.js", "sites/linkedin.js", "sites/naukri.js"]) {
   require(path.join(__dirname, "..", file));
 }
 const cases = require("./cases.json");
-const { filters, answers, store, sites } = JB;
+const { filters, answers, store, sites, tracker } = JB;
 const hirist = sites.hirist;
 
 test("skipReason matches the Python bots", () => {
@@ -200,4 +200,121 @@ test("referrals name people, fill in messages and search like the Python bot", (
   for (const c of li.render) assert.equal(JB.referral.render(c.template, c.name, c.job), c.expected, `${c.template} / ${c.name}`);
   for (const c of li.peopleUrl) assert.equal(JB.referral.peopleUrl(c.ids, c.keywords), c.expected, c.keywords);
   assert.equal(JB.referral.slugOf("https://www.linkedin.com/in/Priya-Sharma-%C3%A9/?x=1"), "priya-sharma-é");
+});
+
+test("applications: applied jobs are in it on their own, with what's tracked about them", () => {
+  const jobs = {
+    "hirist:1": { site: "hirist", jobId: "1", title: "ML Engineer", company: "Acme", url: "u1", status: "applied", note: "", ts: "2026-10-01 10:00:00" },
+    "hirist:2": { site: "hirist", jobId: "2", title: "SDE", company: "Beta", status: "skipped", note: "", ts: "2026-10-01 10:00:00" },
+    "naukri:3": { site: "naukri", jobId: "3", title: "AI Engineer", company: "Gamma", status: "applied", note: "finished by hand", ts: "2026-10-02 10:00:00" },
+    "naukri:4": { site: "naukri", jobId: "4", title: "Old", company: "Delta", status: "already_applied", note: "", ts: "2026-10-02 10:00:00" },
+    "naukri:5": { site: "naukri", jobId: "5", title: "Gone", company: "Eps", status: "applied", note: "", ts: "2026-10-02 10:00:00" },
+  };
+  const track = {
+    "hirist:1": { key: "hirist:1", heard: { at: "2026-10-03", via: "email", who: "Priya" }, rounds: [], log: [] },
+    "manual:x": { key: "manual:x", site: "manual", jobId: "x", title: "Mine", company: "Zeta", appliedAt: "2026-10-05 12:00:00", source: "manual", rounds: [], log: [] },
+    "naukri:5": { key: "naukri:5", hidden: true, rounds: [] },
+  };
+  const apps = Object.fromEntries(tracker.list(jobs, track).map(a => [a.key, a]));
+  assert.deepEqual(Object.keys(apps).sort(), ["hirist:1", "manual:x", "naukri:3", "naukri:4"]);
+  assert.equal(apps["hirist:1"].title, "ML Engineer"); // from the history...
+  assert.equal(apps["hirist:1"].heard.who, "Priya"); // ...with what's tracked on top
+  assert.equal(apps["hirist:1"].source, "bot");
+  assert.equal(apps["naukri:3"].source, "self");
+  assert.ok(apps["naukri:4"].old && !apps["hirist:1"].old);
+  assert.equal(apps["manual:x"].company, "Zeta");
+});
+
+test("applications: the stage, and what's next", () => {
+  const now = new Date("2026-10-24T12:00").getTime();
+  const base = { heard: null, rounds: [], outcome: null, appliedAt: "2026-10-20 10:00:00" };
+  assert.equal(tracker.stage(base, 21, now), "waiting");
+  assert.equal(tracker.stage({ ...base, appliedAt: "2026-09-01 10:00:00" }, 21, now), "quiet");
+  assert.equal(tracker.stage({ ...base, heard: { via: "email" } }, 21, now), "heard");
+  assert.equal(tracker.group(tracker.stage({ ...base, heard: { via: "email" } }, 21, now)), "active");
+  assert.equal(tracker.group("rejected"), "closed");
+  assert.equal(tracker.next(base, 21, now), null);
+  assert.equal(tracker.next({ ...base, heard: {} }, 21, now).type, "setup");
+
+  const rounds = tracker.fromTemplate(tracker.DEFAULTS.templates[0]);
+  assert.deepEqual(rounds.map(r => [r.kind, r.name, r.status]), [
+    ["call", "Recruiter call", "planned"], ["assignment", "Take-home", "planned"], ["interview", "Technical", "planned"], ["interview", "Founder chat", "planned"]]);
+  assert.equal(new Set(rounds.map(r => r.id)).size, 4);
+  let a = { ...base, rounds };
+  assert.equal(tracker.stage(a, 21, now), "rounds");
+  assert.equal(tracker.next(a, 21, now).type, "plan");
+  assert.ok(tracker.heardBack(a) && !tracker.hadRound(a));
+
+  a = tracker.change(a, { round: { id: rounds[0].id, status: "cleared" } });
+  a = tracker.change(a, { round: { id: rounds[1].id, status: "scheduled", at: "2026-10-22", due: "2026-10-26" } });
+  let nx = tracker.next(a, 21, now);
+  assert.equal(nx.type, "due");
+  assert.equal(nx.round.id, rounds[1].id);
+  assert.equal(nx.at.getDate(), 26);
+  assert.equal(tracker.roundWord(nx.round), "To do"); // an assignment's own words
+  assert.equal(tracker.roundWord({ kind: "interview", status: "scheduled" }), "Scheduled");
+
+  a = tracker.change(a, { round: { id: rounds[1].id, status: "given", changed: "2026-10-20" } });
+  nx = tracker.next(a, 21, now);
+  assert.equal(nx.type, "result");
+  assert.equal(nx.days, 4);
+  a = tracker.change(a, { round: { id: rounds[1].id, status: "cleared" } });
+  a = tracker.change(a, { round: { id: rounds[2].id, status: "scheduled", at: "2026-10-26T11:00" } });
+  nx = tracker.next(a, 21, now);
+  assert.deepEqual([nx.type, nx.at.getHours()], ["round", 11]);
+  a = tracker.change(a, { round: { id: rounds[2].id, status: "not_cleared" } });
+  assert.equal(tracker.next(a, 21, now).type, "plan"); // the founder chat is still on
+  a = tracker.change(a, { drop: rounds[3].id });
+  assert.equal(tracker.next(a, 21, now).type, "end");
+  a = tracker.change(a, { set: { outcome: "rejected" } });
+  assert.equal(tracker.stage(a, 21, now), "rejected");
+  assert.equal(tracker.next(a, 21, now), null);
+  assert.equal(tracker.next({ ...a, outcome: "offer" }, 21, now).type, "reply");
+});
+
+test("applications: changes merge, move and add rounds", () => {
+  let a = { heard: null, rounds: [], log: [] };
+  a = tracker.change(a, { heard: { at: "2026-10-03", via: "email" } });
+  a = tracker.change(a, { heard: { via: "call" } });
+  assert.deepEqual(a.heard, { at: "2026-10-03", via: "call" });
+  assert.equal(tracker.change(a, { heard: null }).heard, null);
+
+  a = tracker.change(a, { round: { id: "r1", name: "Screen" } }); // a new id adds it, with the rest filled in
+  assert.deepEqual(a.rounds[0], { id: "r1", kind: "interview", name: "Screen", at: "", due: "", status: "planned", note: "" });
+  a = tracker.change(a, { rounds: [tracker.newRound("assignment", "Take-home")] });
+  a = tracker.change(a, { move: { id: "r1", by: 1 } });
+  assert.deepEqual(a.rounds.map(r => r.name), ["Take-home", "Screen"]);
+  assert.deepEqual(tracker.change(a, { move: { id: "r1", by: 1 } }).rounds.map(r => r.name), ["Take-home", "Screen"]); // already last
+  const before = a.rounds;
+  tracker.change(a, { round: { id: "r1", status: "given" } });
+  assert.equal(before[1].status, "planned"); // the one passed in is left as it was
+});
+
+test("applications: figures, and settings with defaults", () => {
+  const app = (key, more) => ({ key, site: key.split(":")[0], source: "bot", heard: null, rounds: [], outcome: null, ...more });
+  const f = tracker.figures([
+    app("hirist:1"), app("hirist:2", { heard: { via: "email" } }),
+    app("linkedin:3", { rounds: [{ status: "cleared" }], outcome: "offer" }), app("linkedin:4", { outcome: "rejected" }),
+    app("manual:5", { source: "manual", outcome: "ghosted" }),
+  ], new Set(["linkedin:3", "linkedin:4"]));
+  assert.deepEqual([f.applied, f.bot, f.heard, f.rounds, f.offers], [5, 4, 3, 1, 1]);
+  assert.deepEqual(f.sites.hirist, { n: 2, heard: 1 });
+  assert.deepEqual(f.ended, { rejected: 1, ghosted: 1 });
+  assert.deepEqual(f.referral, { n: 2, heard: 2, otherN: 3, otherHeard: 1 });
+
+  assert.equal(store.normalize(undefined).tracker.quietDays, 21);
+  assert.equal(store.normalize(undefined).tracker.templates.length, 3);
+  const mine = store.normalize({ tracker: { quietDays: 30, templates: [] } }).tracker;
+  assert.deepEqual([mine.quietDays, mine.templates, mine.countOld], [30, [], false]); // no templates is a choice
+});
+
+test("applications: a calendar file for a round", () => {
+  const ics = tracker.ics({ key: "linkedin:9", title: "ML Engineer", company: "Acme, Inc", url: "https://x" },
+    { id: "r1", kind: "interview", name: "System design", at: "2026-10-26T11:00", note: "Bring; notes" }, new Date("2026-10-24T00:00:00Z"));
+  assert.match(ics, /^BEGIN:VCALENDAR\r\n/);
+  assert.match(ics, /\r\nSUMMARY:System design: ML Engineer at Acme\\, Inc\r\n/);
+  assert.match(ics, /\r\nDESCRIPTION:Bring\\; notes\\nhttps:\/\/x\r\n/);
+  const start = new Date("2026-10-26T11:00").toISOString().replace(/[-:]/g, "").replace(/\.\d+/, "");
+  assert.ok(ics.includes(`DTSTART:${start}`));
+  assert.ok(ics.includes("DTSTAMP:20261024T000000Z"));
 });

@@ -13,6 +13,7 @@
     <a class="brand" href="#overview"><img src="icons/128.png" alt="" width="28" height="28"><span>Sendoff</span></a>
     <nav class="nav" aria-label="Pages">
       <a href="#overview" id="nav-overview" data-page="overview">Overview</a>
+      <a href="#applications" id="nav-applications" data-page="applications">Applications <span class="nav-count soon" id="nav-soon" hidden></span></a>
       <a href="#history" id="nav-history" data-page="history">History <span class="nav-count" id="nav-needs" hidden></span></a>
       <a href="#settings" id="nav-settings" data-page="settings">Settings</a>
     </nav>
@@ -109,6 +110,14 @@
             <p class="today-note" id="today-note"></p>
           </section>
 
+          <section class="coming" aria-labelledby="coming-title">
+            <div class="rail-head">
+              <h2 id="coming-title">Applications</h2>
+              <a class="link" href="#applications">All</a>
+            </div>
+            <ul id="coming-list"></ul>
+          </section>
+
           <section class="trend" aria-labelledby="trend-title">
             <div class="rail-head">
               <h2 id="trend-title">Applications, last 14 days</h2>
@@ -132,6 +141,56 @@
           </section>
         </aside>
       </div>
+    </section>
+
+    <!-- ===================================================== applications -->
+    <section class="page" id="page-applications" aria-labelledby="apps-title" hidden>
+      <header class="page-head apps-head">
+        <div>
+          <h1 id="apps-title">Applications</h1>
+          <p class="page-lede">Every job you applied to, and what happened after: who replied and how, which round you're on, and how it ended.</p>
+        </div>
+        <button class="btn primary" id="add-app">Add an application</button>
+      </header>
+
+      <section class="funnel" aria-labelledby="funnel-title">
+        <div class="run-head">
+          <h2 id="funnel-title">Where they stand</h2>
+          <label class="period">Applied
+            <select id="figures-period">
+              <option value="">any time</option>
+              <option value="30">in the last 30 days</option>
+              <option value="90">in the last 90 days</option>
+            </select>
+          </label>
+        </div>
+        <ol class="figures" id="figures"></ol>
+        <p class="funnel-foot" id="funnel-foot"></p>
+      </section>
+
+      <section class="upnext" aria-labelledby="upnext-title">
+        <div class="rail-head">
+          <h2 id="upnext-title">Up next</h2>
+          <span class="hint">Rounds, assignments due, and replies you owe</span>
+        </div>
+        <ol id="upnext"></ol>
+      </section>
+
+      <section class="apps-list" aria-labelledby="apps-list-title">
+        <h2 id="apps-list-title">All applications</h2>
+        <div class="filters">
+          <div class="chips" id="app-chips"></div>
+          <select id="app-site" aria-label="Site"><option value="">All sites</option></select>
+          <input type="search" id="app-search" placeholder="Find a title or company" aria-label="Find a title or company">
+        </div>
+        <div class="table-wrap">
+          <table class="history apps">
+            <thead><tr><th>Job</th><th>Stage</th><th>Next</th><th>Heard back via</th><th>Updated</th><th><span class="sr">Quick actions</span></th></tr></thead>
+            <tbody id="app-rows"></tbody>
+          </table>
+        </div>
+        <p class="more" id="app-more" hidden></p>
+      </section>
     </section>
 
     <!-- ===================================================== history -->
@@ -178,6 +237,7 @@
           <a href="#settings" data-goto="jobs">Which jobs</a>
           <a href="#settings" data-goto="answers">Answers</a>
           <a href="#settings" data-goto="message">Message to recruiters</a>
+          <a href="#settings" data-goto="applications">Applications</a>
           <a href="#settings" data-goto="screenshots">Screenshots</a>
           <a href="#settings" data-goto="bring-over">Bring over, back up</a>
         </nav>
@@ -242,6 +302,21 @@
                 <textarea name="profile.coverNote" rows="5"></textarea></label>
             </section>
 
+            <section class="set" id="set-applications" aria-labelledby="applications-set-title">
+              <h2 id="applications-set-title">Applications</h2>
+              <div class="row-fields">
+                <label class="field narrow">Gone quiet after <small>days with no reply</small>
+                  <input type="number" name="tracker.quietDays" min="1" step="1"></label>
+              </div>
+              <label class="tick"><input type="checkbox" name="tracker.countOld"><span>Count jobs applied to before Sendoff in the figures
+                <small>The bot found them already applied, so their date is when it saw them. They're listed either way.</small></span></label>
+              <h2 class="sub">Round templates</h2>
+              <p class="hint">A company's usual rounds, to add in one click when it replies. Change them here, or change the
+                rounds on one application after adding them.</p>
+              <div class="templates" id="templates"></div>
+              <div><button type="button" class="btn" id="add-template">Add a template</button></div>
+            </section>
+
             <div class="savebar" id="savebar">
               <p class="errors" id="errors" role="alert"></p>
               <span class="saved" id="saved" aria-live="polite"></span>
@@ -277,6 +352,47 @@
 
 <div class="tip" id="tip" role="tooltip" hidden></div>
 
+<dialog class="panel" id="app-panel" aria-labelledby="app-panel-title">
+  <div class="panel-top">
+    <span class="panel-label">Application</span>
+    <span class="panel-tools">
+      <a class="btn small" id="app-panel-open" target="_blank" rel="noopener">Open the job ↗</a>
+      <button class="btn small icon-btn" id="app-panel-close" aria-label="Close">✕</button>
+    </span>
+  </div>
+  <div class="panel-body" id="app-panel-body"></div>
+</dialog>
+
+<dialog id="add-dialog" aria-labelledby="add-title">
+  <form method="dialog" class="add-form" id="add-form">
+    <h2 id="add-title">Add an application</h2>
+    <p class="hint">For jobs you applied to without Sendoff: a careers page, an email, someone's referral.</p>
+    <label class="field">Job title <input name="title" required></label>
+    <label class="field">Company <input name="company" required></label>
+    <label class="field">Link to the job <small>Optional</small><input name="url" type="url" placeholder="https://"></label>
+    <div class="two">
+      <label class="field">Applied through
+        <select name="through">
+          <option>Company careers page</option>
+          <option>Email</option>
+          <option>Someone referred me</option>
+          <option>Hirist</option>
+          <option>Instahyre</option>
+          <option>Wellfound</option>
+          <option>Cutshort</option>
+          <option>LinkedIn</option>
+          <option>Naukri</option>
+          <option>Somewhere else</option>
+        </select></label>
+      <label class="field">Applied on <input name="on" type="date" required></label>
+    </div>
+    <div class="dialog-foot">
+      <button class="btn" value="cancel" formnovalidate>Cancel</button>
+      <button class="btn primary" value="add">Add application</button>
+    </div>
+  </form>
+</dialog>
+
 <dialog id="shot-dialog" aria-label="Screenshot">
   <form method="dialog">
     <img alt="The page when the bot stopped">
@@ -287,6 +403,7 @@
 <script src="lib/defaults.js"></script>
 <script src="lib/filters.js"></script>
 <script src="lib/answers.js"></script>
+<script src="lib/tracker.js"></script>
 <script src="lib/store.js"></script>
 <script src="sites/hirist.js"></script>
 <script src="sites/instahyre.js"></script>

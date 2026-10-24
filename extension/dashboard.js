@@ -1,4 +1,5 @@
-// The dashboard: start and watch runs, answer the bot's questions, see the history, edit the settings.
+// The dashboard: start and watch runs, answer the bot's questions, follow your applications, see the history, edit the
+// settings.
 // Runs happen in the background worker; this page shows their state (chrome.storage.session "run:<site>").
 const SITES = {
   hirist: { name: "Hirist", keywords: "One per line. Each one is its own Hirist search.", pages: "20 jobs each" },
@@ -40,11 +41,12 @@ const FORMAT = "job-apply-bots/1";
 const HISTORY_LIMIT = 300;
 
 const runs = {}; // site -> its latest run, as the background worker saved it
-const ui = { stopping: {}, error: {}, logKey: "", stripKey: "", eventsKey: "" };
+const ui = { stopping: {}, error: {}, logKey: "", stripKey: "", eventsKey: "", panelKey: "", day: "" };
 const filter = { status: "applied", text: "", site: "" };
 let settings = null; // as last saved
 let jobs = {};
 let people = {}; // everyone asked for a referral (LinkedIn), by profile
+let track = {}; // what you've noted about each application (lib/tracker.js), by key
 
 // ---------------------------------------------------------------- small helpers
 
@@ -151,7 +153,7 @@ function tipOn(target, title, text) {
 
 function showPage(name) {
   const [page, which] = name.split("/");
-  name = ["overview", "history", "settings"].includes(page) ? page : "overview";
+  name = ["overview", "applications", "history", "settings"].includes(page) ? page : "overview";
   if (name === "overview" && SITES[which]) selectSite(which);
   for (const page of document.querySelectorAll(".page")) page.hidden = page.id !== `page-${name}`;
   for (const link of document.querySelectorAll(".nav a")) {
@@ -618,6 +620,13 @@ function renderHistory() {
     if (/^https?:\/\//.test(r.url || "")) link.href = r.url;
     const note = el("td", { className: "note" }, r.note ? describe(r.status, r.note) : "");
     if (r.shot) note.append(r.note ? " " : "", el("button", { textContent: "Screenshot", onclick: () => showShot(r) }));
+    if (["needs_manual", "external"].includes(r.status)) {
+      note.append(note.textContent ? " " : "", el("button", { textContent: "I applied myself", title: "Count it as applied, and follow it in Applications", onclick: () => selfApplied(r) }));
+    }
+    const tracked = track[`${r.site}:${r.jobId}`];
+    if (r.status === "applied" && tracked && !tracked.hidden) {
+      note.append(note.textContent ? " " : "", el("button", { textContent: "In Applications", onclick: () => openApp(tracked.key) }));
+    }
     body.append(el("tr", {},
       el("td", { className: "when", textContent: when(r.ts) }),
       el("td", { className: "job" }, link, el("span", { textContent: Object.keys(SITES).length > 1 ? [r.company, SITES[r.site]?.name || r.site].filter(Boolean).join(", ") : r.company || "" })),
@@ -653,6 +662,566 @@ async function recheckSkipped() {
   if (!n) return;
   if (!confirm(`Forget the ${n} jobs the filters skipped, so the next run looks at them again?`)) return;
   for (const site of Object.keys(SITES)) await send({ type: "forget", site, status: "skipped" });
+}
+
+// ---------------------------------------------------------------- applications: what happened after applying
+
+const T = JB.tracker;
+const APP_CHIPS = [["active", "Active"], ["waiting", "Waiting"], ["quiet", "Gone quiet"], ["closed", "Closed"], ["", "All"]];
+const GROUP_RANK = { active: 0, waiting: 1, quiet: 2, closed: 3 };
+const appFilter = { group: remember("apps.group"), text: "", site: "" };
+let openKey = ""; // the application open in the side panel
+let pendingFocus = ""; // what to focus once the panel shows a change (a round just added)
+
+const quietDays = () => settings?.tracker.quietDays ?? T.DEFAULTS.quietDays;
+const allApps = () => T.list(jobs, track);
+const appOf = key => allApps().find(a => a.key === key);
+const siteName = a => (a.site === "manual" ? a.through || "Added by you" : SITES[a.site]?.name || a.site);
+const dateWords = ts => T.toDate(ts)?.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" }) || "";
+const ago = days => (days == null ? "" : days <= 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`);
+const roundName = r => r.name || T.word(T.KINDS, r.kind);
+const roundNote = (r, n) => `Round ${n}${r.name ? ` (${r.name})` : ""}: ${T.roundWord(r).toLowerCase()}`;
+
+/** "Today", "Tomorrow", or "Mon 26 Oct". */
+function day(d) {
+  const n = Math.round((new Date(d).setHours(0, 0, 0, 0) - new Date().setHours(0, 0, 0, 0)) / 86400000);
+  return n === 0 ? "Today" : n === 1 ? "Tomorrow" : n === -1 ? "Yesterday" : d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+}
+
+/** Jobs Sendoff asked someone about for a referral, as application keys. */
+const askedKeys = () => new Set(Object.values(people).filter(c => ["messaged", "invited"].includes(c.status)).map(c => `linkedin:${c.jobId}`));
+
+/** Change applications: [application, change, timeline note] each (see JB.tracker.change). */
+async function changeApps(list) {
+  const items = list.map(([a, change, note]) => {
+    const { key, site, jobId, title, company, url, appliedAt, source, old, through } = a;
+    return { key, base: { site, jobId, title, company, url, appliedAt, source, old, through }, change, note };
+  });
+  const { apps } = await send({ type: "track", items });
+  track = { ...track };
+  items.forEach((item, i) => {
+    if (apps[i]) track[item.key] = apps[i];
+    else delete track[item.key];
+  });
+  renderApps();
+}
+const changeApp = (a, change, note) => changeApps([[a, change, note]]);
+
+const glyphOf = (cls, text) => el("span", { className: `glyph ${cls}`, textContent: text, ariaHidden: "true" });
+const button = (text, onclick, cls = "btn small") => el("button", { type: "button", className: cls, textContent: text, onclick });
+
+/** An application's stage as it shows: [glyph class, glyph text, what, under it]. */
+function stageView(a) {
+  const st = T.stage(a, quietDays());
+  const days = T.daysSince(a.appliedAt);
+  const given = a.rounds.filter(r => r.status !== "planned").length;
+  const after = given ? `After ${given} round${given > 1 ? "s" : ""}` : a.heard ? "After they replied" : "After applying";
+  if (st === "waiting") return ["a-waiting", "·", "Waiting", `Applied ${ago(days)}`];
+  if (st === "quiet") return ["a-quiet", "–", "Gone quiet", `No reply in ${days} days`];
+  if (st === "heard") return ["a-heard", "↩", "Heard back", "No rounds yet"];
+  if (st === "rounds") {
+    const r = T.current(a);
+    const n = a.rounds.indexOf(r) + 1;
+    const how = r.status === "planned" ? "no date yet" : T.roundWord(r).toLowerCase();
+    if (r.kind === "assignment") return [r.status === "scheduled" ? "a-due" : "a-rounds", r.status === "scheduled" ? "!" : String(n), `Assignment, ${how}`, `Round ${n}${r.name ? `: ${r.name}` : ""}`];
+    return ["a-rounds", String(n), `Round ${n}, ${how}`, roundName(r)];
+  }
+  if (st === "rejected") return ["a-rejected", "×", "Rejected", after];
+  if (T.gotOffer(a)) return ["a-offer", "✓", T.word(T.OUTCOMES, st), after];
+  return ["a-closed", "–", T.word(T.OUTCOMES, st), after];
+}
+
+/** What's next for an application, as it shows: [what, under it], or null. */
+function nextView(a) {
+  const nx = T.next(a, quietDays());
+  if (!nx) return null;
+  const r = nx.round;
+  if (nx.type === "round") return nx.at ? [`${day(nx.at)}${r.at.length > 10 ? `, ${clock(nx.at)}` : ""}`, roundName(r)] : ["Set the time", roundName(r)];
+  if (nx.type === "due") return [nx.at ? `Due ${day(nx.at)}` : "To do", roundName(r)];
+  if (nx.type === "plan") return ["Set a date", roundName(r)];
+  if (nx.type === "result") return ["Waiting for their result", nx.days > 0 ? `${roundName(r)}, given ${ago(nx.days)}` : roundName(r)];
+  if (nx.type === "more") return ["Add the next round", "or how it ended"];
+  if (nx.type === "end") return ["Say how it ended", `${roundName(r)}: ${T.roundWord(r).toLowerCase()}`];
+  if (nx.type === "setup") return ["Add its rounds", "From a template, or one by one"];
+  return ["Answer the offer", ""];
+}
+
+/** They replied: note it as an email today, and open it to say who and how. */
+async function replied(a) {
+  await changeApp(a, { heard: { at: today(), via: "email", who: "" } }, "They replied");
+  openApp(a.key);
+}
+
+/** The one-click buttons for a round: booked, it was given (or handed in); given, how it went. */
+function roundActions(a, r) {
+  const n = a.rounds.indexOf(r) + 1;
+  const set = status => () => changeApp(a, { round: { id: r.id, status, changed: today() } }, roundNote({ ...r, status }, n));
+  if (r.status === "scheduled") return [button(r.kind === "assignment" ? "Submitted" : "Given", set("given"))];
+  if (r.status === "given") return [button("Cleared", set("cleared")), button("Not cleared", set("not_cleared"))];
+  return [];
+}
+
+/** The one-click buttons for what's next on an application. */
+function quickActions(a) {
+  const st = T.stage(a, quietDays());
+  const nx = T.next(a, quietDays());
+  const end = outcome => () => changeApp(a, { set: { outcome } }, `How it ended: ${T.word(T.OUTCOMES, outcome).toLowerCase()}`);
+  if (st === "waiting") return [button("They replied", () => replied(a))];
+  if (st === "quiet") return [button("They replied", () => replied(a)), button("Ghosted", end("ghosted"))];
+  if (!nx) return [];
+  if (["round", "due", "result"].includes(nx.type)) return roundActions(a, nx.round);
+  if (nx.type === "reply") return [button("Accepted", end("accepted")), button("Declined", end("declined"))];
+  return [button(nx.type === "setup" ? "Add rounds" : "Open", () => openApp(a.key))];
+}
+
+/** What's coming up, soonest first: every booked round and due date (from a week back), offers to answer, rounds
+ * with no result for 3 days or more. */
+function upNext(apps) {
+  const items = [];
+  const from = Date.now() - 7 * 86400000;
+  for (const a of apps) {
+    const st = T.stage(a, quietDays());
+    if (st === "offer") items.push({ a, nx: { type: "reply", at: null }, rank: 1, t: 0 });
+    if (st !== "rounds") continue;
+    for (const r of a.rounds) {
+      const at = T.toDate(r.kind === "assignment" ? r.due : r.at);
+      const days = T.daysSince(r.changed || r.at);
+      if (r.status === "scheduled" && at && at.getTime() >= from) items.push({ a, nx: { type: r.kind === "assignment" ? "due" : "round", at, round: r }, rank: 0, t: at.getTime() });
+      else if (r.status === "given" && days >= 3) items.push({ a, nx: { type: "result", at: null, round: r, days }, rank: 2, t: -days });
+    }
+  }
+  return items.sort((x, y) => x.rank - y.rank || x.t - y.t);
+}
+
+function downloadIcs(a, r) {
+  const url = URL.createObjectURL(new Blob([T.ics(a, r)], { type: "text/calendar" }));
+  const name = `${a.company || "round"} ${roundName(r)}`.replace(/[^\w-]+/g, "-").replace(/^-|-$/g, "").toLowerCase();
+  el("a", { href: url, download: `${name}.ics` }).click();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+function upNextItem({ a, nx }) {
+  const r = nx.round;
+  const n = r ? a.rounds.indexOf(r) + 1 : 0;
+  const [when, sub, cls, g, what] =
+    nx.type === "round" ? [day(nx.at), r.at.length > 10 ? clock(nx.at) : "", "a-rounds", String(n), `Round ${n} · ${roundName(r)}`]
+      : nx.type === "due" ? [day(nx.at), "due", "a-due", "!", `Assignment · ${roundName(r)}`]
+        : nx.type === "reply" ? ["Offer", "to answer", "a-offer", "✓", "Say yes or no to the offer"]
+          : ["No word", `for ${nx.days} days`, "a-rounds", String(n), `Round ${n} given, no result yet`];
+  const calendar = nx.type === "round" && r.at.length > 10 ? button("Add to calendar", () => downloadIcs(a, r)) : null;
+  return el("li", {},
+    el("span", { className: "d" }, el("b", { textContent: when }), el("span", { textContent: sub })),
+    glyphOf(cls, g),
+    el("span", { className: "what" }, el("b", { textContent: what }), " ",
+      el("span", { textContent: [a.company, a.title].filter(Boolean).join(", ") }), r?.note ? el("small", { textContent: r.note }) : null),
+    el("span", { className: "acts" }, ...(r ? roundActions(a, r) : quickActions(a)), calendar, button("Open", () => openApp(a.key))));
+}
+
+function renderUpNext(items, apps) {
+  const list = $("upnext");
+  list.replaceChildren(...items.map(upNextItem));
+  const quiet = apps.filter(a => T.stage(a, quietDays()) === "quiet").sort((x, y) => String(x.appliedAt).localeCompare(String(y.appliedAt)));
+  if (quiet.length) {
+    const oldest = quiet[0];
+    list.append(el("li", {},
+      el("span", { className: "d" }, el("b", { textContent: `${quietDays()}+ days` }), el("span", { textContent: "no reply" })),
+      glyphOf("a-quiet", "–"),
+      el("span", { className: "what" }, el("b", { textContent: `${quiet.length} application${quiet.length > 1 ? "s have" : " has"} gone quiet` }), " ",
+        el("span", { textContent: `The oldest: ${oldest.company || oldest.title}, ${T.daysSince(oldest.appliedAt)} days` }),
+        el("small", { textContent: "Close them as ghosted to keep the list short. One comes back if you say they replied." })),
+      el("span", { className: "acts" },
+        button("See them", () => { setAppGroup("quiet"); $("apps-list-title").scrollIntoView({ behavior: "smooth" }); }),
+        button("Mark all ghosted", () => {
+          if (confirm(`Close the ${quiet.length} applications with no reply in ${quietDays()}+ days as ghosted?`)) {
+            changeApps(quiet.map(a => [a, { set: { outcome: "ghosted" } }, "How it ended: ghosted"]));
+          }
+        }))));
+  }
+  if (!list.children.length) list.append(el("li", { className: "empty", textContent: "Nothing coming up. Rounds and due dates you add show up here." }));
+}
+
+/** The overview's Applications card: the next three things, and the count in the sidebar. */
+function renderComing(items) {
+  const list = $("coming-list");
+  list.replaceChildren();
+  for (const { a, nx } of items.slice(0, 3)) {
+    const r = nx.round;
+    const what = nx.type === "round" ? `Round ${a.rounds.indexOf(r) + 1} · ${a.company || a.title}`
+      : nx.type === "due" ? `Assignment due · ${a.company || a.title}` : nx.type === "reply" ? `Offer to answer · ${a.company || a.title}` : `No result yet · ${a.company || a.title}`;
+    const when = nx.at ? `${day(nx.at)}${nx.type === "round" && r.at.length > 10 ? `, ${clock(nx.at)}` : ""}` : nx.type === "result" ? `Given ${ago(nx.days)}` : "";
+    const link = el("a", { href: "#applications", textContent: what, onclick: e => { e.preventDefault(); openApp(a.key); } });
+    list.append(el("li", {}, link, el("small", { textContent: when })));
+  }
+  if (!items.length) list.append(el("li", { className: "none", textContent: "Nothing coming up. Rounds you add show up here." }));
+  const soon = items.filter(i => i.rank === 1 || (i.rank === 0 && i.t < Date.now() + 7 * 86400000)).length;
+  const badge = $("nav-soon");
+  badge.hidden = !soon;
+  badge.textContent = soon;
+  badge.title = `${soon} coming up this week`;
+}
+
+function renderFigures(apps) {
+  const days = Number($("figures-period").value) || 0;
+  const counted = apps.filter(a => (settings.tracker.countOld || !a.old) && (!days || T.daysSince(a.appliedAt) <= days));
+  const f = T.figures(counted, askedKeys());
+  const pct = (x, of) => {
+    const p = of ? (x / of) * 100 : 0;
+    return `${p > 0 && p < 10 ? p.toFixed(1) : Math.round(p)}%`;
+  };
+  const tile = (label, n, sub, share, cls = "") => el("li", {},
+    el("span", { className: "k", textContent: label }), el("b", { textContent: n.toLocaleString() }), el("small", { textContent: sub }),
+    el("span", { className: "bar", ariaHidden: "true" }, el("span", { className: cls, style: `width: ${Math.min(100, share * 100)}%` })));
+  $("figures").replaceChildren(
+    tile("Applied", f.applied, `${f.bot} by Sendoff, ${f.applied - f.bot} by you`, f.applied ? 1 : 0),
+    tile("Heard back", f.heard, `${pct(f.heard, f.applied)} of applied`, f.applied ? f.heard / f.applied : 0),
+    tile("Had a round", f.rounds, `${pct(f.rounds, f.heard)} of those who replied`, f.heard ? f.rounds / f.heard : 0),
+    tile("Offers", f.offers, `${pct(f.offers, f.rounds)} of those with a round`, f.rounds ? f.offers / f.rounds : 0, "offer"));
+  const parts = [];
+  const ended = [["rejected", "rejected"], ["withdrawn", "withdrawn"], ["ghosted", "ghosted"]].filter(([k]) => f.ended[k]);
+  if (ended.length) parts.push(el("span", {}, "Closed: ", ...ended.flatMap(([k, w], i) => [i ? ", " : "", el("b", { textContent: f.ended[k] }), ` ${w}`])));
+  if (f.referral.n) {
+    parts.push(el("span", {}, "Replies with a referral asked: ", el("b", { textContent: pct(f.referral.heard, f.referral.n) }),
+      ", without: ", el("b", { textContent: pct(f.referral.otherHeard, f.referral.otherN) })));
+  }
+  const sites = [...Object.keys(SITES), "manual"].filter(s => f.sites[s]);
+  if (sites.length) {
+    parts.push(el("span", {}, "Replies by site: ", ...sites.flatMap((s, i) => [i ? " · " : "", `${s === "manual" ? "Added by you" : SITES[s].name} `,
+      el("b", { textContent: pct(f.sites[s].heard, f.sites[s].n) })])));
+  }
+  $("funnel-foot").replaceChildren(...parts);
+  $("funnel-foot").hidden = !parts.length;
+}
+
+function setAppGroup(group) {
+  appFilter.group = group;
+  remember("apps.group", group);
+  renderAppList();
+}
+
+function appRow(a, asked) {
+  const [cls, g, what, sub] = stageView(a);
+  const nv = nextView(a);
+  const tags = [a.source === "manual" ? "Added by you" : a.source === "self" ? "You applied" : null, a.old ? "Before Sendoff" : null,
+    asked.has(a.key) ? "Referral asked" : null].filter(Boolean);
+  return el("tr", {},
+    el("td", { className: "job" }, el("button", { type: "button", className: "job-link", textContent: a.title || "Untitled job", onclick: () => openApp(a.key) }),
+      el("span", { textContent: [a.company, siteName(a)].filter(Boolean).join(" · ") }), ...tags.map(t => el("span", { className: "tag", textContent: t }))),
+    el("td", { className: "stage" }, el("span", { className: "result-tag" }, glyphOf(cls, g), what), el("small", { textContent: sub })),
+    el("td", { className: "next" }, ...(nv ? [el("b", { textContent: nv[0] }), el("small", { textContent: nv[1] })] : ["–"])),
+    el("td", { className: "via" }, ...(a.heard ? [T.word(T.VIA, a.heard.via), el("small", { textContent: a.heard.who || "" })] : ["–"])),
+    el("td", { className: "when", textContent: ago(T.daysSince(a.updated)) }),
+    el("td", { className: "acts" }, ...quickActions(a)));
+}
+
+function renderAppList() {
+  if (!settings) return;
+  const apps = allApps();
+  const items = upNext(apps);
+  renderUpNext(items, apps);
+  renderComing(items);
+  renderFigures(apps);
+
+  const inSite = apps.filter(a => !appFilter.site || a.site === appFilter.site);
+  const groupOf = new Map(inSite.map(a => [a, T.group(T.stage(a, quietDays()))]));
+  const count = g => (g ? inSite.filter(a => groupOf.get(a) === g).length : inSite.length);
+  if (appFilter.group == null) appFilter.group = count("active") ? "active" : ""; // first visit: what's going on, else all
+  for (const chip of document.querySelectorAll("#app-chips .chip")) {
+    chip.setAttribute("aria-pressed", chip.dataset.group === appFilter.group);
+    chip.querySelector(".n").textContent = count(chip.dataset.group).toLocaleString();
+  }
+  let rows = appFilter.group ? inSite.filter(a => groupOf.get(a) === appFilter.group) : inSite;
+  if (appFilter.text) rows = rows.filter(a => `${a.title} ${a.company}`.toLowerCase().includes(appFilter.text));
+  const at = a => T.next(a, quietDays())?.at?.getTime() ?? Infinity;
+  rows.sort((x, y) => GROUP_RANK[groupOf.get(x)] - GROUP_RANK[groupOf.get(y)] || at(x) - at(y) || String(y.updated).localeCompare(String(x.updated)));
+
+  const asked = askedKeys();
+  const body = $("app-rows");
+  body.replaceChildren(...rows.slice(0, HISTORY_LIMIT).map(a => appRow(a, asked)));
+  if (!rows.length) {
+    const text = !apps.length ? "No applications yet. Each job Sendoff applies to shows up here, and you can add ones you applied to yourself."
+      : appFilter.text ? "No applications match that." : appFilter.group === "active" ? "Nothing going on yet. When a company replies, click They replied on it." : "Nothing here.";
+    body.append(el("tr", { className: "empty-row" }, el("td", { colSpan: 6, textContent: text })));
+  }
+  const more = $("app-more");
+  more.hidden = rows.length <= HISTORY_LIMIT;
+  more.textContent = `Showing ${HISTORY_LIMIT} of ${rows.length.toLocaleString()}. Find one by its title or company.`;
+}
+
+function renderApps() {
+  renderAppList();
+  renderPanel();
+}
+
+// ---------------------------------------------------------------- one application, in the side panel
+
+function openApp(key) {
+  openKey = key;
+  ui.panelKey = "";
+  if (location.hash !== "#applications") location.hash = "#applications";
+  const dialog = $("app-panel");
+  if (!dialog.open) dialog.showModal();
+  renderPanel();
+  dialog.scrollTop = 0;
+}
+
+/** A box in the panel that saves when it's left with something new in it. */
+function panelBox(props, save, f) {
+  const box = el(props.rows ? "textarea" : "input", props);
+  box.dataset.f = f;
+  const was = box.value;
+  // Dates on leaving, not on each change: a date box changes as each part is typed, and saving redraws the panel.
+  box.addEventListener(/date/.test(props.type || "") ? "blur" : "change", () => {
+    if (box.value.trim() !== was.trim()) save(box.value.trim());
+  });
+  return box;
+}
+
+/** Buttons for one choice of several, the chosen one pressed. Clicking it again clears it, when `clearable`. */
+function seg(label, options, chosen, pick, f, clearable = false) {
+  const group = el("div", { className: "seg" });
+  group.setAttribute("role", "group");
+  group.setAttribute("aria-label", label);
+  for (const [value, text] of options) {
+    const b = button(text, () => (value !== chosen ? pick(value) : clearable && pick(null)), "");
+    b.setAttribute("aria-pressed", value === chosen);
+    b.dataset.f = `${f}:${value}`;
+    group.append(b);
+  }
+  return group;
+}
+
+function part(title, ...tools) {
+  return el("section", {}, el("div", { className: "sec-head" }, el("h2", { textContent: title }), ...tools));
+}
+
+function panelHead(a) {
+  const how = a.source === "manual" ? "added by you" : a.source === "self" ? "you applied" : a.old ? "applied before Sendoff" : "Sendoff applied";
+  const askedHere = Object.values(people).filter(c => a.site === "linkedin" && c.jobId === a.jobId && ["messaged", "invited"].includes(c.status));
+  return el("header", { className: "panel-head" },
+    el("h1", { id: "app-panel-title", textContent: a.title || "Untitled job" }),
+    a.company ? el("p", { className: "co", textContent: a.company }) : null,
+    el("p", { className: "meta", textContent: `${siteName(a)} · ${how}${a.old ? "" : ` on ${dateWords(a.appliedAt)}`}` }),
+    askedHere.length ? el("p", { className: "meta" }, el("span", { className: "tag", textContent: "Referral asked" }),
+      ` ${askedHere.length} ${askedHere.length > 1 ? "people" : "person"} at ${a.company || "the company"}: ${askedHere.map(c => c.name).join(", ")}`) : null);
+}
+
+function steps(a) {
+  const st = T.stage(a, quietDays());
+  const offer = T.gotOffer(a);
+  const given = a.rounds.filter(r => r.status !== "planned").length;
+  const list = [
+    ["Applied", "done", a.old ? "before Sendoff" : dateWords(a.appliedAt)],
+    ["Heard back", T.heardBack(a) ? "done" : ["waiting", "quiet"].includes(st) ? "now" : "", a.heard?.at ? dateWords(a.heard.at) : ""],
+    ["Rounds", offer && a.rounds.length ? "done" : ["heard", "rounds"].includes(st) ? "now" : "", a.rounds.length ? `${given} of ${a.rounds.length}` : ""],
+    ["Offer", offer ? "done" : "", offer ? T.word(T.OUTCOMES, a.outcome) : ""],
+  ];
+  const ol = el("ol", { className: "steps" }, ...list.map(([label, state, sub]) => {
+    const li = el("li", { className: state }, el("span", { className: "pip", textContent: state === "done" ? "✓" : "", ariaHidden: "true" }), label, el("small", { textContent: sub }));
+    if (state === "now") li.setAttribute("aria-current", "step");
+    return li;
+  }));
+  ol.setAttribute("aria-label", "Progress");
+  return ol;
+}
+
+function heardPart(a) {
+  const h = a.heard;
+  if (!h) {
+    return el("section", {}, el("div", { className: "sec-head" }, el("h2", { textContent: "Heard back" })),
+      el("p", { className: "hint", textContent: T.heardBack(a) ? "They answered; when and how isn't noted." : "No reply yet." }),
+      el("div", {}, button("They replied", () => changeApp(a, { heard: { at: today(), via: "email", who: "" } }, "They replied"), "btn")));
+  }
+  const box = part("Heard back", button("Not yet", () => changeApp(a, { heard: null }, "Reply taken back"), "link"));
+  const at = panelBox({ type: "date", value: h.at || "" }, v => changeApp(a, { heard: { at: v } }), "heard:at");
+  const who = panelBox({ value: h.who || "", placeholder: "Name, role" }, v => changeApp(a, { heard: { who: v } }), "heard:who");
+  box.append(
+    el("div", { className: "heard-fields" }, el("label", { className: "field" }, "When", at), el("label", { className: "field" }, "Who", who)),
+    el("div", { className: "field" }, "How they reached you", seg("How they reached you", T.VIA, h.via, v => changeApp(a, { heard: { via: v } }), "heard:via")));
+  return box;
+}
+
+function useTemplate(a, t) {
+  return changeApp(a, { rounds: T.fromTemplate(t) }, `Added the ${t.name} rounds`);
+}
+
+function roundGlyph(r, n) {
+  const cls = { planned: "a-waiting", given: "a-rounds", cleared: "a-offer", not_cleared: "a-rejected", missed: "a-closed" }[r.status]
+    || (r.kind === "assignment" ? "a-due" : "a-rounds");
+  return glyphOf(cls, String(n));
+}
+
+function roundCard(a, r, i) {
+  const f = `r:${r.id}`;
+  const n = i + 1;
+  const save = (patch, note) => changeApp(a, { round: { id: r.id, ...patch } }, note);
+  // a date on a round not booked yet books it
+  const dated = patch => save({ ...patch, ...(r.status === "planned" && Object.values(patch)[0] ? { status: "scheduled", changed: today() } : {}) },
+    r.status === "planned" && Object.values(patch)[0] ? roundNote({ ...r, status: "scheduled" }, n) : null);
+  const name = panelBox({ className: "bare", value: r.name || "", placeholder: T.word(T.KINDS, r.kind) }, v => save({ name: v }), `${f}:name`);
+  name.setAttribute("aria-label", `Round ${n}: name`);
+  const kind = el("select", { className: "kind", onchange: e => save({ kind: e.target.value }) }, ...T.KINDS.map(([v, t]) => new Option(t, v, false, v === r.kind)));
+  kind.dataset.f = `${f}:kind`;
+  kind.setAttribute("aria-label", `Round ${n}: kind`);
+  const tool = (text, label, onclick, off) => {
+    const b = button(text, onclick, "btn icon");
+    b.title = label;
+    b.setAttribute("aria-label", `${label}: round ${n}`);
+    b.disabled = off;
+    b.dataset.f = `${f}:${label}`;
+    return b;
+  };
+  const empty = r.status === "planned" && !r.at && !r.due && !r.note;
+  const tools = el("span", { className: "round-tools" },
+    tool("↑", "Move up", () => changeApp(a, { move: { id: r.id, by: -1 } }), i === 0),
+    tool("↓", "Move down", () => changeApp(a, { move: { id: r.id, by: 1 } }), i === a.rounds.length - 1),
+    tool("✕", "Remove", () => (empty || confirm(`Remove round ${n}${r.name ? ` (${r.name})` : ""}?`)) && changeApp(a, { drop: r.id }, `Removed round ${n}${r.name ? ` (${r.name})` : ""}`)));
+  const assignment = r.kind === "assignment";
+  const date = (key, type, label) => {
+    const box = panelBox({ type, value: r[key] || "" }, v => dated({ [key]: v }), `${f}:${key}`);
+    return el("label", {}, `${label} `, box);
+  };
+  const when = assignment ? [date("at", "date", "Got"), date("due", "date", "Due")] : [date("at", "datetime-local", "When")];
+  const calendar = !assignment && (r.at || "").length > 10 ? button("Add to calendar", () => downloadIcs(a, r), "link") : null;
+  // nothing pressed: not booked yet; clicking the pressed one again goes back to that
+  const status = seg(`Round ${n}: how it went`, T.ROUND_STATUSES.filter(s => s !== "planned").map(s => [s, T.roundWord({ kind: r.kind, status: s })]), r.status,
+    s => save({ status: s || "planned", changed: today() }, roundNote({ ...r, status: s || "planned" }, n)), `${f}:status`, true);
+  const note = panelBox({ className: "bare note", value: r.note || "", placeholder: "Note: who, what to prepare, a link" }, v => save({ note: v }), `${f}:note`);
+  note.setAttribute("aria-label", `Round ${n}: note`);
+  const now = T.stage(a, quietDays()) === "rounds" && T.current(a) === r;
+  return el("li", { className: `round${now ? " now" : ""}` }, roundGlyph(r, n),
+    el("div", { className: "round-main" }, el("div", { className: "round-top" }, name, kind, tools), el("div", { className: "round-when" }, ...when, calendar), status, note));
+}
+
+function roundsPart(a) {
+  const templates = (settings.tracker.templates || []).filter(t => t.rounds.length);
+  const add = () => {
+    const r = T.newRound();
+    pendingFocus = `r:${r.id}:name`;
+    changeApp(a, { round: r });
+  };
+  let pick = null;
+  if (templates.length && a.rounds.length) {
+    pick = el("select", { className: "small-select" }, new Option("Add from a template…", ""), ...templates.map((t, i) => new Option(t.name, i)));
+    pick.setAttribute("aria-label", "Add rounds from a template");
+    pick.onchange = () => pick.value !== "" && useTemplate(a, templates[pick.value]);
+  }
+  const box = part("Rounds", el("span", { className: "inline" }, pick, button("Add a round", add)));
+  if (a.rounds.length) {
+    box.append(el("ol", { className: "rounds" }, ...a.rounds.map((r, i) => roundCard(a, r, i))));
+    return box;
+  }
+  box.append(el("p", { className: "hint", textContent: templates.length ? "Start from a template, then change what's different, or add rounds one by one."
+    : "Add each round as you hear about it. A template (in Settings) adds a company's usual rounds in one click." }));
+  if (templates.length) {
+    box.append(el("div", { className: "tpls" }, ...templates.map(t => {
+      const b = el("button", { type: "button", className: "tpl", onclick: () => useTemplate(a, t) },
+        el("b", { textContent: t.name }), el("small", { textContent: t.rounds.map(([, name]) => name).join(" → ") }));
+      b.dataset.f = `tpl:${t.name}`;
+      return b;
+    })));
+  }
+  return box;
+}
+
+function endPart(a) {
+  const box = part("Result");
+  box.append(
+    seg("Result", T.OUTCOMES, a.outcome, v => changeApp(a, { set: { outcome: v } }, v ? `How it ended: ${T.word(T.OUTCOMES, v).toLowerCase()}` : "Reopened"), "end", true),
+    el("p", { className: "hint", textContent: a.outcome ? "Click it again to take it back." : "Still going. Pick one when you know." }));
+  return box;
+}
+
+function notesPart(a) {
+  const notes = panelBox({ rows: 3, value: a.notes || "", placeholder: "Who you've met, what they asked, what to ask them" }, v => changeApp(a, { set: { notes: v } }), "notes");
+  notes.id = "app-notes";
+  return el("section", {}, el("label", { className: "sec-head", htmlFor: "app-notes" }, el("h2", { textContent: "Notes" })), notes);
+}
+
+function timelinePart(a) {
+  const first = a.source === "manual" ? `Applied${a.through ? ` through ${a.through.toLowerCase()}` : ""}` : a.source === "self" ? `You applied on ${siteName(a)}`
+    : a.old ? `Sendoff found it already applied on ${siteName(a)}` : `Sendoff applied on ${siteName(a)}`;
+  const entries = [...(a.log || [])].reverse().map(e => [e.ts, e.text]).concat([[a.appliedAt, first]]);
+  return el("section", {}, el("div", { className: "sec-head" }, el("h2", { textContent: "Timeline" })),
+    el("ol", { className: "timeline" }, ...entries.map(([ts, text]) => el("li", {}, el("span", { className: "t", textContent: when(ts) }), el("span", { textContent: text })))));
+}
+
+function panelFoot(a) {
+  const remove = button("Remove from Applications", () => {
+    if (!confirm(`Remove ${a.title || "this job"}${a.company ? ` at ${a.company}` : ""} from Applications, with its rounds and notes?`)) return;
+    $("app-panel").close();
+    changeApp(a, a.source === "manual" ? { remove: true } : { set: { hidden: true } });
+  }, "link danger");
+  return el("footer", { className: "panel-foot" }, remove, a.source === "manual" ? null : el("small", { textContent: "The job stays in your History." }));
+}
+
+function renderPanel() {
+  const dialog = $("app-panel");
+  if (!dialog.open) return;
+  const a = appOf(openKey);
+  if (!a) {
+    dialog.close();
+    return;
+  }
+  const key = JSON.stringify([a, settings.tracker, quietDays(), today(), Object.keys(people).length]);
+  if (key === ui.panelKey && !pendingFocus) return; // unchanged: don't redraw under the cursor
+  ui.panelKey = key;
+  const focus = pendingFocus || document.activeElement?.dataset?.f;
+  pendingFocus = "";
+  const open = $("app-panel-open");
+  open.hidden = !/^https?:\/\//.test(a.url || "");
+  if (!open.hidden) open.href = a.url;
+  const scroll = dialog.scrollTop;
+  $("app-panel-body").replaceChildren(panelHead(a), steps(a), heardPart(a), roundsPart(a), endPart(a), notesPart(a), timelinePart(a), panelFoot(a));
+  dialog.scrollTop = scroll;
+  if (focus) $("app-panel-body").querySelector(`[data-f="${CSS.escape(focus)}"]`)?.focus();
+}
+
+async function addManual() {
+  if ($("add-dialog").returnValue !== "add") return;
+  const f = $("add-form").elements;
+  const id = T.newId();
+  const on = f.on.value;
+  const a = {
+    key: `manual:${id}`, site: "manual", jobId: id, title: f.title.value.trim(), company: f.company.value.trim(), url: f.url.value.trim(),
+    appliedAt: on === today() ? JB.store.now() : `${on} 12:00:00`, source: "manual", through: f.through.value,
+  };
+  await changeApp(a, {}, null);
+  openApp(a.key);
+}
+
+/** You applied yourself to a job the bot left for you. */
+function selfApplied(r) {
+  return send({ type: "selfApplied", site: r.site, jobId: r.jobId });
+}
+
+function buildApps() {
+  for (const [group, text] of APP_CHIPS) {
+    const chip = el("button", { type: "button", className: "chip", onclick: () => setAppGroup(group) }, text, el("span", { className: "n" }));
+    chip.dataset.group = group;
+    $("app-chips").append(chip);
+  }
+  const pick = $("app-site");
+  for (const [name, info] of Object.entries(SITES)) pick.add(new Option(info.name, name));
+  pick.add(new Option("Added by you", "manual"));
+  pick.onchange = () => { appFilter.site = pick.value; renderAppList(); };
+  $("app-search").addEventListener("input", e => { appFilter.text = e.target.value.trim().toLowerCase(); renderAppList(); });
+  const period = $("figures-period");
+  period.value = remember("apps.period") || "";
+  period.onchange = () => { remember("apps.period", period.value); renderAppList(); };
+
+  $("add-app").onclick = () => {
+    const dialog = $("add-dialog");
+    $("add-form").reset();
+    $("add-form").elements.on.value = today();
+    dialog.returnValue = "";
+    dialog.showModal();
+  };
+  $("add-dialog").addEventListener("close", addManual);
+
+  const dialog = $("app-panel");
+  $("app-panel-close").onclick = () => dialog.close();
+  dialog.addEventListener("click", e => { if (e.target === dialog) dialog.close(); }); // the backdrop
+  dialog.addEventListener("close", () => { openKey = ""; });
 }
 
 // ---------------------------------------------------------------- settings
@@ -811,23 +1380,60 @@ function answerRow(pattern = "", answerText = "") {
     return box;
   };
   const tr = el("tr");
+  tr.append(
+    el("td", {}, input("pattern", pattern, "When the question matches")),
+    el("td", {}, input("answer", answerText, "Answer")),
+    rowTools(tr, "Move up: checked earlier"),
+  );
+  return tr;
+}
+
+/** A settings table row's last cell: move it up, down, or remove it. */
+function rowTools(tr, up = "Move up") {
   const move = dir => () => {
     const to = dir < 0 ? tr.previousElementSibling : tr.nextElementSibling?.nextElementSibling;
     if (dir < 0 && !to) return;
     tr.parentElement.insertBefore(tr, to || null);
     dirty();
   };
-  tr.append(
-    el("td", {}, input("pattern", pattern, "When the question matches")),
-    el("td", {}, input("answer", answerText, "Answer")),
-    el("td", {},
-      el("button", { type: "button", className: "btn icon", textContent: "↑", title: "Move up: checked earlier", onclick: move(-1) }), " ",
-      el("button", { type: "button", className: "btn icon", textContent: "↓", title: "Move down", onclick: move(1) }), " ",
-      el("button", { type: "button", className: "btn icon", textContent: "✕", title: "Remove", onclick: () => { tr.remove(); dirty(); } }),
-    ),
+  return el("td", {},
+    el("button", { type: "button", className: "btn icon", textContent: "↑", title: up, onclick: move(-1) }), " ",
+    el("button", { type: "button", className: "btn icon", textContent: "↓", title: "Move down", onclick: move(1) }), " ",
+    el("button", { type: "button", className: "btn icon", textContent: "✕", title: "Remove", onclick: () => { tr.remove(); dirty(); } }),
   );
-  return tr;
 }
+
+/** One round template: its name, and its rounds in order. */
+function templateBox(t = { name: "", rounds: [] }) {
+  const rows = el("tbody");
+  const addRow = (kind = "interview", name = "") => {
+    const tr = el("tr");
+    const k = el("select", {}, ...JB.tracker.KINDS.map(([v, text]) => new Option(text, v, false, v === kind)));
+    k.setAttribute("aria-label", "Kind");
+    const n = el("input", { value: name, placeholder: "Like Technical, or Take-home", spellcheck: false });
+    n.setAttribute("aria-label", "Round");
+    tr.append(el("td", {}, k), el("td", {}, n), rowTools(tr));
+    rows.append(tr);
+    return tr;
+  };
+  for (const [kind, name] of t.rounds) addRow(kind, name);
+  const name = el("input", { value: t.name, placeholder: "Its name, like Startup" });
+  name.dataset.key = "template";
+  name.setAttribute("aria-label", "Template name");
+  const box = el("div", { className: "template" },
+    el("div", { className: "template-head" }, name,
+      el("button", { type: "button", className: "btn", textContent: "Remove template", onclick: () => { box.remove(); dirty(); } })),
+    el("div", { className: "table-wrap" }, el("table", { className: "answers rounds-table" },
+      el("thead", {}, el("tr", {}, el("th", { textContent: "Kind" }), el("th", { textContent: "Round" }), el("th", {}, el("span", { className: "sr", textContent: "Order" })))),
+      rows)),
+    el("div", {}, el("button", { type: "button", className: "btn", textContent: "Add a round", onclick: () => { addRow().querySelector("input").focus(); dirty(); } })));
+  return box;
+}
+
+const readTemplates = () => [...document.querySelectorAll("#templates .template")].map(box => ({
+  name: box.querySelector('[data-key="template"]').value.trim(),
+  rounds: [...box.querySelectorAll("tbody tr")].map(tr => [tr.querySelector("select").value, tr.querySelector("input").value.trim()]).filter(([, n]) => n),
+})).filter(t => t.name || t.rounds.length);
 
 function skillRow(skill = "", years = "") {
   const tr = el("tr");
@@ -862,6 +1468,7 @@ function fillForm(s) {
   $("answer-rows").replaceChildren(...s.profile.answers.map(([p, a]) => answerRow(p, a)));
   $("answer-rows-linkedin").replaceChildren(...(s.sites.linkedin.answers || []).map(([p, a]) => answerRow(p, a)));
   $("skill-rows-linkedin").replaceChildren(...Object.entries(s.sites.linkedin.skillYears || {}).map(([k, v]) => skillRow(k, v)));
+  $("templates").replaceChildren(...s.tracker.templates.map(templateBox));
   for (const area of form.querySelectorAll("[data-counted]")) area.count();
   setDirty(false);
   $("errors").textContent = "";
@@ -887,6 +1494,7 @@ function readForm() {
     .map(tr => [tr.querySelector('[data-key="skill"]').value.trim(), tr.querySelector('[data-key="years"]').value.trim()])
     .filter(([k]) => k)
     .map(([k, v]) => [k, v === "" ? null : Number(v)]));
+  s.tracker.templates = readTemplates();
   return s;
 }
 
@@ -944,6 +1552,12 @@ function check(s) {
   const firstBad = $("site-panels").querySelector('[aria-invalid="true"]');
   if (firstBad) showSiteSettings(firstBad.closest(".site-panel").id.replace("site-panel-", ""));
 
+  if (!whole("tracker.quietDays", 1)) errors.push("Applications: gone quiet after is a whole number of days, at least 1.");
+  const unnamed = [...document.querySelectorAll('#templates [data-key="template"]')]
+    .filter(input => !input.value.trim() && [...input.closest(".template").querySelectorAll("tbody input")].some(i => i.value.trim()));
+  unnamed.forEach(input => input.setAttribute("aria-invalid", "true"));
+  if (unnamed.length) errors.push("Applications: each round template needs a name.");
+
   let broken = 0;
   for (const tr of document.querySelectorAll("#answer-rows tr, #answer-rows-linkedin tr")) {
     const input = tr.querySelector('[data-key="pattern"]');
@@ -986,6 +1600,12 @@ function buildSettings() {
     const row = answerRow();
     $("answer-rows").append(row);
     row.querySelector("input").focus();
+    dirty();
+  };
+  $("add-template").onclick = () => {
+    const box = templateBox();
+    $("templates").append(box);
+    box.querySelector("input").focus();
     dirty();
   };
   $("import-file").onchange = importFile;
@@ -1039,8 +1659,11 @@ async function importFile(e) {
   }
   if (!confirm(`Replace your settings with the ones in ${file.name}, and add its ${data.history.length} past jobs to the history?`)) return;
   try {
-    const { added } = await send({ type: "import", settings: data.settings, history: data.history, cache: data.cache, contacts: data.contacts, referralJobs: data.referralJobs });
-    status.textContent = `Done: settings replaced, ${added} past jobs added${added < data.history.length ? ` (${data.history.length - added} were already here)` : ""}.`;
+    const { added, apps } = await send({
+      type: "import", settings: data.settings, history: data.history, cache: data.cache, contacts: data.contacts, referralJobs: data.referralJobs, track: data.track,
+    });
+    status.textContent = `Done: settings replaced, ${added} past jobs added${added < data.history.length ? ` (${data.history.length - added} were already here)` : ""}`
+      + `${apps ? `, and ${apps} application${apps > 1 ? "s" : ""} you were following` : ""}.`;
   } catch (err) {
     status.classList.add("err");
     status.textContent = err.message;
@@ -1049,7 +1672,7 @@ async function importFile(e) {
 
 function exportBackup() {
   const history = Object.values(jobs).map(({ shot, ...r }) => r);
-  const data = { format: FORMAT, exported: new Date().toISOString(), settings, history };
+  const data = { format: FORMAT, exported: new Date().toISOString(), settings, history, track };
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: "application/json" }));
   el("a", { href: url, download: `sendoff-backup-${today()}.json` }).click();
   setTimeout(() => URL.revokeObjectURL(url), 10000);
@@ -1061,6 +1684,7 @@ async function init() {
   buildRunPanel();
   buildRail();
   buildHistory();
+  buildApps();
   buildSettings();
   buildShots();
   for (const link of document.querySelectorAll("[data-goto]")) {
@@ -1075,6 +1699,8 @@ async function init() {
   settings = await JB.store.getSettings();
   jobs = await JB.store.jobs();
   people = await JB.store.contacts();
+  track = await JB.store.tracks();
+  ui.day = today();
   for (const [k, run] of Object.entries(await chrome.storage.session.get(null))) {
     if (k.startsWith("run:") && SITES[k.slice(4)]) runs[k.slice(4)] = run;
   }
@@ -1083,6 +1709,7 @@ async function init() {
   renderRun();
   renderRail();
   renderHistory();
+  renderApps();
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === "session") {
@@ -1097,11 +1724,18 @@ async function init() {
         jobs = changes.jobs.newValue || {};
         renderRail();
         renderHistory();
+        renderApps();
+      }
+      if (changes.track) {
+        track = changes.track.newValue || {};
+        renderApps();
+        renderHistory();
       }
       if (changes.contacts) {
         people = changes.contacts.newValue || {};
         renderReferrals();
         renderReferBox();
+        renderApps();
       }
       if (changes.settings) {
         settings = JB.store.normalize(changes.settings.newValue);
@@ -1109,10 +1743,17 @@ async function init() {
         $("first-run").hidden = !!settings.savedAt;
         renderRail();
         renderReferBox();
+        renderApps();
       }
     }
   });
-  setInterval(renderRail, 60000); // "today" moves on at midnight
+  setInterval(() => { // "today" moves on at midnight
+    renderRail();
+    if (ui.day !== today()) {
+      ui.day = today();
+      renderApps();
+    }
+  }, 60000);
 }
 
 init();

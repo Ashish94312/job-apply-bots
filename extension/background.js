@@ -1,6 +1,6 @@
 // The extension's background worker: runs the bots (engine.js) and takes requests from the dashboard.
 importScripts(
-  "lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/store.js",
+  "lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/tracker.js", "lib/store.js",
   "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js", "sites/cutshort.js", "sites/linkedin.js",
   "sites/naukri.js",
   "engine.js", "referral.js",
@@ -36,10 +36,12 @@ const handlers = {
   stop: m => JB.engine.stop(m.site),
   answer: m => JB.engine.answer(m.site, m.id, m.value),
   forget: async m => ({ count: await JB.store.forget(m.site, m.status) }),
+  track: async m => ({ apps: await JB.store.saveTracks(m.items) }),
+  selfApplied: async m => ({ done: await JB.store.markApplied(m.site, m.jobId) }),
   import: async m => {
-    if (m.settings) { // a site the file has no settings for (Naukri: no Python bot) keeps the ones here
-      const mine = await JB.store.getSettings();
-      await JB.store.saveSettings({ ...m.settings, sites: { ...mine.sites, ...m.settings.sites } });
+    if (m.settings) { // what the file has no settings for keeps the ones here: a site (Naukri: no Python bot),
+      const mine = await JB.store.getSettings(); // and Applications (the Python bots' files have none)
+      await JB.store.saveSettings({ tracker: mine.tracker, ...m.settings, sites: { ...mine.sites, ...m.settings.sites } });
     }
     for (const [key, found] of Object.entries(m.cache || {})) { // e.g. Cutshort skill ids the Python bot looked up
       if (!key.startsWith("cache:") || !found || typeof found !== "object") continue;
@@ -47,7 +49,8 @@ const handlers = {
       await chrome.storage.local.set({ [key]: { ...found, ...have } });
     }
     const people = await JB.store.importReferrals(m.contacts, m.referralJobs);
-    return { added: await JB.store.importHistory(m.history), people };
+    const apps = await JB.store.importTracks(m.track);
+    return { added: await JB.store.importHistory(m.history), people, apps };
   },
 };
 

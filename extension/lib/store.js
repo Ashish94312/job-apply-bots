@@ -1,4 +1,4 @@
-// Settings, history and screenshots, kept in chrome.storage.local (the replacement for config.yaml and jobs.db).
+// Settings, history, screenshots and applications, kept in chrome.storage.local (the replacement for config.yaml and jobs.db).
 // Loaded in the background worker and the dashboard. History changes go through the worker, one at a time.
 (function (JB) {
   const local = chrome.storage.local;
@@ -24,7 +24,7 @@
       const site = (s.sites || {})[name] || {};
       sites[name] = { ...d.sites[name], ...site, limits: { ...d.sites[name].limits, ...(site.limits || {}) } };
     }
-    return { version: 1, savedAt: s.savedAt || null, profile, sites };
+    return { version: 1, savedAt: s.savedAt || null, profile, sites, tracker: JB.tracker.settings(s.tracker) };
   }
 
   async function getSettings() {
@@ -175,6 +175,58 @@
     });
   }
 
+  // ------------------------------------------------------------ applications (lib/tracker.js)
+
+  const tracks = async () => (await local.get("track")).track || {};
+
+  /** Change applications, each { key, base, change, note } (see JB.tracker.change): one starts from `base` the first
+   * time, `note` goes on its timeline, and `change.remove` forgets it. Returns them as saved. */
+  function saveTracks(items) {
+    return serial(async () => {
+      const all = await tracks();
+      for (const { key, base, change, note } of items) {
+        if (change.remove) {
+          delete all[key];
+          continue;
+        }
+        const was = all[key] || { ...base, key, rounds: [], log: [] };
+        const app = JB.tracker.change(was, change);
+        app.updated = now();
+        if (note) app.log = [...(was.log || []), { ts: now(), text: note }];
+        all[key] = app;
+      }
+      await local.set({ track: all });
+      return items.map(i => all[i.key] || null);
+    });
+  }
+
+  /** Add applications (from a backup) that aren't here yet. */
+  function importTracks(rows) {
+    return serial(async () => {
+      const all = await tracks();
+      let added = 0;
+      for (const t of Object.values(rows || {})) {
+        if (!t || !t.key || all[t.key] || !Array.isArray(t.rounds)) continue;
+        all[t.key] = t;
+        added++;
+      }
+      await local.set({ track: all });
+      return added;
+    });
+  }
+
+  /** You applied to a job it left for you: it counts as applied, as when you finish one while it waits. */
+  function markApplied(site, jobId) {
+    return serial(async () => {
+      const all = await jobs();
+      const r = all[key(site, jobId)];
+      if (!r || !["needs_manual", "external", "failed"].includes(r.status)) return false;
+      all[key(site, jobId)] = { ...r, status: "applied", note: "finished by hand", ts: now() };
+      await local.set({ jobs: all });
+      return true;
+    });
+  }
+
   const saveShot = (site, jobId, dataUrl) => local.set({ [shotKey(site, jobId)]: dataUrl });
   const shot = async (site, jobId) => (await local.get(shotKey(site, jobId)))[shotKey(site, jobId)] || null;
 
@@ -182,6 +234,6 @@
     STATUSES, now, normalize, getSettings, saveSettings, effective, jobs, seen, record, appliedToday, forget, importHistory,
     saveShot, shot,
     CONTACT_STATUSES, contacts, referralJobs, jobsToAsk, jobDone, askedAbout, knownContact, askedAt, sentToday, pendingInvites,
-    saveContact, importReferrals,
+    saveContact, importReferrals, tracks, saveTracks, importTracks, markApplied,
   };
 })(globalThis.JB = globalThis.JB || {});

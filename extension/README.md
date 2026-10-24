@@ -72,10 +72,20 @@ meanwhile). It closes the window when it's done. **Stop** stops it after the cur
 Options on the card: *Ask me before each application*, *Pause on questions it can't answer* (you fill them
 in in the bot's window, then click Continue), and a per-run cap.
 
+**Applications: what happened after applying.** Every job it applied to is on the Applications page by itself.
+When a company replies, click **They replied** and say how (email, call, a message on the site, LinkedIn, a
+referral) and who. Add its rounds in one click from a **template** (Startup, Product company, Service company, or
+your own in Settings > Applications), then change what's different: rename, reorder, add or remove rounds, set
+when each is (a due date for an assignment), and mark it Given or Submitted, Cleared or Not cleared, Missed or
+Not done. **Up next** lists the rounds and due dates coming up (a booked round downloads as a calendar file), and
+the figures show how many replied, had a round and got an offer, by site and with or without a referral. Ones with
+no reply in 21 days are marked gone quiet and close as ghosted in one go. Jobs you applied to elsewhere go in with
+**Add an application**; a job it left for you that you finished yourself, with **I applied myself** in History.
+
 ## What it keeps, and permissions
 
-Everything stays in your Chrome (`chrome.storage`): settings, the history of every job it looked at, and
-screenshots if you turn them on. Nothing is sent anywhere. **Download backup** saves it all to a file.
+Everything stays in your Chrome (`chrome.storage`): settings, the history of every job it looked at, what you
+note about your applications, and screenshots if you turn them on. Nothing is sent anywhere. **Download backup** saves it all to a file.
 
 Chrome asks for:
 
@@ -144,7 +154,8 @@ Plain JavaScript, Manifest V3, no build step.
 | `referral.js` | Asking for referrals on LinkedIn (from `linkedin/referral.py`) |
 | `lib/page.js` | Runs inside job pages: finds buttons, reads forms, fills them (from `core.py`) |
 | `lib/filters.js`, `lib/answers.js` | Which jobs to apply to, answers to questions (from `core.py`) |
-| `lib/store.js` | Settings and history in `chrome.storage.local` |
+| `lib/store.js` | Settings, history and applications in `chrome.storage.local` |
+| `lib/tracker.js` | Applications: where each one stands, what's next, the figures, round templates |
 | `lib/defaults.js` | Default settings, generated from the bots' `config.example.yaml` |
 | `sites/<site>.js` | Everything specific to one site (from `<site>/portal.py`; Naukri's is the extension's own): its search pages, how to read a job, its quirks |
 | `dashboard.*` | The dashboard page |
@@ -167,6 +178,7 @@ node --test extension/tests/                     # filters and answers, checked 
 .venv/bin/python extension/tests/e2e_sites.py    # ...and on fake Instahyre, Wellfound and Cutshort
 .venv/bin/python extension/tests/e2e_linkedin.py # ...and LinkedIn: Easy Apply and referrals
 .venv/bin/python extension/tests/e2e_naukri.py   # ...and Naukri: its questions chat and daily quota
+.venv/bin/python extension/tests/e2e_tracker.py  # the Applications page: replies, rounds, templates
 .venv/bin/python tools/export_for_extension.py --defaults   # after changing a config.example.yaml
 ```
 
