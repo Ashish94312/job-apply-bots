@@ -132,14 +132,31 @@
       await run.sleep(1500);
       await run.loaded({ fresh: false });
       await run.sleep(3000); // it draws the page after loading
-      let seen = "";
-      for (let page = 0; page < 14; page++) {
+      const account = await JB.store.workdaySignIn(); // yours from Settings, if you saved one
+      let tries = 0; // sign-in attempts: with your saved one, then making the account, then you
+      for (let page = 0; page < 16; page++) {
         const step = await run.exec("site.wdStep");
         if (step.done) return status("applied");
         if (step.signIn) {
-          if (seen === "sign in") return status("needs_manual", `not signed in to ${where}'s Workday`);
-          seen = "sign in";
-          const go = await run.ask("Sign in, then continue", `${named(job)}: sign in to ${where}'s Workday in the bot's window, or create your account there (each company has its own). The bot never sees your password.`, SIGN_IN);
+          tries++;
+          if (account && tries === 1) {
+            run.step(`Signing in to ${where}'s Workday`);
+            await run.exec("site.wdSignIn", account.email, account.password);
+            await run.sleep(5000);
+            continue;
+          }
+          if (account && account.create && tries === 2) {
+            run.step(`Making your account on ${where}'s Workday`);
+            run.log(`  No account on ${where}'s Workday yet: making one for ${account.email}`);
+            await run.exec("site.wdCreateAccount", account.email, account.password);
+            await run.sleep(6000);
+            continue;
+          }
+          if (tries > (account ? (account.create ? 3 : 2) : 1)) return status("needs_manual", `not signed in to ${where}'s Workday`);
+          const why = step.errors.length ? ` Workday says: ${step.errors.join("; ")}.` : "";
+          const go = await run.ask("Sign in, then continue", account
+            ? `${named(job)}: signing in to ${where}'s Workday didn't work.${why} Do it in the bot's window (a new account may want you to confirm your email first), then continue.`
+            : `${named(job)}: sign in to ${where}'s Workday in the bot's window, or create your account there (each company has its own). Saving a sign-in in Settings > Your profile lets the bot do this.`, SIGN_IN);
           if (go === "skip") return status("skipped", "declined");
           await run.sleep(3000);
           continue;
@@ -262,11 +279,29 @@
       // ---------------------------------------------------------- Workday
       const WD_DONE_RE = /application (was |has been )?(successfully )?submitted|thank you for (applying|your application)|you('ve| have) (successfully )?applied/i;
       const auto = id => document.querySelector(`[data-automation-id="${id}"]`);
+      const shown = id => [...document.querySelectorAll(`[data-automation-id="${id}"]`)].find(JB.page.isVisible) || null; // of a form showing
       const wdRoot = () => auto("applyFlowPage") || document.querySelector("main") || document.body;
       const until = async (test, ms) => {
         for (const end = Date.now() + ms; Date.now() < end; await sleep(250)) if (test()) return true;
         return test();
       };
+
+      /** Fill in the email and password (twice when it asks) and press `button`, just after returning: it loads the
+       * next page. Workday lays a "click_filter" over its buttons: that's what takes the click. */
+      function submitAccount(email, password, button) {
+        const put = (id, value) => {
+          const e = shown(id);
+          if (e) JB.page.setValue(e, value);
+          return !!e;
+        };
+        if (!put("email", email) || !put("password", password)) return false;
+        put("verifyPassword", password);
+        const b = shown(button);
+        if (!b) return false;
+        const filter = b.parentElement && b.parentElement.querySelector("[data-automation-id=click_filter]");
+        setTimeout(() => JB.page.click(filter || b), 100);
+        return true;
+      }
 
       /** A Workday dropdown (a button opening a list): its question, whether it's picked, and its options. */
       function wdDropdowns(root) {
@@ -300,6 +335,26 @@
           const how = auto("useMyLastApplication") || auto("applyManually");
           if (how) setTimeout(() => JB.page.click(how), 100);
           return true;
+        },
+
+        /** Sign in with your Workday email and password (on its sign-in form; from the make-an-account one, its link). */
+        async wdSignIn(email, password) {
+          if (!shown("signInSubmitButton") && shown("signInLink")) {
+            JB.page.click(shown("signInLink"));
+            await until(() => shown("signInSubmitButton"), 5000);
+          }
+          return submitAccount(email, password, "signInSubmitButton");
+        },
+
+        /** Make the account: the make-an-account form (from the sign-in one, its link), the password twice, the agreement. */
+        async wdCreateAccount(email, password) {
+          if (!shown("createAccountSubmitButton") && shown("createAccountLink")) {
+            JB.page.click(shown("createAccountLink"));
+            await until(() => shown("createAccountSubmitButton"), 5000);
+          }
+          const agree = shown("createAccountCheckbox") || [...document.querySelectorAll("[data-automation-id=createAccountCheckbox]")].find(e => e.closest("label") && JB.page.isVisible(e.closest("label")));
+          if (agree && !agree.checked) JB.page.click(agree);
+          return submitAccount(email, password, "createAccountSubmitButton");
         },
 
         /** Where the application is: the page's name, a sign-in, Review, done, and what Workday complains about. */

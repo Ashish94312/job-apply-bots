@@ -240,6 +240,7 @@ function selectSite(name) {
   remember("site", name);
   $("site-name").textContent = SITES[name].name;
   panel().querySelector('[data-act="login"]').hidden = !!SITES[name].list; // company forms need no login
+  panel().querySelector('[data-act="replies"]').hidden = !JB.sites[name].replies;
   ui.logKey = ui.stripKey = ui.eventsKey = "";
   loadOptions();
   if (settings) {
@@ -281,10 +282,10 @@ function renderRun() {
   p.dataset.state = !running ? "idle" : run.prompt ? "waiting" : "running";
 
   const apply = p.querySelector('[data-act="apply"]');
-  const busy = { apply: "Applying…", "dry-run": "Checking…", login: "Logging in…", refer: "Asking…", "refer-dry-run": "Previewing…" };
+  const busy = { apply: "Applying…", "dry-run": "Checking…", login: "Logging in…", refer: "Asking…", "refer-dry-run": "Previewing…", replies: "Reading…" };
   apply.textContent = !running ? "Apply" : busy[run.action] || "Working…";
   apply.classList.toggle("busy", running);
-  for (const b of p.querySelectorAll('[data-act="apply"], [data-act="dry-run"], [data-act="login"], [data-act^="refer"]')) b.disabled = running;
+  for (const b of p.querySelectorAll('[data-act="apply"], [data-act="dry-run"], [data-act="login"], [data-act^="refer"], [data-act="replies"]')) b.disabled = running;
   p.querySelector('[data-act="stop"]').hidden = !running;
 
   let [text, isError] = ["", false];
@@ -295,6 +296,7 @@ function renderRun() {
   else if (running && run.action === "login") text = "Waiting for you to log in, in its own window.";
   else if (running && run.action === "refer") text = "Asking for referrals in its own Chrome window. Leave that window open.";
   else if (running && run.action === "refer-dry-run") text = "Finding who it would ask, without sending anything, in its own window.";
+  else if (running && run.action === "replies") text = "Reading what it says about the jobs you applied to, in its own window.";
   else if (running) text = "Applying in its own Chrome window. Leave that window open.";
   else if (run) [text, isError] = finished(run);
   else text = "Ready. A dry run first shows what it would apply to.";
@@ -930,6 +932,7 @@ function appRow(a, asked) {
   const [cls, g, what, sub] = stageView(a);
   const nv = nextView(a);
   const tags = [a.source === "manual" ? "Added by you" : a.source === "self" ? "You applied" : null, a.old ? "Before Sendoff" : null,
+    a.viewed && !a.heard && !a.outcome ? "Viewed" : null,
     asked.has(a.key) ? "Referral asked" : null].filter(Boolean);
   return el("tr", {},
     el("td", { className: "job" }, el("button", { type: "button", className: "job-link", textContent: a.title || "Untitled job", onclick: () => openApp(a.key) }),
@@ -1222,7 +1225,25 @@ function selfApplied(r) {
   return send({ type: "selfApplied", site: r.site, jobId: r.jobId });
 }
 
+/** Read what LinkedIn and Naukri say about the jobs you applied to there: a run on each, in its own window. */
+async function checkReplies() {
+  const status = $("replies-status");
+  const sites = Object.keys(SITES).filter(name => JB.sites[name].replies && !runs[name]?.running);
+  const started = [];
+  for (const name of sites) {
+    try {
+      await send({ type: "start", site: name, action: "replies" });
+      started.push(SITES[name].name);
+    } catch (e) {
+      status.textContent = e.message;
+    }
+  }
+  status.hidden = false;
+  if (started.length) status.textContent = `Reading ${started.join(" and ")} in their own windows. Applications update as each finishes; see each site's overview for how it went.`;
+}
+
 function buildApps() {
+  $("check-replies").onclick = checkReplies;
   for (const [group, text] of APP_CHIPS) {
     const chip = el("button", { type: "button", className: "chip", onclick: () => setAppGroup(group) }, text, el("span", { className: "n" }));
     chip.dataset.group = group;
@@ -1457,6 +1478,7 @@ function linkedinSettings(base, field) {
       el("button", { type: "button", className: "btn", textContent: "Add a skill", onclick: () => { $("skill-rows-linkedin").append(skillRow()); dirty(); } }),
       field("field wide-hint", "Any other skill", "0 is honest for ones you haven't used. Empty: ask you.", el("input", { type: "number", name: `${base}.otherSkillYears`, min: 0, step: 0.5 }))),
     tick(`${base}.followCompanies`, "Follow the company when applying", "LinkedIn ticks this on every application; off unticks it."),
+    tick(`${base}.readReplies`, "After each run, read what LinkedIn says about the jobs you applied to", "Viewed, got in touch, not selected: it goes into Applications."),
     referralSettings(base, field, checks, tick),
     el("h3", { textContent: "Answers for LinkedIn" }),
     el("p", { className: "hint", textContent: "LinkedIn uses these instead of the shared answers: some of its questions are number boxes, so salaries are plain rupee amounts, and the phone number goes without +91 because the country code is its own dropdown." }),
@@ -1470,6 +1492,9 @@ function naukriSettings(base, field) {
   return el("div", { className: "site-extra" },
     el("h3", { textContent: "Naukri's search filters" }),
     field("field narrow", "Posted within", null, posted),
+    el("label", { className: "tick" }, el("input", { type: "checkbox", name: `${base}.readReplies` }),
+      el("span", {}, "After each run, read what Naukri says about the jobs you applied to",
+        el("small", { textContent: "Viewed, recruiter action, not shortlisted: it goes into Applications." }))),
     el("p", { className: "hint", textContent: "Naukri asks a job's questions in a chat, one at a time, and the shared answers answer them. When a question has options, the answer has to be one of them (or how one starts); for a length of time, like the notice period, the option covering it is picked: \"30 days\" picks \"1 Month\", \"15 days\" picks \"15 Days or less\". If none fits, or two fit as well, the job is left for you." }));
 }
 
@@ -1782,6 +1807,40 @@ function buildResume() {
   renderResume();
 }
 
+// ---------------------------------------------------------------- your sign-in for companies' Workday
+
+async function renderWorkdaySignIn() {
+  const saved = await JB.store.workdaySignIn();
+  $("wd-email").value = saved?.email || "";
+  $("wd-password").value = "";
+  $("wd-password").placeholder = saved ? "Saved (type a new one to change it)" : "";
+  $("wd-create").checked = saved ? !!saved.create : true;
+  $("wd-remove").hidden = !saved;
+  $("wd-status").textContent = saved ? `Saved for ${saved.email}.` : "";
+}
+
+function buildWorkdaySignIn() {
+  for (const id of ["wd-email", "wd-password", "wd-create"]) {
+    for (const type of ["input", "change"]) $(id).addEventListener(type, e => e.stopPropagation()); // saved by itself, not with Save
+  }
+  $("wd-save").onclick = async () => {
+    const saved = await JB.store.workdaySignIn();
+    const email = $("wd-email").value.trim();
+    const password = $("wd-password").value || saved?.password || "";
+    if (!/^\S+@\S+\.\S+$/.test(email) || !password) {
+      $("wd-status").textContent = "Both an email and a password, please.";
+      return;
+    }
+    await JB.store.saveWorkdaySignIn({ email, password, create: $("wd-create").checked });
+    renderWorkdaySignIn();
+  };
+  $("wd-remove").onclick = async () => {
+    await JB.store.saveWorkdaySignIn(null);
+    renderWorkdaySignIn();
+  };
+  renderWorkdaySignIn();
+}
+
 // ---------------------------------------------------------------- screenshots
 
 const ALL_SITES = { origins: ["<all_urls>"] };
@@ -1855,6 +1914,7 @@ async function init() {
   buildApps();
   buildSettings();
   buildResume();
+  buildWorkdaySignIn();
   buildShots();
   for (const link of document.querySelectorAll("[data-goto]")) {
     link.addEventListener("click", e => { e.preventDefault(); goto(link.dataset.goto); });

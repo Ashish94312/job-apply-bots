@@ -13,6 +13,10 @@ All of it is kept in your browser's extension storage (`chrome.storage`) on your
 - **Your settings:** the jobs to search for, your filters, and the answers you write for screening questions.
   These can include personal details you choose to enter, such as your phone number, city, college, notice
   period and salary.
+- **Your Workday sign-in, only if you save one:** an email and password for companies' Workday sites, kept apart
+  from your settings so it's never in a backup file, and never shown on the dashboard after you save it. It is stored
+  unencrypted in this browser profile, so use a password just for these accounts. It's typed only into the Workday
+  sign-in and create-account forms.
 - **Your profile and resume:** the name, email, phone, city, country, links and current job you enter, and the resume
   file you add, for the application forms that ask for them.
 - **Answers you gave when it asked:** each application-form question you answered on the dashboard, with your
@@ -56,7 +60,7 @@ code from the internet: everything it runs is in the extension you installed.
 ## Your control
 
 - See and change everything on the dashboard: Settings for what you entered, History for what it did.
-- **Download backup** saves your settings, history, applications and answers to a file on your computer; nothing is uploaded.
+- **Download backup** saves your settings, history, applications and answers (never your Workday sign-in) to a file on your computer; nothing is uploaded.
 - Removing the extension from Chrome deletes everything it kept. You can also turn screenshots off at any time
   in Settings.
 

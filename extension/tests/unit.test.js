@@ -391,3 +391,23 @@ test("your profile answers what forms ask about you, after your own answers", ()
   assert.equal(a("Email address of the person who referred you"), null);
   assert.equal(a("Current company"), null); // nothing in the profile: no answer
 });
+
+test("what a site says about an application, and what it changes", () => {
+  const says = tracker.replySignal;
+  assert.equal(says("Applied 3d ago · Application viewed"), "viewed");
+  assert.equal(says("Your resume was downloaded"), "viewed");
+  assert.equal(says("Application status: Not selected"), "rejected");
+  assert.equal(says("No longer being considered"), "rejected");
+  assert.equal(says("Not Shortlisted"), "rejected"); // not "shortlisted"
+  assert.equal(says("Recruiter Action"), "replied");
+  assert.equal(says("Shortlisted for interview"), "replied");
+  assert.equal(says("No longer accepting applications"), null); // the job closed: says nothing of yours
+  assert.equal(says("Applied 2w ago"), null);
+
+  const app = { heard: null, rounds: [], outcome: null };
+  assert.deepEqual(tracker.fromSite(app, "viewed", "LinkedIn", "2026-10-25"), [{ set: { signals: { viewed: "2026-10-25" }, viewed: "2026-10-25" } }, "LinkedIn says: application viewed"]);
+  assert.deepEqual(tracker.fromSite(app, "replied", "Naukri", "2026-10-25")[0].heard, { at: "2026-10-25", via: "site", who: "" });
+  assert.equal(tracker.fromSite({ ...app, signals: { viewed: "2026-10-20" } }, "viewed", "LinkedIn", "2026-10-25"), null); // said before
+  assert.equal(tracker.fromSite({ ...app, outcome: "offer" }, "rejected", "LinkedIn", "2026-10-25"), null); // you know better
+  assert.deepEqual(tracker.fromSite({ ...app, heard: { via: "email" } }, "replied", "Naukri", "2026-10-25")[0], { set: { signals: { replied: "2026-10-25" } } });
+});

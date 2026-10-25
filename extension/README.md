@@ -99,9 +99,18 @@ the standard boxes, and the resume is uploaded. The company's own questions are 
 any site, and the ones nothing answers are asked once (*When it's stuck, ask me*). Questions a form doesn't require
 are left alone unless you have an answer. By default it shows you each filled-in form with a **Send it** button; a
 captcha or a code the company emails you is left for you to do in the bot's window. Each job is applied to once.
-On Workday each company has its own account: the bot asks you to sign in (or create the account) in its window, never
-seeing your password, then goes page by page (My Information, My Experience, its questions) up to Review. Anything
-Workday still wants on a page that the bot can't fill, like a date, you do there and press Save and Continue.
+On Workday each company has its own account. Save a sign-in in **Settings > Your profile** (an email and a password,
+best one used only for these) and the bot signs in by itself, or makes the account when a company has none yet; without
+one, or when that doesn't work (some companies want you to confirm your email first), it asks you to sign in in its
+window. Then it goes page by page (My Information, My Experience, its questions) up to Review. Anything Workday still
+wants on a page that the bot can't fill, like a date, you do there and press Save and Continue. The sign-in is kept
+only in this Chrome, apart from the settings: never in a backup, and not shown again once saved.
+
+**Replies, read from the sites.** LinkedIn and Naukri list the jobs you applied to with what happened to each. After
+each run there (you can turn it off in their Settings tab), and whenever you click **Check for replies** on
+Applications, the bot reads those lists into Applications: "Application viewed" marks it Viewed, a recruiter getting in
+touch (shortlisted, an interview, "Recruiter Action") marks it Heard back, and "No longer being considered" or "Not
+shortlisted" closes it as Rejected. Each says so on its timeline, and nothing it says overrides what you've noted.
 
 ## What it keeps, and permissions
 
@@ -204,7 +213,8 @@ node --test extension/tests/                     # filters and answers, checked 
 .venv/bin/python extension/tests/e2e_tracker.py  # the Applications page: replies, rounds, templates
 .venv/bin/python extension/tests/e2e_answers.py  # questions it asks you once, and the answers it keeps
 .venv/bin/python extension/tests/e2e_company.py  # company sites: Greenhouse, Lever and Ashby forms
-.venv/bin/python extension/tests/e2e_workday.py  # company sites: Workday, page by page
+.venv/bin/python extension/tests/e2e_workday.py  # company sites: Workday, page by page, signing in
+.venv/bin/python extension/tests/e2e_replies.py  # replies read from LinkedIn's and Naukri's lists of your applications
 .venv/bin/python tools/export_for_extension.py --defaults   # after changing a config.example.yaml
 ```
 

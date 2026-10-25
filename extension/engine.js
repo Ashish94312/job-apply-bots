@@ -427,7 +427,7 @@
       if (this.site.flow === "list") return this.mainList(cfg);
       const fixed = this.site.searches ? null : this.site.searchUrls(cfg); // Cutshort looks its searches up once logged in
       const nothing = fixed ? !fixed.length : !(cfg.keywords || []).length && !(cfg.searchUrls || []).length;
-      if (!["login", "refer"].includes(this.action) && nothing) {
+      if (!["login", "refer", "replies"].includes(this.action) && nothing) {
         this.log("Nothing to search for: add keywords in Settings first.");
         return;
       }
@@ -438,6 +438,14 @@
           return;
         }
         await JB.referral.run(this, cfg);
+        return;
+      }
+      if (this.action === "replies") { // read what the site says about your applications there
+        if (!(await this.login(true))) {
+          this.log(`Not logged in to ${this.site.label}, stopping.`);
+          return;
+        }
+        await this.checkReplies();
         return;
       }
       if (this.action === "login") {
@@ -471,6 +479,32 @@
       const done = this.site.flow === "feed" ? await this.runFeed(cfg, searches, budget) : await this.runPages(cfg, searches, budget);
       this.log();
       this.log(`Done: ${this.dry ? "would apply" : "applied"} to ${done}.`);
+      if (!this.dry && this.site.replies && cfg.readReplies) {
+        try {
+          await this.checkReplies();
+        } catch (e) {
+          if (this.isStop(e)) throw e;
+          this.log(`Couldn't read your applications on ${this.site.label}: ${firstLine(e)}`);
+        }
+      }
+    }
+
+    /** Read the site's list of jobs you applied to, and what it says about each, into Applications. */
+    async checkReplies() {
+      const cards = new Map();
+      for (const url of this.site.replies.pages) {
+        this.step(`Reading your applications on ${this.site.label}`);
+        await this.goto(url);
+        await this.clearChallenge();
+        await this.sleep(3000); // its cards draw themselves after the page loads
+        const got = (await this.exec("site.appliedCards")) || [];
+        const fresh = got.filter(([id]) => !cards.has(id));
+        fresh.forEach(([id, text]) => cards.set(id, text));
+        if (!fresh.length) break; // the list ended
+      }
+      const found = await JB.store.noteReplies(this.site.name, this.site.label, [...cards]);
+      this.log();
+      this.log(`Read ${cards.size} of your applications on ${this.site.label}: ${found.viewed} viewed, ${found.replied} got in touch, ${found.rejected} not selected (new since last time).`);
     }
 
     /** Company sites: no login and no search, a list of job links to apply to (sites/company.js queue). */
@@ -890,7 +924,8 @@
   JB.engine = {
     start(site, action, opts) {
       if (!JB.sites[site]) throw new Error(`Unknown site "${site}".`);
-      if (!["apply", "dry-run", "login", "refer", "refer-dry-run"].includes(action)) throw new Error(`Unknown action "${action}".`);
+      if (!["apply", "dry-run", "login", "refer", "refer-dry-run", "replies"].includes(action)) throw new Error(`Unknown action "${action}".`);
+      if (action === "replies" && !JB.sites[site].replies) throw new Error(`${JB.sites[site].label} doesn't show what happened to your applications.`);
       if (action.startsWith("refer") && !JB.sites[site].refers) throw new Error(`${JB.sites[site].label} has no referrals.`);
       if (runs[site]) throw new Error(`${JB.sites[site].label} is already running.`);
       new Run(site, action, opts).start();

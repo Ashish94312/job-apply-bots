@@ -27,6 +27,8 @@
     domain: "naukri.com",
     loginUrl: `${BASE}/nlogin/login`,
     loginCheckUrl: `${BASE}/mnjuser/homepage`, // sends you to the login page if you aren't
+    // the jobs you applied to, with what Naukri says of each ("Application viewed", "Recruiter action", "Not shortlisted")
+    replies: { pages: [`${BASE}/myapply/historypage`] },
     loginHint: "password, OTP or Google",
     jobLinkCss: "a[href*='/job-listings-']",
     jobReadyCss: "h1",
@@ -213,6 +215,19 @@
       return {
         isLoggedIn() {
           return location.pathname.startsWith("/mnjuser");
+        },
+
+        /** [job id, card text] for each job on the list of ones you applied to. */
+        appliedCards() {
+          const cards = new Map();
+          for (const a of document.querySelectorAll("a[href*='/job-listings-']")) {
+            if (!JB.site.jobUrlRe.test(a.href)) continue;
+            const id = JB.site.jobId(a.href);
+            const card = a.closest("article, li, [class*=tuple], [class*=card]") || a.parentElement;
+            const text = norm(card.innerText).slice(0, 500);
+            if (text.length > (cards.get(id) || "").length) cards.set(id, text);
+          }
+          return [...cards];
         },
 
         searchReady() {

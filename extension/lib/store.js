@@ -24,6 +24,7 @@
     for (const name of Object.keys(d.sites)) {
       const site = (s.sites || {})[name] || {};
       sites[name] = { ...d.sites[name], ...site, limits: { ...d.sites[name].limits, ...(site.limits || {}) } };
+      if (JB.sites?.[name]?.replies && sites[name].readReplies === undefined) sites[name].readReplies = true; // on unless you turn it off
     }
     return { version: 1, savedAt: s.savedAt || null, profile, sites, tracker: JB.tracker.settings(s.tracker) };
   }
@@ -307,6 +308,30 @@
     });
   }
 
+  /** What a site says about your applications there ([[jobId, card text]], from its list of jobs you applied to),
+   * into Applications: viewed, they got in touch, not selected. Returns how many of each. */
+  async function noteReplies(site, label, cards) {
+    const history = await jobs();
+    const have = await tracks();
+    const today = now().slice(0, 10);
+    const counts = { viewed: 0, replied: 0, rejected: 0 };
+    const items = [];
+    for (const [jobId, text] of cards) {
+      const k = key(site, jobId);
+      const job = history[k];
+      if (!job || !["applied", "already_applied"].includes(job.status)) continue;
+      const signal = JB.tracker.replySignal(text);
+      const app = { heard: null, rounds: [], outcome: null, ...have[k] };
+      const made = JB.tracker.fromSite(app, signal, label, today);
+      if (!made) continue;
+      counts[signal]++;
+      const base = { site, jobId, title: job.title, company: job.company, url: job.url, appliedAt: job.ts, source: job.note === "finished by hand" ? "self" : "bot", old: job.status === "already_applied" };
+      items.push({ key: k, base, change: made[0], note: made[1] });
+    }
+    if (items.length) await saveTracks(items);
+    return counts;
+  }
+
   /** Add applications (from a backup) that aren't here yet. */
   function importTracks(rows) {
     return serial(async () => {
@@ -340,14 +365,20 @@
   const resume = async () => (await local.get("resume")).resume || null;
   const saveResume = file => (file ? local.set({ resume: file }) : local.remove("resume"));
 
+  // ------------------------------------------------------------ your sign-in for companies' Workday
+
+  /** { email, password, create } or null. Kept apart from the settings, so a backup never has it. */
+  const workdaySignIn = async () => (await local.get("workdaySignIn")).workdaySignIn || null;
+  const saveWorkdaySignIn = value => (value ? local.set({ workdaySignIn: value }) : local.remove("workdaySignIn"));
+
   const saveShot = (site, jobId, dataUrl) => local.set({ [shotKey(site, jobId)]: dataUrl });
   const shot = async (site, jobId) => (await local.get(shotKey(site, jobId)))[shotKey(site, jobId)] || null;
 
   JB.store = {
-    STATUSES, now, normalize, getSettings, saveSettings, effective, profileAnswers, resume, saveResume, jobs, seen, record, appliedToday, forget, importHistory,
+    STATUSES, now, normalize, getSettings, saveSettings, effective, profileAnswers, resume, saveResume, workdaySignIn, saveWorkdaySignIn, jobs, seen, record, appliedToday, forget, importHistory,
     saveShot, shot,
     CONTACT_STATUSES, contacts, referralJobs, jobsToAsk, jobDone, askedAbout, knownContact, askedAt, sentToday, pendingInvites,
-    saveContact, importReferrals, tracks, saveTracks, importTracks, markApplied,
+    saveContact, importReferrals, tracks, saveTracks, importTracks, markApplied, noteReplies,
     kept, waiting, learn, unlearn, noteQuestions, dropQuestions, importKept,
   };
 })(globalThis.JB = globalThis.JB || {});

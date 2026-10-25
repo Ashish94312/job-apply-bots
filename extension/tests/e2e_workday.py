@@ -19,6 +19,8 @@ from e2e import EXT, Hirist, Test, launch
 
 HOST = "acme.wd5.myworkdayjobs.com"
 JOB = "/External/job/Bengaluru/ML-Engineer_JR100"
+JOB2 = "/External/job/Pune/Data-Engineer_JR200"
+TITLES = {JOB: "ML Engineer", JOB2: "Data Engineer"}
 STEPS = ["Create Account/Sign In", "My Information", "My Experience", "Application Questions", "Review"]
 
 PAGE = """<!doctype html><html><head><meta charset=utf-8><title>{title}</title>
@@ -78,31 +80,80 @@ if (next) next.addEventListener('click', async () => {
     document.getElementById('errors').innerHTML = `<div data-automation-id="errorMessage">Error: ${wrong.join(', ')} is required</div>`;
     return;
   }
-  await fetch('/api/step', { method: 'POST', body: JSON.stringify(values) });
+  await fetch(location.pathname.replace(/\/apply\/.*$/, '') + '/api/step', { method: 'POST', body: JSON.stringify(values) });
   location.reload();
 });
 """
 
 
-class Workday:
+SIGN_IN_JS = r"""
+function show(id) {
+  document.getElementById('sign-in').classList.toggle('hidden', id !== 'sign-in');
+  document.getElementById('create').classList.toggle('hidden', id !== 'create');
+}
+const filters = document.querySelectorAll('[data-automation-id=click_filter]');
+filters.forEach(f => f.addEventListener('click', async () => {
+  const which = f.previousElementSibling.dataset.automationId;
+  const box = f.closest('[data-automation-id$=Content]');
+  const v = id => (box.querySelector(`[data-automation-id=${id}]`) || {}).value || '';
+  if (which === 'signInSubmitButton') await fetch('/api/signin', { method: 'POST', body: JSON.stringify({ email: v('email'), password: v('password') }) });
+  else await fetch('/api/create', { method: 'POST', body: JSON.stringify({ email: v('email'), password: v('password'), verify: v('verifyPassword'),
+    agree: box.querySelector('[data-automation-id=createAccountCheckbox]').checked }) });
+  location.reload();
+}));
+"""
+
+
+class Application:
     def __init__(self):
-        self.signed_in = False
         self.step = 1
         self.values = {}
         self.sent = False
-        self.pages = []
 
-    def flow(self):
-        if self.sent:
+
+class Workday:
+    def __init__(self):
+        self.accounts = {}  # email -> password
+        self.signed_in = False
+        self.apps = {JOB: Application(), JOB2: Application()}
+        self.pages = []
+        self.error = ""
+
+    @property
+    def step(self):
+        return self.apps[JOB].step
+
+    @property
+    def values(self):
+        return self.apps[JOB].values
+
+    @property
+    def sent(self):
+        return self.apps[JOB].sent
+
+    def sign_in_page(self):
+        error = f'<div data-automation-id="errorMessage">{self.error}</div>' if self.error else ""
+        button = lambda id, label: (f'<div style="position:relative"><button data-automation-id="{id}">{label}</button>'
+                                    f'<div data-automation-id="click_filter" style="position:absolute;inset:0" aria-hidden="true"></div></div>')
+        return (f'{error}<div data-automation-id="signInContent" id="sign-in"><label for="email">Email Address</label><input id="email" data-automation-id="email">'
+                '<label for="password">Password</label><input id="password" type="password" data-automation-id="password">'
+                + button("signInSubmitButton", "Sign In") + '<button data-automation-id="createAccountLink" onclick="show(\'create\')">Create Account</button></div>'
+                '<div data-automation-id="createAccountContent" id="create" class="hidden"><label for="c-email">Email Address</label><input id="c-email" data-automation-id="email">'
+                '<label for="c-password">Password</label><input id="c-password" type="password" data-automation-id="password">'
+                '<label for="c-verify">Verify New Password</label><input id="c-verify" type="password" data-automation-id="verifyPassword">'
+                '<label><input type="checkbox" data-automation-id="createAccountCheckbox"> I agree</label>'
+                + button("createAccountSubmitButton", "Create Account") + '<button data-automation-id="signInLink" onclick="show(\'sign-in\')">Sign In</button></div>')
+
+    def flow(self, job):
+        app = self.apps[job]
+        if app.sent:
             return PAGE.format(title="Acme", body="<main><h2>Application Submitted</h2><p>Thank you for applying.</p></main>", script="")
-        current = 0 if not self.signed_in else self.step
+        current = 0 if not self.signed_in else app.step
         bar = "".join(
             f'<li data-automation-id="{"progressBarActiveStep" if k == current else "progressBarInactiveStep"}">'
             f'{"current step" if k == current else "step"} {k + 1} of {len(STEPS)}<br>{name}</li>' for k, name in enumerate(STEPS))
         if current == 0:
-            content = ('<div data-automation-id="signInContent"><label for="email">Email Address</label><input id="email" data-automation-id="email">'
-                       '<label for="password">Password</label><input id="password" type="password" data-automation-id="password">'
-                       '<button data-automation-id="signInSubmitButton" onclick="fetch(\'/api/signin\', {method: \'POST\'}).then(() => location.reload())">Sign In</button></div>')
+            content = self.sign_in_page()
         elif current == 1:
             content = (text("firstName", "First Name") + text("lastName", "Last Name") + text("email", "Email Address")
                        + text("phone", "Phone Number", kind="tel") + dropdown("country", "Country", ["United States of America", "India", "Indonesia"])
@@ -114,18 +165,18 @@ class Workday:
         elif current == 3:
             content = radios("sponsor", "Will you now or in the future require sponsorship?", ["Yes", "No"]) + text("notice", "Notice Period (days)")
         else:
-            content = "<h3>Review</h3>" + "".join(f"<p>{k}: {v}</p>" for k, v in self.values.items())
+            content = "<h3>Review</h3>" + "".join(f"<p>{k}: {v}</p>" for k, v in app.values.items())
         label = "Submit" if current == 4 else "Save and Continue"
         footer = "" if current == 0 else f'<div id="errors"></div><button data-automation-id="bottom-navigation-next-button">{label}</button>'
-        body = (f'<div data-automation-id="applyFlowPage"><h2 data-automation-id="jobTitleHeading">ML Engineer</h2>'
+        body = (f'<div data-automation-id="applyFlowPage"><h2 data-automation-id="jobTitleHeading">{TITLES[job]}</h2>'
                 f'<ol data-automation-id="progressBar">{bar}</ol><div class="content">{content}</div>{footer}</div>')
-        return PAGE.format(title="Acme Careers", body=body, script=FLOW_JS)
+        return PAGE.format(title="Acme Careers", body=body, script=FLOW_JS + SIGN_IN_JS.replace("%JOB%", job))
 
-    def job(self):
-        body = ('<main><div data-automation-id="jobPostingPage"><h2 data-automation-id="jobPostingHeader">ML Engineer</h2>'
+    def job(self, job):
+        body = (f'<main><div data-automation-id="jobPostingPage"><h2 data-automation-id="jobPostingHeader">{TITLES[job]}</h2>'
                 '<a data-automation-id="adventureButton" href="#" role="button">Apply</a>'
                 '<div id="choices" class="hidden" role="dialog"><a data-automation-id="autofillWithResume" href="#">Autofill with Resume</a>'
-                f'<a data-automation-id="applyManually" href="{JOB}/apply/applyManually">Apply Manually</a></div>'
+                f'<a data-automation-id="applyManually" href="{job}/apply/applyManually">Apply Manually</a></div>'
                 '<div data-automation-id="jobPostingDescription">Build ML systems in Python.</div></div></main>')
         script = "document.querySelector('[data-automation-id=adventureButton]').addEventListener('click', e => { e.preventDefault(); document.getElementById('choices').classList.remove('hidden'); });"
         return PAGE.format(title="ML Engineer", body=body, script=script)
@@ -135,18 +186,31 @@ class Workday:
         path = re.sub(rf"^https://{re.escape(HOST)}", "", req.url).split("?")[0]
         self.pages.append(path)
         if path == "/api/signin":
-            self.signed_in = True
+            d = json.loads(req.post_data or "{}")
+            self.signed_in = bool(d.get("email")) and self.accounts.get(d["email"]) == d.get("password")
+            self.error = "" if self.signed_in else "Wrong email address or password."
+            return route.fulfill(json={"ok": self.signed_in})
+        if path == "/api/create":
+            d = json.loads(req.post_data or "{}")
+            ok = d.get("agree") and d.get("password") and d["password"] == d.get("verify") and d.get("email") not in self.accounts
+            if ok:
+                self.accounts[d["email"]] = d["password"]
+                self.signed_in, self.error = True, ""
+            else:
+                self.error = "Couldn't create the account."
+            return route.fulfill(json={"ok": bool(ok)})
+        if m := re.match(r"^(/External/job/[^/]+/[^/]+)/api/step$", path):
+            app = self.apps[m[1]]
+            app.values.update(json.loads(req.post_data or "{}"))
+            if app.step == 4:
+                app.sent = True
+            app.step += 1
             return route.fulfill(json={"ok": True})
-        if path == "/api/step":
-            self.values.update(json.loads(req.post_data or "{}"))
-            if self.step == 4:
-                self.sent = True
-            self.step += 1
-            return route.fulfill(json={"ok": True})
-        if path == JOB:
-            return route.fulfill(body=self.job(), content_type="text/html")
-        if path.startswith(JOB + "/apply"):
-            return route.fulfill(body=self.flow(), content_type="text/html")
+        for job in (JOB, JOB2):
+            if path == job:
+                return route.fulfill(body=self.job(job), content_type="text/html")
+            if path.startswith(job + "/apply"):
+                return route.fulfill(body=self.flow(job), content_type="text/html")
         route.fulfill(status=404, body="not found")
 
 
@@ -194,13 +258,12 @@ def main():
         dash.click(".bot h1")
         t.click("apply")
         box = t.wait_prompt("Sign in, then continue")
-        t.check("acme's Workday" in box.inner_text() and "never sees your password" in box.inner_text(), "it hands you the sign-in, its own for each company")
+        t.check("acme's Workday" in box.inner_text() and "Settings > Your profile" in box.inner_text(),
+                "with no sign-in saved, it hands you the sign-in (and says where to save one)")
         t.check(f"{JOB}/apply/applyManually" in wd.pages, "after Apply, it picked Apply Manually (not autofill)")
-        # you, in the bot's window: sign in
-        dash.evaluate("""async () => {
-            const [tab] = (await chrome.tabs.query({})).filter(t => /myworkdayjobs/.test(t.url));
-            await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => document.querySelector('[data-automation-id=signInSubmitButton]').click() });
-        }""")
+        wd.accounts["asha@example.com"] = "typed by you"  # you, in the bot's window: make the account and sign in
+        wd.signed_in = True
+        dash.evaluate("async () => { const [tab] = (await chrome.tabs.query({})).filter(t => /myworkdayjobs/.test(t.url)); await chrome.tabs.reload(tab.id); }")
         dash.wait_for_timeout(1500)
         t.answer("Signed in, continue")
         dash.locator(".bot .prompt", has_text="previously worked for Acme").wait_for(timeout=120000)
@@ -223,6 +286,50 @@ def main():
         t.check(v.get("resume") == "Asha_Rao_Resume.pdf" and v.get("linkedin") == "", "My Experience: your resume, optional boxes left alone")
         t.check(v.get("sponsor") == "No" and v.get("notice") == "30", "Application Questions from your answers")
         t.check(status.get("title") == "ML Engineer" and status.get("company") == "acme", "the job's title, not the site's header")
+
+        print("\nWith a sign-in saved: it signs in, or makes the account, itself")
+        wd.signed_in = False
+        t.page("settings")
+        dash.click('.toc [data-goto="profile"]')
+        dash.fill("#wd-email", "asha.jobs@example.com")
+        dash.fill("#wd-password", "only-for-workday-7")
+        dash.check("#wd-create")
+        dash.click("#wd-save")
+        dash.wait_for_function("async () => !!(await JB.store.workdaySignIn())")
+        t.check(dash.locator("#wd-password").input_value() == "" and "Saved for asha.jobs@example.com" in dash.locator("#wd-status").inner_text(),
+                "saved, and the password isn't shown again")
+        t.check(not dash.locator("#savebar").evaluate("e => e.classList.contains('dirty')"), "it's saved by itself, not with the settings")
+        dash.evaluate("""async link => {
+            const s = await JB.store.getSettings();
+            s.sites.company.searchUrls = [link];
+            await JB.store.saveSettings(s);
+        }""", f"https://{HOST}{JOB2}")
+        asked = []
+        t.click("apply")
+        for _ in range(120):
+            dash.wait_for_timeout(1000)
+            st = run_state() or {}
+            p = (st.get("prompt") or {}).get("title")
+            if p and p not in asked:
+                asked.append(p)
+            if p == "Filled in: send it?":
+                break
+        t.check(asked == ["Filled in: send it?"], f"no sign-in to do, and nothing to ask: only whether to send it ({asked})")
+        t.check(wd.accounts.get("asha.jobs@example.com") == "only-for-workday-7", "it tried signing in, then made the account with your saved sign-in")
+        t.front()
+        dash.locator(".bot .prompt button", has_text=re.compile("^Send it$")).click()
+        s = wait_done()
+        t.check(t.jobs().get("company:wd-acme-jr200", {}).get("status") == "applied" and wd.apps[JOB2].sent, "and applied")
+        t.check(wd.apps[JOB2].values.get("worked") == "No", "with the answer you gave on the last one")
+        log = "\n".join(s["log"])
+        t.check("only-for-workday-7" not in log, "the password isn't in the log")
+
+        t.page("settings")
+        dash.click('.toc [data-goto="bring-over"]')
+        with dash.expect_download() as dl:
+            dash.click("#export")
+        backup = open(dl.value.path()).read()
+        t.check("only-for-workday-7" not in backup and "asha.jobs@example.com" not in backup, "nor in a backup")
         t.check(not errors, f"no errors on the dashboard {errors}")
         ctx.close()
 

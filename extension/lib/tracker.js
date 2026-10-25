@@ -144,6 +144,31 @@
     return a;
   }
 
+  // What a site says about an application, in the text of its card among the jobs you applied to; most telling first.
+  const REPLY_SIGNALS = [
+    ["rejected", /\bnot (been )?(selected|shortlisted)\b|no longer (being )?considered|\brejected\b|decided (not )?to (move forward|proceed) with other|(position|role) (has been )?filled|application (was |has been )?declined/i],
+    ["replied", /\bshortlisted\b|\binterview|recruiter (action|contacted|reached out|messaged|has (contacted|messaged))|assessment (sent|invite)|(a |new )?message from (the )?(recruiter|employer|hiring)/i],
+    ["viewed", /application viewed|viewed (by (the )?(employer|recruiter|company)|your application)|resume (was )?(downloaded|viewed)|profile (was )?viewed by/i],
+  ];
+
+  /** "rejected", "replied" (shortlisted, an interview, the recruiter got in touch), "viewed", or null. */
+  const replySignal = text => (REPLY_SIGNALS.find(([, re]) => re.test(text || "")) || [null])[0];
+
+  /** The change a site's word makes to an application (see change), and its timeline note; null when it changes
+   * nothing: said before, or what you've noted already goes further. */
+  function fromSite(a, signal, label, today) {
+    if (!signal || (a.signals || {})[signal]) return null;
+    const signals = { ...(a.signals || {}), [signal]: today };
+    if (signal === "rejected") {
+      return a.outcome ? null : [{ set: { signals, outcome: "rejected" } }, `${label} says: not selected`];
+    }
+    if (signal === "replied") {
+      return a.heard || a.rounds.length || a.outcome ? [{ set: { signals } }, null]
+        : [{ set: { signals }, heard: { at: today, via: "site", who: "" } }, `${label} says they got in touch`];
+    }
+    return [{ set: { signals, viewed: today } }, `${label} says: application viewed`];
+  }
+
   /** A calendar file (.ics) for a round with a time: an hour long, in UTC. */
   function ics(a, r, now = new Date()) {
     const start = toDate(r.at);
@@ -161,6 +186,6 @@
 
   JB.tracker = {
     KINDS, VIA, OUTCOMES, ROUND_STATUSES, DEFAULTS, settings, word, roundWord, toDate, daysSince, newId, newRound,
-    fromTemplate, list, stage, group, current, next, heardBack, hadRound, gotOffer, figures, change, ics,
+    fromTemplate, list, stage, group, current, next, heardBack, hadRound, gotOffer, figures, change, ics, replySignal, fromSite,
   };
 })(globalThis.JB = globalThis.JB || {});

@@ -52,6 +52,7 @@
             </div>
           </details>
           <button class="btn" data-act="login" title="Open the site so you can log in">Log in</button>
+          <button class="btn" data-act="replies" title="Read what the site says about the jobs you applied to (viewed, got in touch, not selected) into Applications" hidden>Check replies</button>
           <button class="btn" data-act="dry-run" title="List the jobs it would apply to, without applying">Dry run</button>
           <button class="btn primary" data-act="apply">Apply</button>
           <button class="btn stop" data-act="stop" hidden>Stop</button>
@@ -152,7 +153,8 @@
           <h1 id="apps-title">Applications</h1>
           <p class="page-lede">Every job you applied to, and what happened after: who replied and how, which round you're on, and how it ended.</p>
         </div>
-        <button class="btn primary" id="add-app">Add an application</button>
+        <span class="actions"><button class="btn" id="check-replies" title="Read what LinkedIn and Naukri say about the jobs you applied to there">Check for replies</button>
+          <button class="btn primary" id="add-app">Add an application</button></span>
       </header>
 
       <section class="funnel" aria-labelledby="funnel-title">
@@ -167,6 +169,7 @@
           </label>
         </div>
         <ol class="figures" id="figures"></ol>
+        <p class="hint" id="replies-status" aria-live="polite" hidden></p>
         <p class="funnel-foot" id="funnel-foot"></p>
       </section>
 
@@ -285,6 +288,18 @@
                 <div class="inline"><input type="file" id="resume-file" accept=".pdf,.doc,.docx,application/pdf">
                   <span class="saved" id="resume-status" aria-live="polite"></span>
                   <button type="button" class="link" id="resume-remove" hidden>Remove</button></div></div>
+              <div class="field" id="wd-sign-in">Sign-in for Workday
+                <small>Each company has its own Workday account. With these the bot signs in by itself, or makes the
+                  account when there's none yet. Kept only in this Chrome, never in a backup, and not shown again once
+                  saved. Anyone who can use this Chrome profile could read it, so use a password just for these accounts.</small>
+                <div class="two">
+                  <label class="field">Email<input id="wd-email" type="email" autocomplete="off"></label>
+                  <label class="field">Password<input id="wd-password" type="password" autocomplete="new-password"></label>
+                </div>
+                <label class="tick"><input type="checkbox" id="wd-create"><span>Create the account when a company has none yet</span></label>
+                <div class="inline"><button type="button" class="btn" id="wd-save">Save sign-in</button>
+                  <span class="saved" id="wd-status" aria-live="polite"></span>
+                  <button type="button" class="link" id="wd-remove" hidden>Remove</button></div></div>
             </section>
 
             <section class="set" id="set-jobs" aria-labelledby="jobs-title">

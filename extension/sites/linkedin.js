@@ -69,6 +69,8 @@
     loginHint: "and do any security check it asks for",
     loginRequired: true,
     refers: true, // can ask people at the companies for referrals (referral.js)
+    // the jobs you applied to, with what LinkedIn says of each ("Application viewed", "No longer being considered")
+    replies: { pages: [0, 10, 20, 30].map(n => `${BASE}/my-items/saved-jobs/?cardType=APPLIED${n ? `&start=${n}` : ""}`) },
     jobLinkCss: "[data-occludable-job-id], a[href*='/jobs/view/']",
     jobReadyCss: "[data-view-name=job-detail-page], [data-view-name=job-apply-button], h1, main a[href*='/company/'], button[aria-label*='apply' i]",
     jobUrlRe: /linkedin\.com\/jobs\/view\/(?:[^/?#]*-)?(\d+)/,
@@ -336,6 +338,19 @@
       return {
         isLoggedIn() {
           return location.pathname.startsWith("/feed");
+        },
+
+        /** [job id, card text] for each job on the list of ones you applied to. */
+        appliedCards() {
+          const cards = new Map();
+          for (const a of document.querySelectorAll("a[href*='/jobs/view/']")) {
+            const m = a.href.match(/\/jobs\/view\/(?:[^/?#]*-)?(\d+)/);
+            if (!m) continue;
+            const card = a.closest("li, [data-chameleon-result-urn], .entity-result") || a.parentElement;
+            const text = norm(card.innerText).slice(0, 500);
+            if (text.length > (cards.get(m[1]) || "").length) cards.set(m[1], text);
+          }
+          return [...cards];
         },
 
         searchReady() {
