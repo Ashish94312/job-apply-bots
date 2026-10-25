@@ -146,7 +146,7 @@ class Naukri:
         if jid in self.applied:
             action = '<button id="already-applied" disabled>Applied</button>'
         elif kind == "external":
-            action = '<button id="company-site-button">Apply on company site</button>'
+            action = f'<button id="company-site-button" onclick="window.open(\'https://careers.example.com/jobs/{jid}\')">Apply on company site</button>'
         else:
             action = '<button id="apply-button">Apply</button>'
         on_apply = {
@@ -236,7 +236,7 @@ def main():
 
         print("\nNaukri on the dashboard")
         names = dash.eval_on_selector_all("#site-list li a", "els => els.map(a => a.childNodes[1].textContent)")
-        check(names[-1] == "Naukri", f"sidebar lists Naukri ({names})")
+        check("Naukri" in names, f"sidebar lists Naukri ({names})")
 
         print("\nNaukri: dry run, logged out")
         check.start("naukri", "dry-run")
@@ -264,7 +264,8 @@ def main():
         check(nk.posted.get("231024500101") == {"ctc": "8", "notice": "1 Month", "relocate": "Yes", "skills": "Python, PyTorch"},
               f"typed, picked and ticked the answers; 30 days picked 1 Month; \"8 LPA\" sent again as 8 when Naukri wanted a number ({nk.posted.get('231024500101')})")
         check(check.status("naukri", "231024500102") == "applied" and nk.posted.get("231024500102") == {}, "applied straight away (no questions)")
-        check(check.status("naukri", "231024500103") == "external" and check.note("naukri", "231024500103") == "applies on the company website", "Apply on company site is external")
+        check(check.status("naukri", "231024500103") == "external" and check.note("naukri", "231024500103") == "apply opens an external site: https://careers.example.com/jobs/231024500103",
+              f"Apply on company site is external, with where it leads ({check.note('naukri', '231024500103')})")
         check(check.status("naukri", "231024500104") == "already_applied", "already applied")
         check(check.status("naukri", "231024500105") is None, "senior job never opened")
         check(check.status("naukri", "231024500106") == "needs_manual" and check.note("naukri", "231024500106") == "unanswered: What is your date of birth?",

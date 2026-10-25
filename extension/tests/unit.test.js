@@ -6,7 +6,7 @@ const path = require("node:path");
 
 globalThis.JB = {};
 globalThis.chrome = { storage: { local: {} } }; // store.js only touches it when called
-for (const file of ["referral.js", "lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/tracker.js", "lib/store.js", "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js", "sites/cutshort.js", "sites/linkedin.js", "sites/naukri.js"]) {
+for (const file of ["referral.js", "lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/tracker.js", "lib/store.js", "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js", "sites/cutshort.js", "sites/linkedin.js", "sites/naukri.js", "sites/company.js"]) {
   require(path.join(__dirname, "..", file));
 }
 const cases = require("./cases.json");
@@ -154,6 +154,15 @@ test("Naukri search pages, paging, job ids", () => {
   const s = store.normalize(undefined);
   assert.deepEqual(s.sites.naukri.locations, []);
   assert.ok(s.sites.naukri.limits.maxPages >= 1 && s.sites.naukri.postedWithin === "week");
+});
+
+test("select all that apply: the options the answer lists, even ones with commas in them", () => {
+  const options = ["Citizen or permanent resident of Cuba, Iran, North Korea, or Syria", "Ordinarily a resident of Russia or Belarus", "None of the above"];
+  assert.deepEqual(answers.pickSeveral(options, "None of the above"), [2]);
+  assert.deepEqual(answers.pickSeveral(options, "Citizen or permanent resident of Cuba, Iran, North Korea, or Syria"), [0]);
+  assert.deepEqual(answers.pickSeveral(["English (ENG)", "Hindi (HIN)", "Tamil (TAM)"], "english (eng), Hindi (HIN)"), [0, 1]);
+  assert.deepEqual(answers.pickSeveral(["No", "None"], "None"), [1]); // not "No" because "None" starts with it
+  assert.deepEqual(answers.pickSeveral(["Yes", "No"], ""), []);
 });
 
 test("an option is picked only when it is the answer, or starts with it", () => {
@@ -330,4 +339,55 @@ test("answers you gave are kept for their own question, and tried first", () => 
   assert.equal(answers.answerFor("Current CTC", cfg.answers), "12 LPA"); // any other: the patterns, as before
   assert.equal(answers.answerFor("Notice period", cfg.answers), "30 days");
   assert.deepEqual(store.effective(s, "hirist").answers, s.profile.answers);
+});
+
+test("company sites: which links it can apply on, and what's next to apply to", () => {
+  const { parse, linkIn, queue } = sites.company;
+  assert.deepEqual(parse("https://job-boards.greenhouse.io/gitlab/jobs/8860302002?gh_src=x"), // its form, as companies embed it
+    { system: "greenhouse", jobId: "gh-8860302002", url: "https://job-boards.greenhouse.io/embed/job_app?for=gitlab&token=8860302002" });
+  assert.deepEqual(parse("https://boards.greenhouse.io/embed/job_app?token=8172510&for=stripe"),
+    { system: "greenhouse", jobId: "gh-8172510", url: "https://job-boards.greenhouse.io/embed/job_app?for=stripe&token=8172510" });
+  const id = "6ed76ce8-4156-4b60-b120-403538bd66cd";
+  assert.deepEqual(parse(`https://jobs.lever.co/palantir/${id}`), { system: "lever", jobId: `lever-${id}`, url: `https://jobs.lever.co/palantir/${id}/apply` });
+  assert.equal(parse(`https://jobs.ashbyhq.com/ramp/${id}?src=x`).url, `https://jobs.ashbyhq.com/ramp/${id}/application`);
+  assert.deepEqual(parse("https://nvidia.wd5.myworkdayjobs.com/en-US/NVIDIAExternalCareerSite/job/Israel%2C-Yokneam/Software-Engineer--SPE_JR2015623/apply/applyManually"),
+    { system: "workday", jobId: "wd-nvidia-jr2015623", url: "https://nvidia.wd5.myworkdayjobs.com/en-US/NVIDIAExternalCareerSite/job/Israel%2C-Yokneam/Software-Engineer--SPE_JR2015623" });
+  assert.equal(parse("https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite"), null); // the careers site, not a job
+  for (const no of ["https://jobs.lever.co/palantir", "https://careers.example.com/jobs/1", "http://jobs.lever.co/a/" + id, "https://evil.com/greenhouse.io/jobs/1", "not a link"]) {
+    assert.equal(parse(no), null, no);
+  }
+  assert.equal(linkIn(`apply opens an external site: https://jobs.lever.co/acme/${id}).`), `https://jobs.lever.co/acme/${id}`);
+  assert.equal(linkIn("redirected to https://job-boards.greenhouse.io/acme/jobs/1"), "https://job-boards.greenhouse.io/acme/jobs/1");
+
+  const history = {
+    "hirist:1": { site: "hirist", jobId: "1", title: "ML Engineer", company: "Acme", status: "external", note: `apply opens an external site: https://jobs.lever.co/acme/${id}`, ts: "2026-10-01 10:00:00" },
+    "hirist:2": { site: "hirist", jobId: "2", status: "external", note: "apply opens an external site: https://careers.example.com/2", ts: "2026-10-01 10:00:00" },
+    "naukri:3": { site: "naukri", jobId: "3", status: "external", note: "redirected to https://job-boards.greenhouse.io/b/jobs/33", ts: "2026-10-02 10:00:00" },
+    "company:gh-44": { site: "company", jobId: "gh-44", status: "applied", ts: "2026-10-02 10:00:00" },
+    "company:gh-55": { site: "company", jobId: "gh-55", status: "failed", ts: "2026-10-02 10:00:00" },
+  };
+  const links = ["https://job-boards.greenhouse.io/b/jobs/44", "https://job-boards.greenhouse.io/b/jobs/55", "https://job-boards.greenhouse.io/b/jobs/33", "https://x.com/no"];
+  const jobs = queue({ searchUrls: links, fromOthers: true }, history);
+  assert.deepEqual(jobs.map(j => j.jobId), ["gh-55", "gh-33", `lever-${id}`]); // done ones left out, a failed one tried again, each once
+  assert.deepEqual([jobs[2].title, jobs[2].company, jobs[2].from], ["ML Engineer", "Acme", "hirist:1"]);
+  assert.deepEqual(queue({ searchUrls: [], fromOthers: false }, history), []);
+});
+
+test("your profile answers what forms ask about you, after your own answers", () => {
+  const s = store.normalize({
+    profile: { firstName: "Asha", lastName: "Rao", email: "asha@example.com", phone: "+91 98765 43210", linkedin: "https://linkedin.com/in/asha",
+      answers: [["linkedin", ""], ["phone", "98765 43210"]] },
+  });
+  const cfg = store.effective(s, "company", { "4 describe your favourite colour": { answer: "Blue" } });
+  const a = q => answers.answerFor(q, cfg.answers);
+  assert.equal(a("First Name*"), "Asha");
+  assert.equal(a("Full name ✱"), "Asha Rao");
+  assert.equal(a("Legal Name"), "Asha Rao");
+  assert.equal(a("Email"), "asha@example.com");
+  assert.equal(a("LinkedIn Profile"), "https://linkedin.com/in/asha"); // an empty answer of yours leaves it to the profile
+  assert.equal(a("Phone"), "98765 43210"); // one you wrote comes first
+  assert.equal(a("4. Describe your favourite colour"), "Blue");
+  assert.equal(a("Name of your university"), null);
+  assert.equal(a("Email address of the person who referred you"), null);
+  assert.equal(a("Current company"), null); // nothing in the profile: no answer
 });

@@ -61,6 +61,21 @@
     return null;
   }
 
+  const escape = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  /** "Select all that apply": the options the answer lists, comma separated (indexes). An option that has a comma
+   * of its own ("Cuba, Iran, North Korea, or Syria") counts when it's in the answer whole. */
+  function pickSeveral(options, answer) {
+    const parts = (answer || "").split(/[,;|]/).map(plain).filter(Boolean);
+    const said = (answer || "").toLowerCase();
+    return options.map((o, k) => [String(o || ""), k]).filter(([o]) => {
+      if (!plain(o)) return false;
+      if (parts.includes(plain(o))) return true;
+      const whole = o.toLowerCase().trim();
+      return /[,;|]/.test(whole) && new RegExp(`(^|[,;|]\\s*)${escape(whole)}\\s*($|[,;|])`).test(said);
+    }).map(([, k]) => k);
+  }
+
   const DAYS = { day: 1, week: 7, month: 30, year: 365 };
   const N = "(\\d+(?:\\.\\d+)?)";
   const UNIT = "(day|week|month|year)s?";
@@ -110,5 +125,5 @@
     return answer.replace(/[^\d.]/g, "");
   }
 
-  JB.answers = { questionKey, answerFor, badPatterns, coverNote, pick, daysRange, pickDuration, numberAnswer };
+  JB.answers = { questionKey, answerFor, badPatterns, coverNote, pick, pickSeveral, daysRange, pickDuration, numberAnswer };
 })(globalThis.JB = globalThis.JB || {});

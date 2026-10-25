@@ -18,8 +18,12 @@ from urllib.parse import parse_qs, urlsplit
 
 from playwright.sync_api import sync_playwright
 
+from urllib.parse import quote
+
 from e2e import CACHE, EXT, REACT
 from e2e_sites import REACT_TAGS, Check, fake, page, redirect
+
+LEVER_JOB = "6ed76ce8-4156-4b60-b120-403538bd66cd"  # where the job that applies on its company's site leads
 
 JOBS = {  # id: (title, company, kind)
     "400006": ("Senior ML Engineer", "Bigcorp", "easy"),
@@ -201,8 +205,11 @@ class LinkedIn:
             about = f"<h2>About the job</h2><p>We need {title}s with 1+ years of experience in Python and ML. Great team, hybrid in Bengaluru.</p>"
             if jid in self.applied:
                 action = '<p id="state">Applied 3 days ago</p><button>See application</button>'
-            elif kind == "external":
-                action = '<button>Apply</button>'
+            elif kind == "external":  # a reminder first, then the company's site in a new tab, through LinkedIn's redirect
+                to = "https://www.linkedin.com/jobs/view/externalApply/400002?url=" + quote(f"https://jobs.lever.co/outside/{LEVER_JOB}", safe="")
+                action = ('<button aria-label="Apply to AI Engineer on company website" onclick="document.getElementById(\'safety\').hidden = false">Apply</button>'
+                          '<div id="safety" role="dialog" hidden><h2>Job search safety reminder</h2>'
+                          f'<button onclick="window.open(\'{to}&amp;urlHash=x\', \'_blank\')">Continue applying</button></div>')
             elif kind == "closed":
                 action = "<p>No longer accepting applications</p>"
             else:
@@ -273,6 +280,8 @@ def main():
         check(got.get("notice") == "30", "notice period rewritten as a number after LinkedIn rejected \"30 days\"")
         check(got.get("follow") is False, "\"Follow the company\" unticked")
         check(check.status("linkedin", "400002") == "external", "a job that applies on the company site is recorded as external")
+        check(check.note("linkedin", "400002") == f"apply opens an external site: https://jobs.lever.co/outside/{LEVER_JOB}",
+              f"with where it leads, past the safety reminder and LinkedIn's redirect ({check.note('linkedin', '400002')})")
         check(check.status("linkedin", "400003") == "skipped" and check.note("linkedin", "400003") == "job is closed", "a closed job is skipped")
         check(check.status("linkedin", "400004") == "needs_manual" and "night shifts" in check.note("linkedin", "400004"), "a required question it can't answer is left for you")
         check(check.status("linkedin", "400005") == "already_applied", "already applied")

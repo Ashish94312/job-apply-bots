@@ -83,7 +83,11 @@
       const state = await run.exec("site.applyState");
       if (state.applied) return status("already_applied");
       if (state.closed) return status("skipped", "job is closed");
-      if (!state.apply) return state.external ? status("external", "applies on the company website") : status("needs_manual", "no Apply button found");
+      if (!state.apply && state.external) {
+        const link = await run.followOut("site.clickCompanySite");
+        return status("external", link ? `apply opens an external site: ${link}` : "applies on the company website");
+      }
+      if (!state.apply) return status("needs_manual", "no Apply button found");
       await run.exec("site.clickApply");
 
       let answered = null; // the last question answered: what was asked, what it got, and what the chat looked like
@@ -307,8 +311,7 @@
           }
           if (c.boxes.length) { // "select all that apply": the answer lists the options, comma separated
             const plain = s => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
-            const wanted = new Set(given.split(/[,;|]/).map(plain).filter(Boolean));
-            const chosen = c.boxes.filter(b => wanted.has(plain(optionText(b))));
+            const chosen = JB.answers.pickSeveral(c.boxes.map(optionText), given).map(k => c.boxes[k]);
             if (!chosen.length) return false;
             for (const b of chosen) if (!b.checked) b.click();
             await sleep(300);
@@ -324,6 +327,16 @@
           type(c.text, given);
           await sleep(300);
           return save(d);
+        },
+
+        /** "Apply on company site": a link gives its address, a button is clicked. */
+        clickCompanySite() {
+          const button = document.querySelector("#company-site-button") || JB.page.firstVisible(document, COMPANY_SITE_RE);
+          if (!button) return null;
+          const a = button.closest("a[href]");
+          if (a && /^https?:/.test(a.href)) return a.href;
+          JB.page.click(button);
+          return null;
         },
 
         /** Close the chat drawer (a half-answered one, or one left open after applying). */

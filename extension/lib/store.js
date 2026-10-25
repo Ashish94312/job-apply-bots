@@ -36,13 +36,35 @@
     await local.set({ settings: { ...normalize(settings), savedAt: now() } });
   }
 
+  /** Your profile as answers, for the forms that ask it (a company's own, mostly), after your own patterns. */
+  function profileAnswers(p) {
+    const end = "\\W*$"; // the whole question, give or take a "*"
+    return [
+      [`^(legal |preferred )?first name${end}|^given name${end}`, p.firstName],
+      [`^(legal )?last name${end}|^(surname|family name)${end}`, p.lastName],
+      [`^(full |legal |your )?name${end}|^full legal name${end}`, [p.firstName, p.lastName].filter(Boolean).join(" ")],
+      [`^(your )?e-?mail( address)?${end}`, p.email],
+      [`^(your )?(phone|mobile)( number)?${end}`, p.phone],
+      [`^linkedin( profile)?( url)?${end}`, p.linkedin],
+      [`^github( profile)?( url)?${end}`, p.github],
+      [`^(personal )?(website|portfolio)( url)?${end}`, p.website],
+      [`^current (company|employer)${end}`, p.company],
+      [`^current (job )?title${end}`, p.jobTitle],
+      [`^(current )?location( \\(city\\))?${end}|^city${end}`, p.city],
+      [`^country( of residence)?${end}`, p.country],
+    ].filter(([, answer]) => answer);
+  }
+
   /** What one site's run uses: the shared profile with that site's own settings on top. A site with answers of
    * its own (LinkedIn: number boxes, phone without +91) uses those instead of the shared ones. Answers you gave
-   * when it asked (`kept`, see learn) come first, each for its own question. */
+   * when it asked (`kept`, see learn) come first, each for its own question; your profile's details last. */
   function effective(settings, site, kept = {}) {
     const own = settings.sites[site] || {};
     const answers = own.answers && own.answers.length ? own.answers : settings.profile.answers;
-    return { ...settings.profile, ...own, answers: [...Object.entries(kept).map(([k, a]) => [`=${k}`, a.answer]), ...answers] };
+    return {
+      ...settings.profile, ...own,
+      answers: [...Object.entries(kept).map(([k, a]) => [`=${k}`, a.answer]), ...answers, ...profileAnswers(settings.profile)],
+    };
   }
 
   // ------------------------------------------------------------ history
@@ -312,11 +334,17 @@
     });
   }
 
+  // ------------------------------------------------------------ your resume, for forms that want one
+
+  /** { name, type, size, data: base64 } or null. */
+  const resume = async () => (await local.get("resume")).resume || null;
+  const saveResume = file => (file ? local.set({ resume: file }) : local.remove("resume"));
+
   const saveShot = (site, jobId, dataUrl) => local.set({ [shotKey(site, jobId)]: dataUrl });
   const shot = async (site, jobId) => (await local.get(shotKey(site, jobId)))[shotKey(site, jobId)] || null;
 
   JB.store = {
-    STATUSES, now, normalize, getSettings, saveSettings, effective, jobs, seen, record, appliedToday, forget, importHistory,
+    STATUSES, now, normalize, getSettings, saveSettings, effective, profileAnswers, resume, saveResume, jobs, seen, record, appliedToday, forget, importHistory,
     saveShot, shot,
     CONTACT_STATUSES, contacts, referralJobs, jobsToAsk, jobDone, askedAbout, knownContact, askedAt, sentToday, pendingInvites,
     saveContact, importReferrals, tracks, saveTracks, importTracks, markApplied,

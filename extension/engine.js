@@ -6,6 +6,7 @@
   const ICONS = { applied: "+", already_applied: "=", skipped: "-", needs_manual: "!", external: ">", failed: "x" };
   const CONTINUE = [["Done, continue", "continue", "primary"], ["Stop run", "stop", "stop"]];
   const LEARN = [["Save and continue", "save", "primary"], ["I'll do it in Chrome", "manual"], ["Skip this job", "skip"], ["Stop run", "stop", "stop"]];
+  const KEEP = [["Keep them", "save", "primary"], ["Don't keep them", "no"]];
   const CHECK_RE = /just a moment|attention required|verify you are human|captcha|security check/i;
   const MAX_LOG = 3000;
   const MAX_EVENTS = 400;
@@ -164,6 +165,46 @@
       for (const a of given) cfg.answers.unshift([`=${key(a.q)}`, String(a.answer).trim()]);
       this.log(`  Kept ${given.length} answer${given.length > 1 ? "s" : ""} for next time`);
       return true;
+    }
+
+    /** You finish the job in the bot's window. What you enter there for the questions it had no answer for is
+     * watched, and kept for next time if you say so. Returns whether it went (`applied`: how to tell). */
+    async byHand(job, note, cfg, applied) {
+      const pending = this.pending || [];
+      let watching = false;
+      try {
+        watching = pending.length > 0 && (await this.exec("watchAnswers", pending.map(m => m.q)));
+      } catch (e) {
+        if (this.isStop(e)) throw e;
+      }
+      await this.ask("Do this in Chrome, then continue", `${named(job)}: ${note}\nFinish it in the bot's window.`, CONTINUE);
+      if (watching) await this.keepTyped(pending, cfg);
+      return !!(await applied());
+    }
+
+    /** Offer to keep what you entered in Chrome for the questions it had no answer for. */
+    async keepTyped(pending, cfg) {
+      let typed;
+      try {
+        typed = (await this.exec("typedAnswers")) || [];
+      } catch (e) {
+        if (this.isStop(e)) throw e;
+        return; // it went on to a page the bot can't look into (another site)
+      }
+      const key = JB.answers.questionKey;
+      const same = (a, b) => a === b || (Math.min(a.length, b.length) >= 12 && (a.includes(b) || b.includes(a)));
+      const fields = pending.map(m => [m, typed.find(t => same(key(t.q), key(m.q)))]).filter(([, t]) => t && t.answer)
+        .map(([m, t]) => ({ q: m.q, kind: m.kind || "text", options: m.options || [], answer: t.answer }));
+      if (!fields.length) return;
+      const reply = await this.ask("Keep what you answered?",
+        `What you entered in Chrome for ${fields.length > 1 ? `${fields.length} questions` : "a question"} it had no answer for. Kept, it's answered for you next time (Settings > Your answers).`,
+        KEEP, fields);
+      if (typeof reply !== "object") return;
+      const given = reply.answers.filter(a => String(a.answer ?? "").trim());
+      if (!given.length) return;
+      await JB.store.learn(given, this.site.name);
+      for (const a of given) cfg.answers.unshift([`=${key(a.q)}`, String(a.answer).trim()]);
+      this.log(`  Kept ${given.length} answer${given.length > 1 ? "s" : ""} you entered`);
     }
 
     /** A job's result when questions are left unanswered: skipped if you said so, else left for you, with the
@@ -383,6 +424,7 @@
 
     async main() {
       const cfg = JB.store.effective(await JB.store.getSettings(), this.site.name, await JB.store.kept());
+      if (this.site.flow === "list") return this.mainList(cfg);
       const fixed = this.site.searches ? null : this.site.searchUrls(cfg); // Cutshort looks its searches up once logged in
       const nothing = fixed ? !fixed.length : !(cfg.keywords || []).length && !(cfg.searchUrls || []).length;
       if (!["login", "refer"].includes(this.action) && nothing) {
@@ -427,6 +469,49 @@
         return;
       }
       const done = this.site.flow === "feed" ? await this.runFeed(cfg, searches, budget) : await this.runPages(cfg, searches, budget);
+      this.log();
+      this.log(`Done: ${this.dry ? "would apply" : "applied"} to ${done}.`);
+    }
+
+    /** Company sites: no login and no search, a list of job links to apply to (sites/company.js queue). */
+    async mainList(cfg) {
+      if (["login", "refer"].includes(this.action)) {
+        this.log(`${this.site.label} need no login.`);
+        return;
+      }
+      const jobs = this.site.queue(cfg, await JB.store.jobs());
+      if (!jobs.length) {
+        this.log("Nothing to apply to: add job links in Settings, or let it take the jobs other sites found on Greenhouse, Lever or Ashby.");
+        return;
+      }
+      let budget = this.opts.max || cfg.limits.maxPerRun;
+      if (!this.dry) {
+        budget = Math.min(budget, cfg.limits.maxPerDay - (await JB.store.appliedToday(this.site.name)));
+        if (budget <= 0) {
+          this.log(`Daily limit reached (${cfg.limits.maxPerDay}).`);
+          return;
+        }
+      }
+      await this.openWindow();
+      this.log(`${jobs.length} job${jobs.length > 1 ? "s" : ""} to apply to.`);
+      this.state.page = { label: "Job links", n: 1, listed: jobs.length, fresh: jobs.length, cells: jobs.map(j => ({ url: j.url, state: "pending", label: named(j) })) };
+      this.event({ kind: "search", label: "Job links", n: 1, listed: jobs.length, fresh: jobs.length });
+      let done = 0;
+      for (let job of jobs) {
+        if (done >= budget) break;
+        let status;
+        let note;
+        this.log();
+        this.log(job.url);
+        this.mark(job.url, { state: "working" });
+        try {
+          [status, job, note] = await this.handleJob(job, cfg);
+        } catch (e) {
+          if (this.isStop(e)) throw e;
+          [status, note] = [S.FAILED, firstLine(e)];
+        }
+        done += await this.finish(job, status, note, budget, done, cfg.limits);
+      }
       this.log();
       this.log(`Done: ${this.dry ? "would apply" : "applied"} to ${done}.`);
     }
@@ -617,9 +702,8 @@
         if (yes !== "y") return [S.SKIPPED, "declined"];
       }
       let [status, note] = await this.applyCard(job, cfg);
-      if (status === S.MANUAL && this.opts.assist) {
-        await this.ask("Do this in Chrome, then continue", `${named(job)}: ${note}\nFinish it in the bot's window.`, CONTINUE);
-        if (await this.exec("site.cardApplied", job.jobId)) [status, note] = [S.APPLIED, "finished by hand"];
+      if (status === S.MANUAL && this.opts.assist && (await this.byHand(job, note, cfg, () => this.exec("site.cardApplied", job.jobId)))) {
+        [status, note] = [S.APPLIED, "finished by hand"];
       }
       return [status, note];
     }
@@ -673,7 +757,7 @@
       job = { ...job, ...(await this.exec("site.readJob")) };
       this.step(`Checking ${named(job)}`);
 
-      const reason = JB.filters.skipReason(job, cfg.filters);
+      const reason = this.site.flow !== "list" && JB.filters.skipReason(job, cfg.filters); // a link you gave is one you want
       if (reason) return [S.SKIPPED, job, reason];
       if (this.dry) {
         this.log(`  ~ would apply   ${label(job)}  ${job.url}`);
@@ -686,9 +770,8 @@
 
       this.step(`Applying to ${named(job)}`);
       let [status, note] = await this.applyJob(cfg, job);
-      if (status === S.MANUAL && this.opts.assist) {
-        await this.ask("Do this in Chrome, then continue", `${named(job)}: ${note}\nFinish it in the bot's window.`, CONTINUE);
-        if (await this.exec("isApplied")) [status, note] = [S.APPLIED, "finished by hand"];
+      if (status === S.MANUAL && this.opts.assist && (await this.byHand(job, note, cfg, () => this.exec("isApplied")))) {
+        [status, note] = [S.APPLIED, "finished by hand"];
       }
       return [status, job, note];
     }
@@ -742,6 +825,60 @@
       await this.dismissExtras();
       if (await this.exec("isApplied")) return [S.APPLIED, ""];
       return [S.MANUAL, "couldn't confirm the application went through"];
+    }
+
+    /** Click what applies on the company's own site (`path`: the site's function that clicks it, or gives the address
+     * when it's a plain link) and note the address it leads to, without applying there. Where it shows: the link, a
+     * tab it opens (closed again), one it tries to open (Chrome blocks a new tab from a click that isn't yours), or
+     * this tab going there. The site's own redirect counts as where it leads. Null when it shows nowhere. */
+    async followOut(path) {
+      const opened = [];
+      const onCreated = tab => {
+        if (tab.openerTabId === this.tabId || tab.windowId === this.windowId) opened.push(tab.id);
+      };
+      chrome.tabs.onCreated.addListener(onCreated);
+      let link;
+      try {
+        await this.inMainWorld(watchWindowOpen);
+        link = await this.exec(path);
+        if (!link) {
+          await this.sleep(1500);
+          if (this.site.page.continueOut && (await this.exec("site.continueOut"))) await this.sleep(2000); // "you're leaving" dialogs
+        }
+      } finally {
+        chrome.tabs.onCreated.removeListener(onCreated);
+      }
+      const tabs = (await Promise.all(opened.map(id => chrome.tabs.get(id).catch(() => null)))).filter(Boolean);
+      const tried = await this.inMainWorld(() => (window.__jobBotsOpened || []).pop());
+      await chrome.tabs.remove(opened).catch(() => {});
+      const here = (await this.tab()).url;
+      const out = [link, ...tabs.map(t => t.url || t.pendingUrl), tried, here].map(u => this.outside(u)).find(Boolean);
+      if (out || !link || !this.outside(link, true)) return out || null;
+      await this.goto(link); // a redirect of the site's own with nothing to read the address from: see where it goes
+      return this.outside((await this.tab()).url);
+    }
+
+    /** The address if it's off this site, or what a redirect of the site's own leads to ("?url=https://..."); else
+     * null. With `own`, true for any address on the site. */
+    outside(url, own = false) {
+      let u;
+      try {
+        u = new URL(url);
+      } catch {
+        return null;
+      }
+      if (!/^https?:$/.test(u.protocol)) return null;
+      const ours = h => h === this.site.domain || h.endsWith(`.${this.site.domain}`);
+      if (own) return ours(u.hostname);
+      if (!ours(u.hostname)) return u.href;
+      for (const v of u.searchParams.values()) {
+        try {
+          if (/^https?:\/\//.test(v) && !ours(new URL(v).hostname)) return v;
+        } catch {
+          // not an address
+        }
+      }
+      return null;
     }
 
     /** Close what a site pops up after applying (e.g. Instahyre's "Apply to N similar jobs"). */

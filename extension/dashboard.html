@@ -236,6 +236,7 @@
         <nav class="toc" aria-label="Settings sections">
           <a href="#settings" data-goto="search">Sites</a>
           <a href="#settings" data-goto="experience">Your experience</a>
+          <a href="#settings" data-goto="profile">Your profile</a>
           <a href="#settings" data-goto="jobs">Which jobs</a>
           <a href="#settings" data-goto="answers">Answers</a>
           <a href="#settings" data-goto="your-answers">Your answers</a>
@@ -263,6 +264,27 @@
                   <input type="number" name="profile.filters.maxExperienceRequired" min="0" step="0.5"></label>
               </div>
               <p class="hint">Hirist, Instahyre, Cutshort and Naukri only search jobs in your range (Naukri: jobs open to the top of it).</p>
+            </section>
+
+            <section class="set" id="set-profile" aria-labelledby="profile-title">
+              <h2 id="profile-title">Your profile <small>For forms that ask, like a company's own</small></h2>
+              <div class="two">
+                <label class="field">First name<input name="profile.firstName" autocomplete="given-name"></label>
+                <label class="field">Last name<input name="profile.lastName" autocomplete="family-name"></label>
+                <label class="field">Email<input name="profile.email" type="email" autocomplete="email"></label>
+                <label class="field">Phone <small>With the country code, like +91 98765 43210</small><input name="profile.phone" type="tel" autocomplete="tel"></label>
+                <label class="field">City<input name="profile.city" autocomplete="address-level2"></label>
+                <label class="field">Country<input name="profile.country" autocomplete="country-name"></label>
+                <label class="field">LinkedIn profile<input name="profile.linkedin" type="url" placeholder="https://www.linkedin.com/in/…"></label>
+                <label class="field">GitHub<input name="profile.github" type="url" placeholder="https://github.com/…"></label>
+                <label class="field">Website or portfolio<input name="profile.website" type="url" placeholder="https://"></label>
+                <label class="field">Current company <small>Empty if you have none</small><input name="profile.company" autocomplete="organization"></label>
+                <label class="field">Current job title<input name="profile.jobTitle" autocomplete="organization-title"></label>
+              </div>
+              <div class="field">Resume <small>A PDF or Word file, uploaded to forms that ask for one. Saved as soon as you pick it.</small>
+                <div class="inline"><input type="file" id="resume-file" accept=".pdf,.doc,.docx,application/pdf">
+                  <span class="saved" id="resume-status" aria-live="polite"></span>
+                  <button type="button" class="link" id="resume-remove" hidden>Remove</button></div></div>
             </section>
 
             <section class="set" id="set-jobs" aria-labelledby="jobs-title">
@@ -431,6 +453,7 @@
 <script src="sites/cutshort.js"></script>
 <script src="sites/linkedin.js"></script>
 <script src="sites/naukri.js"></script>
+<script src="sites/company.js"></script>
 <script src="dashboard.js"></script>
 </body>
 </html>

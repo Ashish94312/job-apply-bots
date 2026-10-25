@@ -591,6 +591,20 @@
         },
         "locations": [],
         "postedWithin": "week"
+      },
+      "company": {
+        "keywords": [],
+        "searchUrls": [],
+        "fromOthers": true,
+        "sendMode": "review",
+        "limits": {
+          "maxPerRun": 10,
+          "maxPerDay": 25,
+          "delaySeconds": [
+            20,
+            45
+          ]
+        }
       }
     }
   };

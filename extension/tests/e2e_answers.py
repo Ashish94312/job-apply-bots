@@ -8,8 +8,10 @@ used again on another job.
   .venv/bin/python extension/tests/e2e_answers.py --shots DIR  # also save screenshots to DIR
 """
 import argparse
+import re
 import sys
 import tempfile
+import time
 import urllib.request
 from pathlib import Path
 
@@ -21,6 +23,7 @@ from e2e import CACHE, EXT, JOBS, REACT, Hirist, Test, launch
 JOBS["2013"] = ("Hue Co", "Python Developer", "1 - 3", "screening-hard")
 JOBS["2014"] = ("Tint Co", "Python Developer", "1 - 3", "screening-hard")
 JOBS["2015"] = ("Shade Co", "Python Developer", "1 - 3", "screening-hard")
+JOBS["2016"] = ("Tone Co", "Python Developer", "1 - 3", "screening-hard")
 COLOUR = "4 describe your favourite colour"  # the question's key
 
 
@@ -129,6 +132,35 @@ def main():
         t.wait_done()
         t.check(t.status("2015") == "skipped" and "2015" not in site.posted, "Skip this job skips it, unsent")
         t.check(not store("waiting"), "a skipped job's question isn't kept waiting")
+
+        print("\nWhat you enter in Chrome yourself")
+        apply("2016")
+        t.wait_prompt("A question it has no answer for")
+        t.answer("I'll do it in Chrome")
+        t.wait_prompt("Do this in Chrome, then continue")
+        # you, in the bot's window: type the answer, then Next
+        dash.evaluate("""async () => {
+            const [tab] = (await chrome.tabs.query({})).filter(t => /hirist\\.tech\\/screening/.test(t.url));
+            await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: async () => {
+                const box = document.querySelector('#colour');
+                box.focus();
+                Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(box, 'Purple');
+                box.dispatchEvent(new Event('input', { bubbles: true }));
+                await new Promise(r => setTimeout(r, 800));
+                [...document.querySelectorAll('button')].find(b => b.innerText === 'Next').click();
+            } });
+        }""")
+        dash.wait_for_function("async () => ((await chrome.storage.local.get('jobs')).jobs || {})['hirist:2016'] || true")
+        dash.wait_for_timeout(2000)
+        t.answer("Done, continue")
+        box = t.wait_prompt("Keep what you answered?")
+        t.check(box.locator("textarea").input_value() == "Purple", "it shows what you entered, to keep or change")
+        shot("3-keep")
+        dash.locator(".bot .prompt button", has_text=re.compile("^Keep them$")).click()
+        s = t.wait_done()
+        t.check(t.status("2016") == "applied" and t.jobs()["hirist:2016"]["note"] == "finished by hand", "the job you finished counts as applied")
+        t.check(store("kept").get(COLOUR, {}).get("answer") == "Purple", "and your answer is kept for that question")
+        t.check(not store("waiting"), "so it isn't waiting for one either")
 
         print("\nDropdowns, in a form")
         missing = dash.evaluate("""async () => {

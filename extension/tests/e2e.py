@@ -192,7 +192,13 @@ class Test:
             await JB.store.saveSettings(s);
         }""", changes)
 
+    def front(self):
+        """The dashboard in front: the bot's own window opening hides it, and Playwright clicks and waits only on a
+        page that's showing."""
+        self.dash.bring_to_front()
+
     def page(self, name):
+        self.front()
         if not self.dash.locator(f"#page-{name}").is_visible():
             self.dash.click(f"#nav-{name}")
 
@@ -218,10 +224,11 @@ class Test:
             s = self.run_state()
             if s and not s["running"]:
                 return s
-            time.sleep(0.5)
+            self.dash.wait_for_timeout(500)  # not time.sleep: the fake sites answer only while Playwright runs
         raise AssertionError(f"run didn't finish; log so far:\n" + "\n".join((self.run_state() or {}).get("log", [])))
 
     def wait_prompt(self, title, timeout=60):
+        self.front()
         box = self.dash.locator(".bot .prompt")
         box.wait_for(state="visible", timeout=timeout * 1000)
         text = box.inner_text()
@@ -229,6 +236,7 @@ class Test:
         return box
 
     def answer(self, label):
+        self.front()
         self.dash.locator(".bot .prompt button", has_text=label).click()
 
     def log(self, state):

@@ -410,6 +410,7 @@ textarea[name="profile.coverNote"] { font-family: var(--sans); font-size: 14.5px
 .site-panel { display: grid; gap: 16px; }
 .site-panel h3 { font-size: 15px; font-weight: 600; margin-top: 4px; }
 .site-extra { display: grid; gap: 14px; margin-top: 6px; padding-top: 18px; border-top: 1px solid var(--line); }
+.site-extra.first { margin-top: 0; padding-top: 0; border-top: 0; }
 .checks { display: flex; flex-wrap: wrap; gap: 8px 18px; font-weight: 400; }
 .checks label { display: inline-flex; align-items: center; gap: 7px; font-size: 14px; white-space: nowrap; }
 .field .checks input, .tick input { width: auto; height: auto; padding: 0; margin: 0; flex: none; }

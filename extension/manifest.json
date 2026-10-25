@@ -3,7 +3,7 @@
   "name": "Sendoff",
   "short_name": "Sendoff",
   "version": "1.1.0",
-  "description": "Applies to jobs for you on Hirist, Instahyre, Wellfound, Cutshort, LinkedIn and Naukri, with your filters and answers.",
+  "description": "Applies to jobs for you on Hirist, Instahyre, Wellfound, Cutshort, LinkedIn, Naukri and Greenhouse, Lever, Ashby or Workday forms.",
   "homepage_url": "https://github.com/Ashish94312/job-apply-bots/tree/chrome-extension/extension",
   "minimum_chrome_version": "120",
   "permissions": [
@@ -24,7 +24,12 @@
     "https://www.linkedin.com/*",
     "https://linkedin.com/*",
     "https://www.naukri.com/*",
-    "https://naukri.com/*"
+    "https://naukri.com/*",
+    "https://*.greenhouse.io/*",
+    "https://jobs.lever.co/*",
+    "https://jobs.ashbyhq.com/*",
+    "https://*.myworkdayjobs.com/*",
+    "https://*.myworkdaysite.com/*"
   ],
   "optional_host_permissions": [
     "<all_urls>"

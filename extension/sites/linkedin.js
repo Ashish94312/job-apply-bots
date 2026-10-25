@@ -125,7 +125,10 @@
       if (!state.easy) {
         if (state.applied) return status("already_applied");
         if (state.closed) return status("skipped", "job is closed");
-        if (state.external) return status("external", "applies on the company website");
+        if (state.external) {
+          const link = await run.followOut("site.clickExternalApply");
+          return status("external", link ? `apply opens an external site: ${link}` : "applies on the company website");
+        }
         return status("needs_manual", "no Easy Apply button found");
       }
       await run.exec("site.clickEasyApply");
@@ -390,6 +393,25 @@
           JB.page.click(JB.page.firstVisible(document, EASY_APPLY_RE, ["button"]));
         },
 
+        /** The Apply that leads to the company's site: a link gives its address, a button is clicked. */
+        clickExternalApply() {
+          const button = JB.page.firstVisible(document, EXTERNAL_APPLY_RE);
+          if (!button) return null;
+          const a = button.closest("a[href]");
+          if (a && /^https?:/.test(a.href)) return a.href;
+          JB.page.click(button);
+          return null;
+        },
+
+        /** "Continue applying" in the "Job search safety reminder" LinkedIn shows before sending you to a company's site. */
+        continueOut() {
+          const dialog = JB.page.visibleDialog();
+          const go = dialog && JB.page.firstVisible(dialog, /^\s*continue( applying| to (the )?(company|site|website))?\s*$/i, ["button", "link"]);
+          if (!go) return false;
+          JB.page.click(go);
+          return true;
+        },
+
         stepReady() {
           const m = modal();
           return (!!m && (!!m.querySelector("input, select, textarea") || Object.values(STEP_RES).some(re => JB.page.firstVisible(m, re, ["button"]))))
@@ -458,8 +480,7 @@
             } else if (options.length === 1) { // a lone "I agree" box
               chosen = given && (YES_RE.test(given) || plain(given) === plain(options[0])) ? [g.options[0][0]] : [];
             } else { // "select all that apply": the answer lists the options, comma separated
-              const wanted = new Set((given || "").split(/[,;|]/).map(plain).filter(Boolean));
-              chosen = g.options.filter(([, o]) => wanted.has(plain(o))).map(([i]) => i);
+              chosen = JB.answers.pickSeveral(options, given).map(k => g.options[k][0]);
             }
             for (const i of chosen) choose(inputs[i]);
             if (!chosen.length) {

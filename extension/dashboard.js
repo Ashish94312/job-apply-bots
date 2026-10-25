@@ -20,6 +20,7 @@ const SITES = {
     name: "Naukri", keywords: "What you'd type in Naukri's job search, one per line, like machine learning engineer.",
     pages: "20 jobs each", locations: true, places: "Cities, one per line, like bengaluru. Empty: anywhere.", naukri: true,
   },
+  company: { name: "Company sites", list: true }, // Greenhouse, Lever and Ashby forms (sites/company.js)
 };
 const LINKEDIN_LEVELS = [["internship", "Internship"], ["entry level", "Entry level"], ["associate", "Associate"],
   ["mid-senior level", "Mid-senior level"], ["director", "Director"], ["executive", "Executive"]];
@@ -238,6 +239,7 @@ function selectSite(name) {
   site = name;
   remember("site", name);
   $("site-name").textContent = SITES[name].name;
+  panel().querySelector('[data-act="login"]').hidden = !!SITES[name].list; // company forms need no login
   ui.logKey = ui.stripKey = ui.eventsKey = "";
   loadOptions();
   if (settings) {
@@ -336,7 +338,7 @@ function renderPrompt() {
   box.hidden = !p;
   if (!p) return;
   box.querySelector(".prompt-q").replaceChildren(el("small", { textContent: p.title }), p.text);
-  const fields = (p.fields || []).map(field => [field, answerBox(field)]);
+  const fields = (p.fields || []).map(field => [field, answerBox(field, field.answer || "")]); // an answer it read, to keep or change
   box.querySelector(".prompt-fields").replaceChildren(...fields.map(([field, control]) =>
     el("div", { className: "prompt-field" }, el("span", { textContent: shownQuestion(field.q, field.options) }), control)));
   const err = box.querySelector(".prompt-err");
@@ -362,7 +364,7 @@ function renderStrip() {
   $("now").textContent = run?.running ? run.now || "" : "";
   if (key === ui.stripKey) return;
   ui.stripKey = key;
-  $("run-title").textContent = page && !run.running ? "Last page of results" : "Current page of results";
+  $("run-title").textContent = SITES[site].list ? "Jobs to apply to" : page && !run.running ? "Last page of results" : "Current page of results";
   const strip = $("strip");
   strip.replaceChildren();
   if (!page) {
@@ -1353,11 +1355,11 @@ function sitePanel(name, info) {
   const field = (cls, label, hint, control) => el("label", { className: cls }, label, hint ? el("small", { textContent: hint }) : null, control);
   const area = (path, rows) => el("textarea", { name: path, rows, spellcheck: false });
   const num = (path, min) => el("input", { type: "number", name: path, min, step: 1 });
-  const depth = JB.sites[name].paged
+  const depth = info.list ? null : JB.sites[name].paged
     ? field("field narrow", "Pages per search", info.pages, num(`${base}.limits.maxPages`, 1))
     : field("field narrow", "Scrolls per search", "Each loads more results", num(`${base}.limits.maxScrolls`, 0));
   const box = el("div", { className: "site-panel", id: `site-panel-${name}`, role: "tabpanel" },
-    el("div", { className: "two" },
+    info.list ? companySettings(base, field, area) : el("div", { className: "two" },
       field("field", "Search keywords", info.keywords, area(`${base}.keywords`, 12)),
       field("field", "Extra search pages", `Optional. Whole ${info.name} search addresses, one per line.`, area(`${base}.searchUrls`, 12))),
     info.locations ? field("field", "Places", info.places || "One per line: a country or city, like india, or remote.", area(`${base}.locations`, 3)) : null,
@@ -1374,6 +1376,19 @@ function sitePanel(name, info) {
     info.naukri ? naukriSettings(base, field) : null);
   box.setAttribute("aria-labelledby", `site-tab-${name}`);
   return box;
+}
+
+/** Company sites: the job links to apply to, and whether to show you each form before it's sent. */
+function companySettings(base, field, area) {
+  return el("div", { className: "site-extra first" },
+    el("p", { className: "hint", textContent: "Applies on a company's own form when it's on Greenhouse, Lever, Ashby or Workday. Your profile and resume (Settings > Your profile) fill the standard boxes; the company's own questions are answered like any site's, and asked once when nothing answers them. On Workday you sign in yourself (each company has its own account); then it goes page by page." }),
+    field("field", "Job links", "Greenhouse, Lever, Ashby or Workday job pages, one per line, like https://jobs.lever.co/acme/… . Each one is applied to once.", area(`${base}.searchUrls`, 8)),
+    el("label", { className: "tick" }, el("input", { type: "checkbox", name: `${base}.fromOthers` }),
+      el("span", {}, "Also the jobs the other sites found that apply on Greenhouse, Lever, Ashby or Workday",
+        el("small", { textContent: "They're in History as Other site, with the link they opened." }))),
+    field("field", "Before sending each application", null, el("div", { className: "checks" },
+      el("label", {}, el("input", { type: "radio", name: `${base}.sendMode`, value: "review" }), "Show me the filled-in form first, with a Send button (recommended)"),
+      el("label", {}, el("input", { type: "radio", name: `${base}.sendMode`, value: "direct" }), "Send it straight away"))));
 }
 
 /** Asking people at the companies applied to for a referral. */
@@ -1636,7 +1651,7 @@ function check(s) {
 
   for (const [name, info] of Object.entries(SITES)) {
     const base = `sites.${name}.limits`;
-    const depth = JB.sites[name].paged ? whole(`${base}.maxPages`, 1) : whole(`${base}.maxScrolls`, 0);
+    const depth = info.list || (JB.sites[name].paged ? whole(`${base}.maxPages`, 1) : whole(`${base}.maxScrolls`, 0));
     if (![whole(`${base}.maxPerRun`, 1), whole(`${base}.maxPerDay`, 1), depth].every(Boolean)) {
       errors.push(`${info.name}: per run and per day are whole numbers, at least 1; so is how far to go through results.`);
     }
@@ -1646,7 +1661,13 @@ function check(s) {
       bad(`${base}.delaySeconds.1`);
       errors.push(`${info.name}: the pause is two numbers of seconds, the first not more than the second.`);
     }
-    if (s.sites[name].searchUrls.some(u => !JB.sites[name].searchHost.test(u))) {
+    if (info.list) {
+      const wrong = s.sites[name].searchUrls.filter(u => !JB.sites[name].parse(u));
+      if (wrong.length) {
+        bad(`sites.${name}.searchUrls`);
+        errors.push(`${info.name}: these aren't Greenhouse, Lever, Ashby or Workday job links: ${wrong.slice(0, 3).join(", ")}${wrong.length > 3 ? ", …" : ""}`);
+      }
+    } else if (s.sites[name].searchUrls.some(u => !JB.sites[name].searchHost.test(u))) {
       bad(`sites.${name}.searchUrls`);
       errors.push(`${info.name}: extra search pages must be ${info.name} pages, starting ${JB.sites[name].loginUrl}`);
     }
@@ -1726,6 +1747,41 @@ function buildSettings() {
   });
 }
 
+// ---------------------------------------------------------------- your resume
+
+async function renderResume() {
+  const file = await JB.store.resume();
+  $("resume-status").textContent = file ? `${file.name}, ${Math.max(1, Math.round(file.size / 1024))} KB` : "None yet: a form that wants one is left for you.";
+  $("resume-remove").hidden = !file;
+}
+
+function buildResume() {
+  const pick = $("resume-file");
+  for (const type of ["input", "change"]) pick.addEventListener(type, e => e.stopPropagation()); // saved by itself, not with Save
+  pick.addEventListener("change", async () => {
+    const file = pick.files[0];
+    pick.value = "";
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      $("resume-status").textContent = "That's over 5 MB; forms take smaller ones.";
+      return;
+    }
+    const data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result).split(",")[1]);
+      reader.onerror = () => reject(reader.error);
+      reader.readAsDataURL(file);
+    });
+    await JB.store.saveResume({ name: file.name, type: file.type, size: file.size, data });
+    renderResume();
+  });
+  $("resume-remove").onclick = async () => {
+    await JB.store.saveResume(null);
+    renderResume();
+  };
+  renderResume();
+}
+
 // ---------------------------------------------------------------- screenshots
 
 const ALL_SITES = { origins: ["<all_urls>"] };
@@ -1798,6 +1854,7 @@ async function init() {
   buildHistory();
   buildApps();
   buildSettings();
+  buildResume();
   buildShots();
   for (const link of document.querySelectorAll("[data-goto]")) {
     link.addEventListener("click", e => { e.preventDefault(); goto(link.dataset.goto); });

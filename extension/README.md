@@ -3,7 +3,8 @@
 Sends your job applications off for you. It's the bots in this repo as a Chrome extension: no Python, no terminal. It runs in your own Chrome, with your own logins, and
 keeps everything (settings, history) in that Chrome. It applies on **Hirist**, **Instahyre**, **Wellfound**,
 **Cutshort**, **LinkedIn** (Easy Apply) and **Naukri**, and on LinkedIn it can also **ask for referrals**. Naukri is in
-the extension only: there's no Python bot for it.
+the extension only: there's no Python bot for it. So is applying on **company sites**: a company's own application form
+when it's on Greenhouse, Lever or Ashby.
 
 On each site it does what the Python bot does: searches with your keywords and experience range, skips jobs that don't
 fit your filters, answers the screening questions it has answers for, applies, and never applies to the same job
@@ -77,6 +78,8 @@ and the bot fills it in and carries on; the answer is kept for that question and
 any site, before the patterns in Settings. You can also say you'll do that job in Chrome yourself, or skip it.
 With the option off, the job is left for you and its questions wait in **Settings > Your answers**: answer them there
 and the jobs that only needed those go again on the next run. Your answers are listed there too, to change or forget.
+If you choose to do a job in Chrome yourself, it notices what you enter there for the questions it didn't know and,
+when you continue, offers to keep those answers too.
 
 **Applications: what happened after applying.** Every job it applied to is on the Applications page by itself.
 When a company replies, click **They replied** and say how (email, call, a message on the site, LinkedIn, a
@@ -88,6 +91,18 @@ the figures show how many replied, had a round and got an offer, by site and wit
 no reply in 21 days are marked gone quiet and close as ghosted in one go. Jobs you applied to elsewhere go in with
 **Add an application**; a job it left for you that you finished yourself, with **I applied myself** in History.
 
+**Company sites (Greenhouse, Lever, Ashby, Workday).** Many jobs apply on the company's own form instead of the job
+site's. When that form is on Greenhouse, Lever, Ashby or Workday, **Company sites** in the sidebar applies there: to the job links you
+list in its Settings tab, and to the jobs the other sites found that lead to one of these (they're in History as
+Other site). First fill in **Settings > Your profile** (name, email, phone, city, links) and add your resume: they go in
+the standard boxes, and the resume is uploaded. The company's own questions are answered from your answers like on
+any site, and the ones nothing answers are asked once (*When it's stuck, ask me*). Questions a form doesn't require
+are left alone unless you have an answer. By default it shows you each filled-in form with a **Send it** button; a
+captcha or a code the company emails you is left for you to do in the bot's window. Each job is applied to once.
+On Workday each company has its own account: the bot asks you to sign in (or create the account) in its window, never
+seeing your password, then goes page by page (My Information, My Experience, its questions) up to Review. Anything
+Workday still wants on a page that the bot can't fill, like a date, you do there and press Save and Continue.
+
 ## What it keeps, and permissions
 
 Everything stays in your Chrome (`chrome.storage`): settings, the history of every job it looked at, what you
@@ -96,7 +111,9 @@ note about your applications, and screenshots if you turn them on. Nothing is se
 Chrome asks for:
 
 - **Read and change your data on hirist.tech, instahyre.com, wellfound.com, cutshort.io, linkedin.com and naukri.com**: to
-  search, read jobs, fill in applications and (on LinkedIn) send the referral messages you set up.
+  search, read jobs, fill in applications and (on LinkedIn) send the referral messages you set up. And on
+  greenhouse.io, jobs.lever.co, jobs.ashbyhq.com, myworkdayjobs.com and myworkdaysite.com: to fill in and send a
+  company's own application form.
 - **Read your browsing history** (Chrome's wording for the `tabs` permission): to see the bot window's address,
   e.g. to notice an apply button that leads to another site.
 - **Screenshots** are off by default. Turning them on (Settings > Screenshots) asks for access to all sites,
@@ -186,6 +203,8 @@ node --test extension/tests/                     # filters and answers, checked 
 .venv/bin/python extension/tests/e2e_naukri.py   # ...and Naukri: its questions chat and daily quota
 .venv/bin/python extension/tests/e2e_tracker.py  # the Applications page: replies, rounds, templates
 .venv/bin/python extension/tests/e2e_answers.py  # questions it asks you once, and the answers it keeps
+.venv/bin/python extension/tests/e2e_company.py  # company sites: Greenhouse, Lever and Ashby forms
+.venv/bin/python extension/tests/e2e_workday.py  # company sites: Workday, page by page
 .venv/bin/python tools/export_for_extension.py --defaults   # after changing a config.example.yaml
 ```
 

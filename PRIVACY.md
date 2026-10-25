@@ -2,8 +2,8 @@
 
 *Effective 14 October 2026. Applies to the Sendoff Chrome extension.*
 
-Sendoff applies to jobs for you on Hirist, Instahyre, Wellfound, Cutshort, LinkedIn and Naukri, and on LinkedIn can ask
-people for referrals. Everything it knows stays in your own Chrome. It has no server, no account and no
+Sendoff applies to jobs for you on Hirist, Instahyre, Wellfound, Cutshort, LinkedIn and Naukri, and on companies' own
+application forms on Greenhouse, Lever, Ashby and Workday, and on LinkedIn can ask people for referrals. Everything it knows stays in your own Chrome. It has no server, no account and no
 analytics, and the developer never receives any of your data.
 
 ## What Sendoff keeps, and where
@@ -13,6 +13,8 @@ All of it is kept in your browser's extension storage (`chrome.storage`) on your
 - **Your settings:** the jobs to search for, your filters, and the answers you write for screening questions.
   These can include personal details you choose to enter, such as your phone number, city, college, notice
   period and salary.
+- **Your profile and resume:** the name, email, phone, city, country, links and current job you enter, and the resume
+  file you add, for the application forms that ask for them.
 - **Answers you gave when it asked:** each application-form question you answered on the dashboard, with your
   answer, and the questions still waiting for one (with the jobs they held up).
 - **Your history:** each job Sendoff looked at (title, company, link, the date, and what happened).
@@ -42,6 +44,9 @@ code from the internet: everything it runs is in the extension you installed.
 
 - **hirist.tech, instahyre.com, wellfound.com, cutshort.io, linkedin.com, naukri.com:** to search for jobs, read job
   pages and fill in applications on those sites, and (on LinkedIn) send the referral messages you set up.
+- **greenhouse.io, jobs.lever.co, jobs.ashbyhq.com, myworkdayjobs.com, myworkdaysite.com:** to fill in a company's own
+  application form there, with your profile, resume and answers, and send it to that company. On Workday you sign in
+  yourself; Sendoff never sees or keeps your password.
 - **Tabs and scripting:** to open the window it works in, follow where its pages go, and read and fill those
   pages.
 - **Storage:** to keep your settings and history on your computer.

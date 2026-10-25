@@ -34,6 +34,13 @@ EXTENSION_ONLY = {
         "locations": [],  # cities, e.g. bengaluru; empty searches all of India
         "postedWithin": "week",
     },
+    "company": {  # a company's own application form, on Greenhouse, Lever or Ashby
+        "keywords": [],
+        "searchUrls": [],  # the job links to apply to
+        "fromOthers": True,  # and the jobs other sites found that apply on one of these
+        "sendMode": "review",  # show the filled form before sending it ("direct": send straight away)
+        "limits": {"maxPerRun": 10, "maxPerDay": 25, "delaySeconds": [20, 45]},
+    },
 }
 PROFILE_SITE = "hirist"  # whose filters and answers become the profile every site shares
 FORMAT = "job-apply-bots/1"
