@@ -7,7 +7,7 @@ const path = require("node:path");
 globalThis.JB = {};
 globalThis.chrome = { storage: { local: {} } }; // store.js only touches it when called
 const local = chrome.storage.local; // the one store.js keeps
-for (const file of ["referral.js", "lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/tracker.js", "lib/store.js", "lib/places.js", "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js", "sites/cutshort.js", "sites/linkedin.js", "sites/naukri.js", "sites/company.js"]) {
+for (const file of ["referral.js", "lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/tracker.js", "lib/store.js", "lib/places.js", "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js", "sites/cutshort.js", "sites/linkedin.js", "sites/naukri.js", "sites/company.js", "sites/yc.js"]) {
   require(path.join(__dirname, "..", file));
 }
 const cases = require("./cases.json");
@@ -690,4 +690,39 @@ test("forms' standard questions: self-identification, consent, when you can star
   assert.equal(answers.dateAnswer("2027-01-15", "DD/MM/YYYY", today), "15/01/2027");
   assert.equal(answers.dateAnswer("15-30 days", "iso", today), null); // a range: no one date
   assert.equal(answers.dateAnswer("30 days", "Your answer", today), null);
+});
+
+test("YC startups: its searches, its jobs, and the note to the founders", () => {
+  const yc = sites.yc;
+  assert.deepEqual(yc.searchUrls({ keywords: ["Software Engineer", "designer"], locations: [], country: "India" }), [
+    "https://www.ycombinator.com/jobs/role/software-engineer/remote", "https://www.ycombinator.com/jobs/role/software-engineer/india",
+    "https://www.ycombinator.com/jobs/role/designer/remote", "https://www.ycombinator.com/jobs/role/designer/india",
+  ]); // no places: remote, and where you are
+  assert.deepEqual(yc.searchUrls({ keywords: ["science"], locations: ["anywhere", "san francisco"] }),
+    ["https://www.ycombinator.com/jobs/role/science", "https://www.ycombinator.com/jobs/role/science/san-francisco"]);
+  assert.equal(yc.jobId("https://www.ycombinator.com/companies/evidence/jobs/zmlmpjE-software-engineer"), "zmlmpjE");
+  assert.equal(yc.searchLabel("https://www.ycombinator.com/jobs/role/software-engineer/new-york"), "software engineer, new york");
+  assert.equal(yc.placeOf("https://www.ycombinator.com/jobs/role/designer/new-york"), "new york");
+  assert.equal(yc.placeOf("https://www.ycombinator.com/jobs/role/designer/remote"), "");
+  assert.equal(yc.withRange("Experience 3+ years"), "3 - 3 years. Experience 3+ years");
+  assert.deepEqual(yc.rolesFor("Design"), ["designer"]);
+
+  const job = { title: "Software Engineer", company: "Evidence", url: "https://www.ycombinator.com/companies/evidence/jobs/zmlmpjE-x", founders: ["Sean Hughes", "Adam McAskill"] };
+  assert.equal(yc.note("Hi {founders}, {first_name}: {title} at {company}. {name}", job, { firstName: "Asha", lastName: "Rao" }),
+    "Hi Sean and Adam, Sean: Software Engineer at Evidence. Asha Rao");
+  assert.equal(yc.note("Hi {founders}", { ...job, founders: [] }), "Hi there");
+
+  // where its jobs are: the country's two letters last
+  for (const [where, code] of [["Toronto, ON, CA", "CA"], ["IN / Remote (IN)", "IN"], ["New York, NY, US / Remote (US)", "US"],
+    ["Bengaluru, KA, IN", "IN"], ["San Francisco, CA", "US"], ["Remote (US)", "US"], ["London, England, GB", "GB"]]) {
+    assert.equal(places.countryIn(where)?.code, code, where);
+  }
+  assert.equal(places.countryIn("San Francisco, CA, US / Remote (CA)"), null); // two countries
+
+  // its visa line, for a job where you'd need a visa
+  const cfg = store.effective(store.normalize({ profile: { country: "India", workIn: [{ country: "United States", can: "visa" }] } }), "yc");
+  const skip = (where, text) => places.skipReason({ where, text }, cfg, yc);
+  assert.equal(skip("San Francisco, CA, US", "US citizen/visa only\nWe build things."), "in United States, says no visa sponsorship");
+  assert.equal(skip("San Francisco, CA, US", "Will sponsor\nWe build things."), null);
+  assert.equal(skip("IN / Remote (IN)", "US citizenship/visa not required"), null);
 });

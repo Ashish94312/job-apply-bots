@@ -315,6 +315,22 @@
         "locations": [],
         "postedWithin": "week"
       },
+      "yc": {
+        "keywords": [],
+        "searchUrls": [],
+        "limits": {
+          "maxPerRun": 5,
+          "maxPerDay": 10,
+          "delaySeconds": [
+            60,
+            120
+          ],
+          "maxScrolls": 1
+        },
+        "locations": [],
+        "message": "Hi {founders},\n\nI'd love to join {company} as {title}. <one or two lines: what you've built that's like their work, and why {company}>\n\nMy YC profile has the rest. Thanks,\n{name}\n",
+        "sendMode": "review"
+      },
       "company": {
         "keywords": [],
         "searchUrls": [],

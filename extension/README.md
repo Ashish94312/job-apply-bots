@@ -3,8 +3,9 @@
 Sends your job applications off for you. It's the bots in this repo as a Chrome extension: no Python, no terminal. It runs in your own Chrome, with your own logins, and
 keeps everything (settings, history) in that Chrome. It applies on **Hirist**, **Instahyre**, **Wellfound**,
 **Cutshort**, **LinkedIn** (Easy Apply) and **Naukri**, and on LinkedIn it can also **ask for referrals**. Naukri is in
-the extension only: there's no Python bot for it. So is applying on **company sites**: a company's own application form
-when it's on Greenhouse, Lever or Ashby.
+the extension only: there's no Python bot for it. So is applying on **company sites** (a company's own application
+form, on Greenhouse, Lever, Ashby, Workday and more) and at **YC startups** (Y Combinator's Work at a Startup, with a
+note to the founders).
 
 On each site it does what the Python bot does: searches with your keywords and experience range, skips jobs that don't
 fit your filters, answers the screening questions it has answers for, applies, and never applies to the same job
@@ -132,6 +133,18 @@ the figures show how many replied, had a round and got an offer, by site and wit
 no reply in 21 days are marked gone quiet and close as ghosted in one go. Jobs you applied to elsewhere go in with
 **Add an application**; a job it left for you that you finished yourself, with **I applied myself** in History.
 
+**YC startups (Work at a Startup).** Jobs at companies Y Combinator funded. In its Settings tab: YC's roles to search
+(software engineer, designer, product manager, recruiting hr, sales manager, marketing, support, operations, science;
+*Start from a field* fills them in) and places (remote, india, san francisco, ...; anywhere for all; none: remote and
+where you are). It searches YC's public job pages (the newest 40 or so of each), so a dry run needs no login, and reads
+each job there: where it is, the experience it wants, its visa line ("US citizen/visa only" is skipped when you'd need a
+US visa, with Where you can work), and the founders. Applying is on Work at a Startup, signed in with your YC account
+(it asks you to sign in in its window the first time): it presses Apply and writes the note to the founders from the
+template in its Settings tab ({founders} becomes "Priya and Rahul"). Each note is shown to you on the dashboard to
+change for that company before **Send it**, unless you choose to send straight away; until the template's `<…>` part is
+in your own words it sends nothing. A few a day by default (5 a run, 10 a day, a minute or two apart): founders read
+these themselves. Chrome asks to let Sendoff onto ycombinator.com and workatastartup.com the first time you use it.
+
 **Company sites (Greenhouse, Lever, Ashby, Workday).** Many jobs apply on the company's own form instead of the job
 site's. When that form is on Greenhouse, Lever, Ashby or Workday, **Company sites** in the sidebar applies there: to the job links you
 list in its Settings tab, and to the jobs the other sites found that lead to one of these (they're in History as
@@ -180,6 +193,8 @@ Chrome asks for:
   e.g. to notice an apply button that leads to another site.
 - **Screenshots** are off by default. Turning them on (Settings > Screenshots) asks for access to all sites,
   because that's what Chrome requires for taking a screenshot; the bot still only goes to the job sites.
+- **ycombinator.com and workatastartup.com**, asked for the first time you use YC startups: to read YC's job pages
+  and apply there with your note.
 - **Other companies' forms** (Company sites) ask for the same access to all sites, to fill in a form on whatever site
   a company uses. It goes only to the job links you list and the ones the job sites led to.
 
@@ -272,6 +287,7 @@ node --test extension/tests/                     # filters and answers, checked 
 .venv/bin/python extension/tests/e2e_workday.py  # company sites: Workday, page by page, signing in
 .venv/bin/python extension/tests/e2e_replies.py  # replies read from LinkedIn's and Naukri's lists of your applications
 .venv/bin/python extension/tests/e2e_forms.py    # other companies' forms: behind an Apply button, a job abroad, sign-in
+.venv/bin/python extension/tests/e2e_yc.py       # YC startups: searching, skipping, signing in, the note to the founders
 .venv/bin/python tools/export_for_extension.py --defaults   # after changing a config.example.yaml
 ```
 

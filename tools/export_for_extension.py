@@ -34,6 +34,15 @@ EXTENSION_ONLY = {
         "locations": [],  # cities, e.g. bengaluru; empty searches all of India
         "postedWithin": "week",
     },
+    "yc": {  # Y Combinator's Work at a Startup: jobs at YC companies, applied to with a note to the founders
+        "keywords": [],  # YC's roles: software engineer, designer, product manager, ...
+        "searchUrls": [],
+        "limits": {"maxPerRun": 5, "maxPerDay": 10, "delaySeconds": [60, 120], "maxScrolls": 1},
+        "locations": [],  # remote, india, san francisco, ...; none: remote and where you are
+        "message": "Hi {founders},\n\nI'd love to join {company} as {title}. <one or two lines: what you've built that's like "
+                   "their work, and why {company}>\n\nMy YC profile has the rest. Thanks,\n{name}\n",
+        "sendMode": "review",  # show each note, to change for that company, before it's sent; "direct" sends straight away
+    },
     "company": {  # a company's own application form, on Greenhouse, Lever or Ashby
         "keywords": [],
         "searchUrls": [],  # the job links to apply to

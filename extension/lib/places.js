@@ -210,19 +210,28 @@
   const CITY = new Map(Object.entries(CITIES).flatMap(([code, list]) => list.split("|").map(c => [c, code])));
 
   /** The country a job location is in: "London, England, United Kingdom", "San Francisco, CA", "Remote - US",
-   * "Bengaluru". Null when it names none, or more than one ("US or Canada", "EMEA"). */
+   * "Bengaluru", YC's "Toronto, ON, CA" and "IN / Remote (IN)". Null when it names none, or more than one ("US or
+   * Canada", "EMEA"). */
   function countryIn(location) {
     const found = new Set();
-    for (const raw of String(location || "").split(/[,;·|()/•]| - | – /)) {
-      const part = raw.replace(/^\s*(remote|hybrid|on-?site)\b\s*(in\b)?/i, "").trim(), low = part.toLowerCase();
-      if (!low) continue;
-      if (US_STATES.includes(low) || US_CODES.includes(part)) found.add("US");
-      else if (CA_PROVINCES.includes(low) || CA_CODES.includes(part)) found.add("CA");
-      else if (part === "US" || part === "UK") found.add(part === "US" ? "US" : "GB");
-      else if (CITY.has(low)) found.add(CITY.get(low));
-      else {
-        const c = low.length > 2 && country(low);
-        if (c) found.add(c.code);
+    for (const place of String(location || "").split(/\s+\/\s+|[;|·•]| or /i)) { // a job in several places
+      const parts = place.split(/[,()]| - | – /).map(p => p.replace(/^\s*(remote|hybrid|on-?site)\b\s*(in\b)?/i, "").trim()).filter(Boolean);
+      const last = parts[parts.length - 1] || "";
+      // a country's two letters last: "City, ST, CC" or on its own ("Remote (IN)", "IN"); "City, CA" is California
+      const code = /^[A-Z]{2}$/.test(last) && (parts.length >= 3 || parts.length === 1) && byCode(last === "UK" ? "GB" : last);
+      if (code) {
+        found.add(code.code);
+        continue;
+      }
+      for (const part of parts) {
+        const low = part.toLowerCase();
+        if (US_STATES.includes(low) || US_CODES.includes(part)) found.add("US");
+        else if (CA_PROVINCES.includes(low) || CA_CODES.includes(part)) found.add("CA");
+        else if (CITY.has(low)) found.add(CITY.get(low));
+        else {
+          const c = low.length > 2 && country(low);
+          if (c) found.add(c.code);
+        }
       }
     }
     return found.size === 1 ? byCode([...found][0]) : null;
@@ -291,11 +300,11 @@
     return { ...cfg, answers: [...rows, ...cfg.answers], run: cfg.run || cfg, jobCountry: where?.name || "" };
   }
 
-  const SPONSORS_RE = /visa sponsorship (is )?(available|provided|offered)|(we|will|can|do) sponsor (work )?visas?|sponsorship (is )?available/i;
+  const SPONSORS_RE = /visa sponsorship (is )?(available|provided|offered)|(we|will|can|do) sponsor (work )?visas?|sponsorship (is )?available|^will sponsor$/im;
   const NO_SPONSOR_RE = new RegExp([
     "\\b(no|not|unable to|cannot|can't|won't|will not|do not|don't|does not|doesn't)\\b[^.]{0,40}\\bsponsor",
     "without (the need for |requiring )?(visa |employer )?sponsorship", "must (already )?(have|hold) (the |full )?right to work",
-    "\\b(us|u\\.s\\.) citizens? only", "(us|u\\.s\\.) citizenship (is )?required", "security clearance",
+    "\\b(us|u\\.s\\.) citizens? only", "(us|u\\.s\\.) citizenship (is )?required", "citizen(ship)?/visa only", "security clearance",
   ].join("|"), "i");
 
   /** Why not to apply to this job, given where you can work, or null: it's in a country you didn't list, or one

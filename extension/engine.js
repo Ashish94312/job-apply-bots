@@ -432,6 +432,10 @@
 
     async main() {
       const cfg = JB.store.effective(await JB.store.getSettings(), this.site.name, await JB.store.kept());
+      if (this.site.origins && !(await chrome.permissions.contains({ origins: this.site.origins }))) { // allowed on first use (YC)
+        this.log(`Chrome hasn't let Sendoff onto ${this.site.label}' sites yet: click Dry run or Apply on the dashboard and allow it.`);
+        return;
+      }
       if (this.site.flow === "list") return this.mainList(cfg);
       const fixed = this.site.searches ? null : this.site.searchUrls(cfg); // Cutshort looks its searches up once logged in
       const nothing = fixed ? !fixed.length : !(cfg.keywords || []).length && !(cfg.searchUrls || []).length;

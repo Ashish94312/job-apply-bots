@@ -21,6 +21,10 @@ const SITES = {
     pages: "20 jobs each", locations: true, places: "Cities, one per line, like bengaluru. Empty: anywhere.", naukri: true,
   },
   company: { name: "Company sites", list: true }, // Greenhouse, Lever and Ashby forms (sites/company.js)
+  yc: {
+    name: "YC startups", keywords: "YC's roles, one per line: software engineer, designer, product manager, recruiting hr, sales manager, marketing, support, operations or science.",
+    locations: true, places: "One per line, like remote, india, san francisco or new york; anywhere for all. Empty: remote, and where you are.", yc: true,
+  },
 };
 const LINKEDIN_LEVELS = [["internship", "Internship"], ["entry level", "Entry level"], ["associate", "Associate"],
   ["mid-senior level", "Mid-senior level"], ["director", "Director"], ["executive", "Executive"]];
@@ -181,6 +185,12 @@ function options() {
 }
 
 async function start(action) {
+  const origins = JB.sites[site].origins; // a site Chrome lets Sendoff onto once you use it (YC); asked straight from the click
+  if (origins && !(await chrome.permissions.request({ origins }))) {
+    ui.error[site] = `Sendoff needs Chrome's permission for ${SITES[site].name}' sites to go on.`;
+    renderRun();
+    return;
+  }
   ui.error[site] = "";
   ui.stopping[site] = false;
   panel().querySelector("details.opts").open = false;
@@ -1395,7 +1405,8 @@ function sitePanel(name, info) {
       field("field narrow", "Pause, at most", "seconds", num(`${base}.limits.delaySeconds.1`, 0))),
     el("p", { className: "hint", textContent: "After each application the bot waits a random time in this range, like a person would." }),
     info.linkedin ? linkedinSettings(base, field) : null,
-    info.naukri ? naukriSettings(base, field) : null);
+    info.naukri ? naukriSettings(base, field) : null,
+    info.yc ? ycSettings(base, field) : null);
   box.setAttribute("aria-labelledby", `site-tab-${name}`);
   return box;
 }
@@ -1510,6 +1521,19 @@ function naukriSettings(base, field) {
       el("span", {}, "After each run, read what Naukri says about the jobs you applied to",
         el("small", { textContent: "Viewed, recruiter action, not shortlisted: it goes into Applications." }))),
     el("p", { className: "hint", textContent: "Naukri asks a job's questions in a chat, one at a time, and the shared answers answer them. When a question has options, the answer has to be one of them (or how one starts); for a length of time, like the notice period, the option covering it is picked: \"30 days\" picks \"1 Month\", \"15 days\" picks \"15 Days or less\". If none fits, or two fit as well, the job is left for you." }));
+}
+
+/** YC startups: the note to the founders, and whether to show you each one before it's sent. */
+function ycSettings(base, field) {
+  const message = el("textarea", { name: `${base}.message`, rows: 8 });
+  message.style.fontFamily = "var(--sans)";
+  return el("div", { className: "site-extra" },
+    el("h3", { textContent: "Your note to the founders" }),
+    el("p", { className: "hint", textContent: "Applying on Work at a Startup sends a note to the company's founders with your YC profile. It's written from this for each company. Founders read every one: keep it short and specific." }),
+    field("field", "Note", "{founders} (their first names), {first_name} (the first founder's), {company}, {title}, {job_url} and {name} (yours) are filled in. Write the <…> part in your own words: until then it won't send.", message),
+    field("field", "Before sending each note", null, el("div", { className: "checks" },
+      el("label", {}, el("input", { type: "radio", name: `${base}.sendMode`, value: "review" }), "Show it to me first, to change for that company (recommended)"),
+      el("label", {}, el("input", { type: "radio", name: `${base}.sendMode`, value: "direct" }), "Send it straight away"))));
 }
 
 function showSiteSettings(name) {
@@ -1799,12 +1823,14 @@ function useField() {
   const got = JB.filters.forField({ includeTitle: lines("includeTitle"), excludeTitle: lines("excludeTitle") }, name);
   for (const n of ["includeTitle", "requireRole", "excludeTitle"]) list(n).value = got[n].join("\n");
   // ...and what to search for, on the sites that take any words and have none yet
-  const filled = ["linkedin", "naukri", "wellfound", "hirist"].filter(site => {
+  const searches = { linkedin: JB.filters.fieldSearches(name), naukri: JB.filters.fieldSearches(name), wellfound: JB.filters.fieldSearches(name),
+    hirist: JB.filters.fieldSearches(name), yc: JB.sites.yc.rolesFor(name) };
+  const filled = Object.entries(searches).filter(([site, words]) => {
     const box = form.querySelector(`[name="sites.${site}.keywords"]`);
-    if (!box || box.value.trim()) return false;
-    box.value = JB.filters.fieldSearches(name).join("\n");
+    if (!box || box.value.trim() || !words.length) return false;
+    box.value = words.join("\n");
     return true;
-  });
+  }).map(([site]) => site);
   const where = filled.map(site => SITES[site].name).join(", ");
   $("field-status").textContent = `${name}: filled in below${filled.length ? `, and what ${where} search for (Sites)` : ""}. Save to keep it.`;
   dirty();

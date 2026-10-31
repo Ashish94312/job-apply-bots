@@ -54,6 +54,8 @@ code from the internet: everything it runs is in the extension you installed.
 - **Tabs and scripting:** to open the window it works in, follow where its pages go, and read and fill those
   pages.
 - **Storage:** to keep your settings and history on your computer.
+- **ycombinator.com and workatastartup.com, only once you use YC startups:** to read YC's public job pages and, signed
+  in with your YC account, apply there with the note to the founders you saw (or chose to send straight away).
 - **Access to all sites, only if you allow screenshots or other companies' forms:** Chrome requires it for taking a
   screenshot of a tab, and for filling in an application form on whatever site a company uses. It goes only to the
   job links you list and the ones the job sites led to.

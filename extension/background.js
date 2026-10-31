@@ -2,7 +2,7 @@
 importScripts(
   "lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/tracker.js", "lib/store.js", "lib/places.js",
   "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js", "sites/cutshort.js", "sites/linkedin.js",
-  "sites/naukri.js", "sites/company.js",
+  "sites/naukri.js", "sites/company.js", "sites/yc.js",
   "engine.js", "referral.js",
 );
 
