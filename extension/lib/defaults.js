@@ -115,15 +115,15 @@
       "answers": [
         [
           "notice period",
-          "30 days"
+          ""
         ],
         [
           "current.*(ctc|salary|compensation)|(ctc|salary|compensation).*current",
-          "8 LPA"
+          ""
         ],
         [
           "expect.*(ctc|salary|compensation)|(ctc|salary|compensation).*expect",
-          "12 LPA"
+          ""
         ],
         [
           "years? of (work )?experi?e?nce|total experi?e?nce|how much experi?e?nce",
@@ -131,11 +131,7 @@
         ],
         [
           "current (city|location)",
-          "Bengaluru"
-        ],
-        [
-          "currently (living|located|residing|based) in (bengaluru|bangalore)",
-          "Yes"
+          ""
         ],
         [
           "currently (living|located|residing|based) in",
@@ -170,7 +166,17 @@
           ""
         ]
       ],
-      "coverNote": ""
+      "coverNote": "",
+      "country": "",
+      "city": "",
+      "currency": "",
+      "salaryPeriod": "year",
+      "currentSalary": null,
+      "expectedSalary": null,
+      "noticePeriod": "",
+      "relocate": "",
+      "workIn": [],
+      "selfIdentify": "decline"
     },
     "sites": {
       "hirist": {
@@ -482,15 +488,15 @@
         "answers": [
           [
             "notice period",
-            "30 days"
+            ""
           ],
           [
             "current.*(ctc|salary|compensation)|(ctc|salary|compensation).*current",
-            "800000"
+            ""
           ],
           [
             "expect.*(ctc|salary|compensation)|(ctc|salary|compensation).*expect",
-            "1200000"
+            ""
           ],
           [
             "years of (work |professional |relevant |total |it |information technology |industry |software (development |engineering )?)?experience( do you (currently )?have)?\\??$|total (years of )?experience|overall experience",
@@ -498,11 +504,7 @@
           ],
           [
             "current (city|location)|^city$|location \\(city\\)",
-            "Bengaluru"
-          ],
-          [
-            "currently (living|located|residing|based) in (bengaluru|bangalore)",
-            "Yes"
+            ""
           ],
           [
             "currently (living|located|residing|based) in",
@@ -546,7 +548,7 @@
           ],
           [
             "country code",
-            "India (+91)"
+            ""
           ],
           [
             "phone|mobile",
@@ -596,6 +598,7 @@
         "keywords": [],
         "searchUrls": [],
         "fromOthers": true,
+        "moreForms": false,
         "sendMode": "review",
         "limits": {
           "maxPerRun": 10,

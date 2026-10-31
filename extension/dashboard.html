@@ -30,8 +30,9 @@
       <button class="btn" id="reload-sendoff">Reload Sendoff</button>
     </p>
     <p class="banner" id="first-run" hidden>
-      Before the first run, check your <a href="#settings" data-goto="answers">answers to screening questions</a>:
-      salary and notice period are sample values. Coming from the Python bots?
+      Before the first run, say <a href="#settings" data-goto="place">where you are</a> (it fills in the answers about
+      salary, notice period and your city), then check your <a href="#settings" data-goto="answers">answers to screening
+      questions</a>. Coming from the Python bots?
       <a href="#settings" data-goto="bring-over">Bring your settings and history over</a>.
     </p>
 
@@ -237,6 +238,7 @@
       </header>
       <div class="settings">
         <nav class="toc" aria-label="Settings sections">
+          <a href="#settings" data-goto="place">Where you are</a>
           <a href="#settings" data-goto="search">Sites</a>
           <a href="#settings" data-goto="experience">Your experience</a>
           <a href="#settings" data-goto="profile">Your profile</a>
@@ -251,6 +253,41 @@
 
         <div class="settings-body">
           <form id="settings-form" novalidate>
+            <section class="set" id="set-place" aria-labelledby="place-title">
+              <h2 id="place-title">Where you are <small>And what you'd take</small></h2>
+              <p class="hint">Saving puts these in your answers to screening questions, and LinkedIn's: the salaries,
+                notice period, city, relocating, "Are you based in…?" and the phone's country code. An answer you change
+                yourself stays as you wrote it until you change the one here again. Empty: you answer it yourself.</p>
+              <div class="two">
+                <label class="field">Country<select name="profile.country" id="place-country" autocomplete="country-name"></select></label>
+                <label class="field">City<input name="profile.city" autocomplete="address-level2"></label>
+                <label class="field">Currency <small>Three letters, like EUR. Set with the country.</small>
+                  <input name="profile.currency" id="place-currency" maxlength="3" spellcheck="false" autocomplete="off"></label>
+                <label class="field">Salaries are per<select name="profile.salaryPeriod">
+                  <option value="year">Year</option><option value="month">Month</option><option value="hour">Hour</option></select></label>
+                <label class="field">Current salary <small>A plain amount, like 65000</small>
+                  <input type="number" name="profile.currentSalary" min="0" step="any"></label>
+                <label class="field">Expected salary<input type="number" name="profile.expectedSalary" min="0" step="any"></label>
+                <label class="field">Notice period <small>Like 30 days, 2 months or Immediately</small><input name="profile.noticePeriod"></label>
+                <label class="field">Willing to relocate<select name="profile.relocate">
+                  <option value="">I'll answer it</option><option>Yes</option><option>No</option></select></label>
+              </div>
+              <p class="hint" id="place-preview" aria-live="polite"></p>
+              <h2 class="sub">Where you can work</h2>
+              <p class="hint">For jobs in other countries. With a country here, questions about a work permit, a visa or
+                sponsorship are answered for the job's country (where the job page says, or the place it was searched in),
+                and the expected salary is the one for there. When the job's country isn't clear, those questions are
+                left for you. Jobs in countries not here are skipped, and so are jobs saying they don't sponsor visas
+                where you'd need one. Where you live counts as allowed to work. Empty: answered from your answers, as before.</p>
+              <div class="table-wrap">
+                <table class="answers work-table">
+                  <thead><tr><th>Country</th><th>You there</th><th>Expected salary there</th><th>Currency</th><th><span class="sr">Remove</span></th></tr></thead>
+                  <tbody id="work-rows"></tbody>
+                </table>
+              </div>
+              <div><button type="button" class="btn" id="add-work">Add a country</button></div>
+            </section>
+
             <section class="set" id="set-search" aria-labelledby="search-title">
               <h2 id="search-title">Sites</h2>
               <p class="hint">What to search for on each site, and how many applications it may send.</p>
@@ -275,14 +312,16 @@
                 <label class="field">First name<input name="profile.firstName" autocomplete="given-name"></label>
                 <label class="field">Last name<input name="profile.lastName" autocomplete="family-name"></label>
                 <label class="field">Email<input name="profile.email" type="email" autocomplete="email"></label>
-                <label class="field">Phone <small>With the country code, like +91 98765 43210</small><input name="profile.phone" type="tel" autocomplete="tel"></label>
-                <label class="field">City<input name="profile.city" autocomplete="address-level2"></label>
-                <label class="field">Country<input name="profile.country" autocomplete="country-name"></label>
+                <label class="field">Phone <small>With the country code</small><input name="profile.phone" id="profile-phone" type="tel" autocomplete="tel" placeholder="+91 98765 43210"></label>
                 <label class="field">LinkedIn profile<input name="profile.linkedin" type="url" placeholder="https://www.linkedin.com/in/…"></label>
                 <label class="field">GitHub<input name="profile.github" type="url" placeholder="https://github.com/…"></label>
                 <label class="field">Website or portfolio<input name="profile.website" type="url" placeholder="https://"></label>
                 <label class="field">Current company <small>Empty if you have none</small><input name="profile.company" autocomplete="organization"></label>
                 <label class="field">Current job title<input name="profile.jobTitle" autocomplete="organization-title"></label>
+              </div>
+              <div class="two">
+                <label class="field">Gender, race, veteran and disability questions <small>US forms ask these, saying it's voluntary.</small>
+                  <select name="profile.selfIdentify"><option value="decline">Decline to answer</option><option value="ask">Leave them for me</option></select></label>
               </div>
               <div class="field">Resume <small>A PDF or Word file, uploaded to forms that ask for one. Saved as soon as you pick it.</small>
                 <div class="inline"><input type="file" id="resume-file" accept=".pdf,.doc,.docx,application/pdf">
@@ -305,12 +344,16 @@
             <section class="set" id="set-jobs" aria-labelledby="jobs-title">
               <h2 id="jobs-title">Which jobs to apply to <small>All sites</small></h2>
               <p class="hint">Whole words, any case, one per line. A title must have one word from the first list and one from the second, and none from the third.</p>
+              <div class="inline"><label class="field">Start from a field <small>Puts its roles in the second list, empties the first, and takes them out of the third.</small>
+                  <select id="field-pick"><option value="">Choose…</option></select></label>
+                <button type="button" class="btn" id="field-use">Use it</button>
+                <span class="saved" id="field-status" aria-live="polite"></span></div>
               <div class="three">
                 <label class="field">Title has one of <small>Empty: any title.</small>
                   <textarea name="profile.filters.includeTitle" rows="11" spellcheck="false"></textarea></label>
-                <label class="field">…and is a role like <small>Skips "AI Trainer", "Data Science SME".</small>
+                <label class="field">…and is a role like <small>Skips "AI Trainer", "Data Science SME". Empty: any role.</small>
                   <textarea name="profile.filters.requireRole" rows="11" spellcheck="false"></textarea></label>
-                <label class="field">Skip titles with <small>Seniority, internships, non-engineering roles.</small>
+                <label class="field">Skip titles with <small>Seniority, internships, roles you don't want.</small>
                   <textarea name="profile.filters.excludeTitle" rows="11" spellcheck="false"></textarea></label>
               </div>
               <div class="two">
@@ -326,7 +369,8 @@
               <p class="hint">Each question is matched against these patterns from the top, and the first match answers it.
                 A pattern is a few words or a regular expression, any case. For yes/no questions the answer has to be one of
                 the options, like "Yes". Leave an answer empty to keep that question for yourself: the job is then marked
-                <b>Needs you</b>. The bot never guesses.</p>
+                <b>Needs you</b>. The bot never guesses. <a href="#settings" data-goto="place">Where you are</a> fills in
+                the ones that depend on it.</p>
               <div class="table-wrap">
                 <table class="answers">
                   <thead><tr><th>When the question matches</th><th>Answer</th><th><span class="sr">Order</span></th></tr></thead>
@@ -462,6 +506,7 @@
 <script src="lib/answers.js"></script>
 <script src="lib/tracker.js"></script>
 <script src="lib/store.js"></script>
+<script src="lib/places.js"></script>
 <script src="sites/hirist.js"></script>
 <script src="sites/instahyre.js"></script>
 <script src="sites/wellfound.js"></script>

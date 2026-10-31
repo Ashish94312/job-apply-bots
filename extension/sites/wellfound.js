@@ -46,6 +46,12 @@
       return JB.filters.uniqueUrls([...urls, ...(cfg.searchUrls || [])]);
     },
 
+    /** The place a role page searches in: "/role/l/<role>/united-states" is United States; "/role/r/" is remote. */
+    placeOf(url) {
+      const m = /\/role\/l\/[^/]+\/([^/?#]+)/.exec(url);
+      return m ? m[1].replace(/-/g, " ") : "";
+    },
+
     searchPageUrl(url, n) {
       return n === 1 ? url : `${url}${url.includes("?") ? "&" : "?"}page=${n}`;
     },

@@ -20,6 +20,14 @@
   const named = job => (job.company ? `${job.title || "the job"} at ${job.company}` : job.title || "the job");
   const pageFiles = site => ["lib/filters.js", "lib/answers.js", "lib/page.js", `sites/${site}.js`];
 
+  /** Answers you just gave, first from now on: for this job, and the rest of the run (`run`: a job's settings are a
+   * copy, lib/places.js forJob, whose answers for the job's country still come before these). */
+  function keep(cfg, given) {
+    for (const c of new Set([cfg, cfg.run].filter(Boolean))) {
+      for (const a of given) c.answers.unshift([`=${JB.answers.questionKey(a.q)}`, String(a.answer).trim()]);
+    }
+  }
+
   /** "https://www.hirist.tech/search/generative-ai?minexp=1" -> "generative ai" */
   function searchLabel(url) {
     try {
@@ -162,7 +170,7 @@
       const given = reply.answers.filter(a => String(a.answer ?? "").trim());
       if (given.length < missing.length) return false;
       await JB.store.learn(given, this.site.name);
-      for (const a of given) cfg.answers.unshift([`=${key(a.q)}`, String(a.answer).trim()]);
+      keep(cfg, given);
       this.log(`  Kept ${given.length} answer${given.length > 1 ? "s" : ""} for next time`);
       return true;
     }
@@ -203,7 +211,7 @@
       const given = reply.answers.filter(a => String(a.answer ?? "").trim());
       if (!given.length) return;
       await JB.store.learn(given, this.site.name);
-      for (const a of given) cfg.answers.unshift([`=${key(a.q)}`, String(a.answer).trim()]);
+      keep(cfg, given);
       this.log(`  Kept ${given.length} answer${given.length > 1 ? "s" : ""} you entered`);
     }
 
@@ -513,9 +521,13 @@
         this.log(`${this.site.label} need no login.`);
         return;
       }
+      if (cfg.moreForms && !(await chrome.permissions.contains({ origins: ["<all_urls>"] }))) {
+        this.log("Other companies' forms are on, but Chrome's access to all sites is off: only Greenhouse, Lever, Ashby and Workday this time (Settings > Sites > Company sites).");
+        cfg = { ...cfg, moreForms: false };
+      }
       const jobs = this.site.queue(cfg, await JB.store.jobs());
       if (!jobs.length) {
-        this.log("Nothing to apply to: add job links in Settings, or let it take the jobs other sites found on Greenhouse, Lever or Ashby.");
+        this.log("Nothing to apply to: add job links in Settings, or let it take the jobs other sites found on Greenhouse, Lever, Ashby or Workday (and with Other companies' forms on, any).");
         return;
       }
       let budget = this.opts.max || cfg.limits.maxPerRun;
@@ -638,7 +650,7 @@
 
           for (const u of fresh) {
             if (done >= budget) break;
-            let job = { url: u, jobId: this.site.jobId(u), title: "", company: "", text: "" };
+            let job = { url: u, jobId: this.site.jobId(u), title: "", company: "", text: "", place: this.site.placeOf?.(url) || "" };
             let status;
             let note;
             this.mark(u, { state: "working" });
@@ -725,7 +737,8 @@
 
     /** A feed card: the filters, then apply from the card. Returns [status, note]. */
     async handleCard(job, cfg) {
-      const reason = JB.filters.skipReason(job, cfg.filters);
+      cfg = JB.places.forJob(cfg, job, this.site);
+      const reason = JB.filters.skipReason(job, cfg.filters) || JB.places.skipReason(job, cfg, this.site);
       if (reason) return [S.SKIPPED, reason];
       if (this.dry) {
         this.log(`  ~ would apply   ${label(job)}  ${job.url}`);
@@ -790,8 +803,10 @@
       await this.sleep(this.site.settleMs || 1500); // let the apply button render
       job = { ...job, ...(await this.exec("site.readJob")) };
       this.step(`Checking ${named(job)}`);
+      cfg = JB.places.forJob(cfg, job, this.site); // its answers for the job's country, when you work abroad
 
-      const reason = this.site.flow !== "list" && JB.filters.skipReason(job, cfg.filters); // a link you gave is one you want
+      const reason = this.site.flow !== "list" // a link you gave is one you want
+        && (JB.filters.skipReason(job, cfg.filters) || JB.places.skipReason(job, cfg, this.site));
       if (reason) return [S.SKIPPED, job, reason];
       if (this.dry) {
         this.log(`  ~ would apply   ${label(job)}  ${job.url}`);

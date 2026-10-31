@@ -7,6 +7,7 @@
   const site = {
     name: "instahyre",
     label: "Instahyre",
+    country: "IN", // its jobs are all in India (lib/places.js)
     domain: "instahyre.com",
     loginUrl: "https://www.instahyre.com/login/",
     loginCheckUrl: "https://www.instahyre.com/candidate/opportunities/?matching=true", // sends you to /login if you aren't

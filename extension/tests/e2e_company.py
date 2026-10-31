@@ -62,7 +62,7 @@ def gh_upload(id, label, required=False):
 
 def greenhouse(jid):
     title = GREENHOUSE[jid]
-    body = f"""<div class="job__title"><h1 class="section-header">{title}</h1></div><p>Build models.</p>
+    body = f"""<div class="job__title"><h1 class="section-header">{title}</h1><div class="job__location">Bengaluru, India</div></div><p>Build models.</p>
 <form method="get" action="/acme/jobs/{jid}" id="application-form" class="application--form"><div class="application--questions">
 {gh_text("first_name", "First Name", True)}{gh_text("last_name", "Last Name", True)}{gh_text("email", "Email", True)}
 {gh_combo("country", "Country")}{gh_text("phone", "Phone", False, "tel")}
@@ -159,7 +159,7 @@ def lever():
     radios = "".join(f'<li><label><input type="radio" name="cards[a][field0]" value="{v}" required="required"><span>{v}</span></label></li>' for v in ["Yes", "No"])
     boxes = "".join(f'<li><label><input type="checkbox" name="cards[b][field0]" value="{v}" required=""><span>{v}</span></label></li>' for v in ["English (ENG)", "Hindi (HIN)", "Tamil (TAM)"])
     select = '<div class="application-dropdown"><select name="cards[c][field0]" required=""><option value="">Select...</option><option>LinkedIn</option><option>A friend</option></select></div>'
-    body = f"""<div class="posting-headline"><h2>Backend Engineer</h2></div>
+    body = f"""<div class="posting-headline"><h2>Backend Engineer</h2><div class="posting-categories"><div class="location">London, United Kingdom</div></div></div>
 <form id="application-form" method="POST" enctype="multipart/form-data"><ul>
 <li class="application-question resume"><label><div class="application-label">Resume/CV <span class="required">✱</span></div>
 <div class="application-field"><a href="#" class="postings-btn visible-resume-upload"><span class="filename"></span><span class="default-label">ATTACH RESUME/CV</span>
@@ -235,7 +235,7 @@ def ashby_yesno(id, label):
 
 
 def ashby():
-    body = f"""<div id="root"><h1 class="ashby-job-posting-heading">Data Scientist</h1>
+    body = f"""<div id="root"><h1 class="ashby-job-posting-heading">Data Scientist</h1><div><h2>Location</h2><p>Remote - India</p></div>
 <div class="ashby-application-form-autofill-input-root">Autofill from resume Upload your resume here to autofill key application fields.
 <input type="file" id="autofill"><button>Upload file</button></div>
 <div class="_jobPostingForm ashby-application-form-container"><div class="ashby-application-form-section-container">
@@ -354,7 +354,8 @@ def main():
 
         gh = lambda jid: f"https://job-boards.greenhouse.io/acme/jobs/{jid}"
         settings(profile={"answers": [["sponsorship", "No"], ["legally authorized", "Yes"], ["language skill", "English (ENG), Hindi (HIN)"],
-                                      ["hear about", "LinkedIn"], ["years of experience with python", "Yes"], ["locations could you work", "India"]]},
+                                      ["hear about", "LinkedIn"], ["years of experience with python", "Yes"], ["locations could you work", "India"]],
+                          "country": "India", "workIn": [{"country": "United Kingdom", "can": "visa"}]},  # Where you can work: the UK needs a visa
                  company={"searchUrls": [gh("1003")], "fromOthers": False, "sendMode": "direct"})
 
         print("Company sites on the dashboard")
@@ -372,8 +373,9 @@ def main():
         t.page("settings")
         dash.click('.toc [data-goto="profile"]')
         for name, value in {"firstName": "Asha", "lastName": "Rao", "email": "asha@example.com", "phone": "+91 98765 43210",
-                            "city": "Bengaluru", "country": "India", "linkedin": "https://www.linkedin.com/in/asha", "github": "https://github.com/asha"}.items():
+                            "city": "Bengaluru", "linkedin": "https://www.linkedin.com/in/asha", "github": "https://github.com/asha"}.items():
             dash.fill(f'[name="profile.{name}"]', value)
+        dash.select_option('[name="profile.country"]', "India")  # Where you are
         with tempfile.NamedTemporaryFile(suffix=".pdf", prefix="Asha_Rao_Resume_") as pdf:
             pdf.write(b"%PDF-1.4\n% a resume\n" + b"x" * 2000)
             pdf.flush()
@@ -383,9 +385,12 @@ def main():
         t.check(resume_name in dash.locator("#resume-status").inner_text(), "the resume is kept as soon as it's picked")
         dash.click('.toc [data-goto="search"]')
         dash.click("#site-tab-company")
+        dash.fill('[name="sites.company.searchUrls"]', "https://acme.icims.com/jobs/1/ml/job")
+        dash.click("#save")
+        t.check("aren't job links it can apply on" in dash.locator("#errors").inner_text(), "a link it can't apply on is pointed out")
         dash.fill('[name="sites.company.searchUrls"]', "https://example.com/careers/1")
         dash.click("#save")
-        t.check("aren't Greenhouse, Lever, Ashby or Workday job links" in dash.locator("#errors").inner_text(), "a link it can't apply on is pointed out")
+        t.check("Other companies' forms too" in dash.locator("#errors").inner_text(), "...and one that needs Other companies' forms ticked")
         dash.fill('[name="sites.company.searchUrls"]', f"{gh('1001')}\nhttps://jobs.lever.co/acme/{LEVER_ID}")
         dash.check('[name="sites.company.fromOthers"]')
         dash.click("#save")
@@ -432,13 +437,14 @@ def main():
         t.check(g.get("sponsorship") == "No" and g.get("before") == "No" and g.get("places") == ["India"],
                 "its dropdown questions and checkboxes from your answers, and the one you were asked")
         t.check(g.get("resume") == resume_name and g.get("resumeSize", 0) > 2000 and g.get("cover") == 0, "your resume attached, not as the cover letter")
-        t.check(g.get("preferred") == "" and g.get("gender") == "", "questions it needn't answer, with no answer, left alone")
+        t.check(g.get("preferred") == "", "a question it needn't answer, with no answer, left alone")
+        t.check(g.get("gender") == "Decline To Self Identify", f"US self-identification declined, as the form words it ({g.get('gender')!r})")
         lv = forms.posted.get(f"lever:{LEVER_ID}", {})
         t.check(lv.get("name") == "Asha Rao" and lv.get("github") == "https://github.com/asha", f"Lever: full name and links ({lv})")
         t.check(lv.get("location") == "Bengaluru, Bengaluru Urban, Karnataka, IND" and "Bengaluru" in lv.get("picked", ""),
                 "the location picked from Lever's suggestions, as it wants")
-        t.check(lv.get("auth") == "Yes" and lv.get("langs") == ["English (ENG)", "Hindi (HIN)"] and lv.get("heard") == "LinkedIn",
-                "its radio, checkbox and dropdown questions")
+        t.check(lv.get("auth") == "No" and lv.get("langs") == ["English (ENG)", "Hindi (HIN)"] and lv.get("heard") == "LinkedIn",
+                "its radio, checkbox and dropdown questions; authorized to work in the job's country (London): No, you'd need a visa")
         t.check(lv.get("resume") == resume_name and lv.get("project") == "" and lv.get("comments") == "", "the resume attached, optional boxes left empty")
         ab = forms.posted.get(f"ashby:{ASHBY_ID}", {})
         t.check(ab.get("name") == "Asha Rao" and ab.get("linkedin") == "https://www.linkedin.com/in/asha" and ab.get("python") == "yes"

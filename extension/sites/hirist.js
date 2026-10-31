@@ -7,6 +7,7 @@
   const site = {
     name: "hirist",
     label: "Hirist",
+    country: "IN", // its jobs are all in India (lib/places.js)
     domain: "hirist.tech",
     loginUrl: "https://www.hirist.tech/", // its "Login" button is there
     jobLinkCss: "a[href*='/j/']",

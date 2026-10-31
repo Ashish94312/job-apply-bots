@@ -20,6 +20,7 @@
   const site = {
     name: "cutshort",
     label: "Cutshort",
+    country: "IN", // its jobs are all in India (lib/places.js)
     domain: "cutshort.io",
     loginUrl: "https://cutshort.io/jobs", // click "Candidate login" there
     loginHint: "click Candidate login, then Google or phone OTP",

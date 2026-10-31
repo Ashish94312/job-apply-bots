@@ -6,16 +6,18 @@ const path = require("node:path");
 
 globalThis.JB = {};
 globalThis.chrome = { storage: { local: {} } }; // store.js only touches it when called
-for (const file of ["referral.js", "lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/tracker.js", "lib/store.js", "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js", "sites/cutshort.js", "sites/linkedin.js", "sites/naukri.js", "sites/company.js"]) {
+const local = chrome.storage.local; // the one store.js keeps
+for (const file of ["referral.js", "lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/tracker.js", "lib/store.js", "lib/places.js", "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js", "sites/cutshort.js", "sites/linkedin.js", "sites/naukri.js", "sites/company.js"]) {
   require(path.join(__dirname, "..", file));
 }
 const cases = require("./cases.json");
-const { filters, answers, store, sites, tracker } = JB;
+const { filters, answers, store, sites, tracker, places } = JB;
 const hirist = sites.hirist;
 
 test("skipReason matches the Python bots", () => {
   for (const c of cases.skipReason) {
-    assert.equal(filters.skipReason(c, cases.filters), c.expected, `${c.title} / ${c.company} / ${c.text}`);
+    const expected = c.expected === "not an engineering role" ? "not one of your roles" : c.expected; // worded for any field
+    assert.equal(filters.skipReason(c, cases.filters), expected, `${c.title} / ${c.company} / ${c.text}`);
   }
 });
 
@@ -69,10 +71,11 @@ test("settings: defaults fill gaps, a site's answers come before the shared ones
   assert.equal(s.sites.hirist.limits.maxPerDay, JB.DEFAULTS.sites.hirist.limits.maxPerDay);
   assert.deepEqual(s.sites.hirist.keywords, JB.DEFAULTS.sites.hirist.keywords);
 
-  assert.deepEqual(store.effective(s, "hirist").answers, s.profile.answers); // no answers of its own: the shared ones
+  const mine = cfg => cfg.answers.slice(0, -2); // the last two are the standard ones (self-identification, consent)
+  assert.deepEqual(mine(store.effective(s, "hirist")), s.profile.answers); // no answers of its own: the shared ones
   s.sites.hirist.answers = [["notice", "15 days"]];
   const cfg = store.effective(s, "hirist");
-  assert.deepEqual(cfg.answers, [["notice", "15 days"]]); // its own replace the shared ones
+  assert.deepEqual(mine(cfg), [["notice", "15 days"]]); // its own replace the shared ones
   assert.equal(cfg.coverNote, "Hi");
   assert.deepEqual(cfg.keywords, s.sites.hirist.keywords);
   assert.equal(store.normalize(undefined).savedAt, null);
@@ -190,6 +193,54 @@ test("a length of time picks the option covering it, never a guess", () => {
   assert.equal(answers.pickDuration(["Less than 30 days", "30 days or more"], "30 days"), 1); // "less than" leaves 30 out
   assert.equal(answers.pickDuration(["Within 2 weeks", "1 Month"], "2 weeks"), 0);
   assert.equal(answers.pickDuration(naukri, "15-30 days"), null); // an answer that's a range itself: no
+});
+
+test("questions, options and experience in other languages", () => {
+  assert.equal(answers.questionKey("¿Cuál es su salario esperado? *"), "cual es su salario esperado");
+  assert.equal(answers.questionKey("Kündigungsfrist?"), "kundigungsfrist");
+  assert.equal(answers.questionKey("希望年収を教えてください（必須）"), "希望年収を教えてください 必須");
+  assert.equal(answers.questionKey("ما هو راتبك المتوقع؟"), "ما هو راتبك المتوقع");
+  assert.notEqual(answers.questionKey("Python経験年数"), answers.questionKey("Pythonの使用歴")); // not both "python"
+  assert.equal(answers.pick(["Sí", "No"], "Si"), 0);
+  assert.equal(answers.pick(["Não", "Sim"], "Nao"), 0);
+  assert.equal(answers.pick(["はい", "いいえ"], "いいえ"), 1);
+  assert.equal(answers.pick(["Ｙｅｓ", "Ｎｏ"], "No"), 1); // full-width letters
+  assert.deepEqual(answers.pickSeveral(["Français", "Deutsch", "日本語"], "francais, 日本語"), [0, 2]);
+
+  for (const [text, years] of [["3-5 Jahre Berufserfahrung", 3], ["de 2 a 4 años", 2], ["3 à 5 ans", 3], ["3〜5年以上", 3],
+    ["2–4 år", 2], ["3-5 lat", 3], ["1 tot 3 jaar", 1], ["3-5 лет", 3], ["3-5 answers", null], ["5-8 YrsBengaluru", 5]]) {
+    assert.equal(filters.minYears(text), years, text);
+  }
+  assert.equal(sites.linkedin.withRange("Mindestens 3 bis 5 Jahre"), "3 - 3 years. Mindestens 3 bis 5 Jahre");
+
+  const de = ["Sofort", "Bis zu 1 Monat", "1-3 Monate", "Mehr als 3 Monate"];
+  assert.equal(de[answers.pickDuration(de, "30 days")], "Bis zu 1 Monat");
+  assert.equal(de[answers.pickDuration(de, "Immediately")], "Sofort");
+  assert.equal(de[answers.pickDuration(de, "120 days")], "Mehr als 3 Monate");
+  const fr = ["Immédiatement", "Moins de 15 jours", "1 mois", "2 mois", "Plus de 3 mois"];
+  assert.equal(fr[answers.pickDuration(fr, "1 month")], "1 mois");
+  assert.equal(fr[answers.pickDuration(fr, "10 days")], "Moins de 15 jours");
+  const es = ["15 días o menos", "De 1 a 3 meses", "Más de 3 meses"];
+  assert.equal(es[answers.pickDuration(es, "60 days")], "De 1 a 3 meses");
+  assert.deepEqual(answers.daysRange("até 30 dias"), { lo: 0, hi: 30 });
+  assert.deepEqual(answers.daysRange("1 miesiąc"), { lo: 30, hi: 30 });
+});
+
+test("answers kept under the old ASCII-only keys come back under today's", async () => {
+  const before = {
+    "k ndigungsfrist": { q: "Kündigungsfrist?", answer: "3 Monate", ts: "2026-10-01 10:00:00" },
+    "": { q: "希望年収", answer: "800万円", ts: "2026-10-02 10:00:00" },
+    "notice period": { q: "Notice period", answer: "30 days", ts: "2026-10-03 10:00:00" },
+  };
+  local.get = async key => ({ [key]: key === "kept" ? before : {
+    "s alaire": { q: "Salaire ?", jobs: ["company:1"], ts: "2026-10-01" },
+    "salaire": { q: "Salaire", jobs: ["company:2"], ts: "2026-10-02" },
+  } });
+  const kept = await store.kept();
+  assert.deepEqual(Object.keys(kept).sort(), ["kundigungsfrist", "notice period", "希望年収"]);
+  assert.equal(kept.kundigungsfrist.answer, "3 Monate");
+  assert.deepEqual((await store.waiting()).salaire.jobs, ["company:1", "company:2"]); // two that are now one
+  delete local.get;
 });
 
 test("LinkedIn reads experience, answers questions and picks options like the Python bot", () => {
@@ -338,7 +389,7 @@ test("answers you gave are kept for their own question, and tried first", () => 
   assert.equal(answers.answerFor("Expected CTC (in Lakhs) *", cfg.answers), "14"); // the very question: yours
   assert.equal(answers.answerFor("Current CTC", cfg.answers), "12 LPA"); // any other: the patterns, as before
   assert.equal(answers.answerFor("Notice period", cfg.answers), "30 days");
-  assert.deepEqual(store.effective(s, "hirist").answers, s.profile.answers);
+  assert.deepEqual(store.effective(s, "hirist").answers.slice(0, s.profile.answers.length), s.profile.answers);
 });
 
 test("company sites: which links it can apply on, and what's next to apply to", () => {
@@ -353,9 +404,21 @@ test("company sites: which links it can apply on, and what's next to apply to", 
   assert.deepEqual(parse("https://nvidia.wd5.myworkdayjobs.com/en-US/NVIDIAExternalCareerSite/job/Israel%2C-Yokneam/Software-Engineer--SPE_JR2015623/apply/applyManually"),
     { system: "workday", jobId: "wd-nvidia-jr2015623", url: "https://nvidia.wd5.myworkdayjobs.com/en-US/NVIDIAExternalCareerSite/job/Israel%2C-Yokneam/Software-Engineer--SPE_JR2015623" });
   assert.equal(parse("https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite"), null); // the careers site, not a job
-  for (const no of ["https://jobs.lever.co/palantir", "https://careers.example.com/jobs/1", "http://jobs.lever.co/a/" + id, "https://evil.com/greenhouse.io/jobs/1", "not a link"]) {
+  for (const no of ["https://jobs.lever.co/palantir", "http://jobs.lever.co/a/" + id, "https://www.linkedin.com/jobs/view/1/", "https://careers.example.com/", "not a link"]) {
     assert.equal(parse(no), null, no);
   }
+  // with "Other companies' forms": more systems, and any company's own form
+  assert.deepEqual(parse("https://apply.workable.com/acme/j/ABC123DEF/"), { system: "workable", jobId: "workable-acme-abc123def", url: "https://apply.workable.com/acme/j/ABC123DEF/", more: true });
+  assert.equal(parse("https://jobs.smartrecruiters.com/Acme/743999912345-ml-engineer?trid=x").jobId, "smartrecruiters-acme-743999912345");
+  assert.equal(parse("https://acme.recruitee.com/o/ml-engineer").jobId, "recruitee-acme-ml-engineer");
+  assert.equal(parse("https://acme.teamtailor.com/jobs/4512-ml-engineer").jobId, "teamtailor-acme-4512");
+  assert.equal(parse("https://acme.keka.com/careers/jobdetails/91").jobId, "keka-acme-91");
+  const own = parse("https://careers.example.com/jobs/1?utm=x");
+  assert.equal(own.system, "web");
+  assert.ok(own.more && /^web-\w+$/.test(own.jobId) && own.jobId === parse("https://careers.example.com/jobs/1/").jobId); // tracking aside
+  assert.notEqual(parse("https://acme.com/careers/job?jobId=5").jobId, parse("https://acme.com/careers/job?jobId=6").jobId);
+  assert.deepEqual(parse("https://acme.icims.com/jobs/123/ml-engineer/job"), { system: "portal" }); // wants an account: left for you
+  assert.deepEqual(parse("https://career5.successfactors.eu/career?company=acme"), { system: "portal" });
   assert.equal(linkIn(`apply opens an external site: https://jobs.lever.co/acme/${id}).`), `https://jobs.lever.co/acme/${id}`);
   assert.equal(linkIn("redirected to https://job-boards.greenhouse.io/acme/jobs/1"), "https://job-boards.greenhouse.io/acme/jobs/1");
 
@@ -371,6 +434,8 @@ test("company sites: which links it can apply on, and what's next to apply to", 
   assert.deepEqual(jobs.map(j => j.jobId), ["gh-55", "gh-33", `lever-${id}`]); // done ones left out, a failed one tried again, each once
   assert.deepEqual([jobs[2].title, jobs[2].company, jobs[2].from], ["ML Engineer", "Acme", "hirist:1"]);
   assert.deepEqual(queue({ searchUrls: [], fromOthers: false }, history), []);
+  const more = queue({ searchUrls: ["https://acme.icims.com/jobs/1/x/job"], fromOthers: true, moreForms: true }, history);
+  assert.deepEqual(more.map(j => j.jobId), [`lever-${id}`, parse("https://careers.example.com/2").jobId, "gh-33"]); // not the account one
 });
 
 test("your profile answers what forms ask about you, after your own answers", () => {
@@ -410,4 +475,196 @@ test("what a site says about an application, and what it changes", () => {
   assert.equal(tracker.fromSite({ ...app, signals: { viewed: "2026-10-20" } }, "viewed", "LinkedIn", "2026-10-25"), null); // said before
   assert.equal(tracker.fromSite({ ...app, outcome: "offer" }, "rejected", "LinkedIn", "2026-10-25"), null); // you know better
   assert.deepEqual(tracker.fromSite({ ...app, heard: { via: "email" } }, "replied", "Naukri", "2026-10-25")[0], { set: { signals: { replied: "2026-10-25" } } });
+});
+
+test("where you are: countries, with their calling code and currency", () => {
+  const names = places.COUNTRIES.map(c => c.name);
+  assert.ok(places.COUNTRIES.length > 190 && new Set(names).size === names.length);
+  assert.deepEqual(names, [...names].sort((a, b) => a.localeCompare(b)));
+  assert.deepEqual(places.country("india"), { code: "IN", name: "India", dial: "91", currency: "INR" });
+  assert.equal(places.country("Germany").currency, "EUR");
+  assert.equal(places.country("United Kingdom").dial, "44");
+  assert.equal(places.country("United States").currency, "USD");
+  assert.equal(places.country("Atlantis"), null);
+
+  assert.equal(places.salaryText(800000, "INR", "year"), "8 LPA");
+  assert.equal(places.salaryText(1250000, "INR", "year"), "12.5 LPA");
+  assert.equal(places.salaryText(65000, "EUR", "year"), "65000 EUR a year");
+  assert.equal(places.salaryText(40, "USD", "hour"), "40 USD an hour");
+  assert.equal(places.salaryText(null, "EUR", "year"), "");
+  assert.equal(answers.numberAnswer(places.salaryText(65000, "EUR", "year")), "65000");
+});
+
+test("where you are goes into your answers, the shared ones and LinkedIn's", () => {
+  const before = store.normalize(undefined); // a new install: those answers start empty
+  const ask = (s, site, q) => answers.answerFor(q, store.effective(s, site).answers);
+  assert.equal(ask(before, "hirist", "What is your expected CTC?"), null);
+  assert.equal(ask(before, "hirist", "Are you currently living in Bangalore?"), "No"); // no sample city says Yes
+
+  const after = structuredClone(before);
+  Object.assign(after.profile, { country: "Germany", city: "München", currency: "EUR", salaryPeriod: "year", currentSalary: 60000,
+    expectedSalary: 70000, noticePeriod: "3 months", relocate: "No" });
+  const got = places.apply(before, after);
+  assert.deepEqual(got, { answers: 14, places: 2 });
+  for (const [q, a] of [["What is your notice period?", "3 months"], ["Current CTC", "60000 EUR a year"], ["Expected salary", "70000 EUR a year"],
+    ["Current city", "München"], ["Are you currently living in Munich?", "Yes"], ["Are you currently based in Germany?", "Yes"],
+    ["Are you currently living in Bengaluru?", "No"], ["Are you willing to relocate?", "No"], ["Country code", "Germany (+49)"]]) {
+    assert.equal(ask(after, "hirist", q), a, q);
+  }
+  assert.equal(ask(after, "linkedin", "What is your expected CTC?"), "70000"); // its number boxes
+  assert.equal(ask(after, "linkedin", "Current location"), "München");
+  assert.equal(ask(after, "linkedin", "Country code"), "Germany (+49)");
+  assert.deepEqual(after.sites.linkedin.locations, ["Germany"]); // the sample searched India
+  assert.deepEqual(after.sites.wellfound.locations, ["germany", "remote"]);
+  assert.deepEqual(places.apply(after, structuredClone(after)), { answers: 0, places: 0 }); // nothing changed: nothing to do
+
+  const raise = structuredClone(after); // only the expected salary: your other answers stay as you wrote them
+  raise.profile.answers = raise.profile.answers.map(([p, a]) => [p, /notice/.test(p) ? "90 days" : a]);
+  raise.profile.expectedSalary = 75000;
+  places.apply(after, raise);
+  assert.equal(ask(raise, "hirist", "Expected salary"), "75000 EUR a year");
+  assert.equal(ask(raise, "hirist", "Notice period"), "90 days");
+});
+
+test("where you are, on answers you wrote yourself", () => {
+  const s = store.normalize({ profile: { city: "Bengaluru", answers: [["salary|ctc", "8 LPA"], ["current (city|location)", "Bengaluru"],
+    ["currently (living|located|residing|based) in (bengaluru|bangalore)", "Yes"], ["currently (living|located|residing|based) in", "No"]] } });
+  const after = structuredClone(s);
+  Object.assign(after.profile, { country: "India", currency: "INR", expectedSalary: 1200000 });
+  places.apply(s, after);
+  const ask = q => answers.answerFor(q, store.effective(after, "hirist").answers);
+  assert.equal(ask("Expected CTC"), "12 LPA"); // a row of its own, before the broad one
+  assert.equal(ask("Current CTC"), "8 LPA"); // which still answers the rest
+  assert.equal(ask("Are you currently based in India?"), "Yes");
+  assert.equal(ask("Are you currently living in Bangalore?"), "Yes");
+  assert.equal(ask("Are you currently living in Pune?"), "No");
+
+  const moved = structuredClone(after);
+  Object.assign(moved.profile, { city: "Toronto", country: "Canada" });
+  places.apply(after, moved);
+  assert.equal(answers.answerFor("Are you currently living in Bengaluru?", moved.profile.answers), "No"); // not there any more
+  assert.equal(answers.answerFor("Are you currently living in Toronto?", moved.profile.answers), "Yes");
+  assert.equal(answers.answerFor("Current city", moved.profile.answers), "Toronto");
+});
+
+test("jobs abroad: which country a job is in", () => {
+  const c = loc => places.countryIn(loc)?.code ?? null;
+  assert.equal(c("Bengaluru, Karnataka, India"), "IN");
+  assert.equal(c("London, England, United Kingdom"), "GB");
+  assert.equal(c("San Francisco, CA"), "US");
+  assert.equal(c("New York, NY"), "US");
+  assert.equal(c("United States (Remote)"), "US");
+  assert.equal(c("Remote - US"), "US");
+  assert.equal(c("Remote in UK"), "GB");
+  assert.equal(c("Hybrid - Berlin"), "DE");
+  assert.equal(c("Toronto, Ontario, Canada"), "CA");
+  assert.equal(c("Bangalore"), "IN");
+  assert.equal(c("Remote"), null);
+  assert.equal(c("US or Canada"), null); // two
+  assert.equal(c("EMEA"), null);
+  assert.equal(places.country("USA").name, "United States");
+  assert.equal(places.country("Hong Kong").code, "HK");
+  assert.equal(places.jobCountry({ where: "" }, sites.naukri).code, "IN"); // India's job sites
+  assert.equal(places.jobCountry({ where: "", place: "United Kingdom" }, sites.linkedin).code, "GB"); // where it was searched
+  assert.equal(places.jobCountry({ where: "Austin, Texas, United States", place: "United Kingdom" }, sites.linkedin).code, "US"); // the page wins
+  assert.equal(sites.linkedin.placeOf("https://www.linkedin.com/jobs/search/?keywords=ml&location=United+States"), "United States");
+  assert.equal(sites.wellfound.placeOf("https://wellfound.com/role/l/software-engineer/united-kingdom"), "united kingdom");
+});
+
+test("jobs abroad: from India, applying in the US and the UK", () => {
+  const s = store.normalize({ profile: { country: "India", city: "Bengaluru", currency: "INR", salaryPeriod: "year",
+    answers: [["expect.*(ctc|salary|compensation)", "12 LPA"], ["authori[sz]ed to work|legally (allowed|eligible)", "Yes"], ["sponsorship|visa", "No"]],
+    workIn: [{ country: "India", can: "citizen" }, { country: "United States", can: "visa", salary: 140000, currency: "USD" },
+      { country: "United Kingdom", can: "visa", salary: 70000, currency: "GBP" }] } });
+  const cfg = store.effective(s, "company", { "will you now or in the future require sponsorship": { answer: "No" } }); // kept on an Indian job
+  const ask = (job, q, site = sites.company) => answers.answerFor(q, places.forJob(cfg, job, site).answers);
+  const us = { where: "New York, NY" }, uk = { where: "London, England, United Kingdom" }, india = { where: "Pune, India" }, unknown = { where: "Remote" };
+
+  assert.equal(ask(us, "Will you now or in the future require sponsorship?"), "Yes"); // the job's country, before the kept answer
+  assert.equal(ask(us, "Are you legally authorized to work in the country for which you are applying?"), "No");
+  assert.equal(ask(us, "Are you authorized to work in the US without sponsorship?"), "No");
+  assert.equal(ask(us, "What are your salary expectations?"), "140000 USD a year");
+  assert.equal(ask(us, "Expected salary", sites.linkedin), "140000"); // its number boxes
+  assert.equal(ask(uk, "Do you have the right to work in the UK?"), "No");
+  assert.equal(ask(uk, "Expected salary"), "70000 GBP a year");
+  assert.equal(ask(uk, "Are you a U.S. citizen?"), "No"); // a question naming a country: that one
+  assert.equal(ask(india, "Will you now or in the future require sponsorship?"), "No");
+  assert.equal(ask(india, "Are you authorized to work in India?"), "Yes");
+  assert.equal(ask(india, "Are you an Indian citizen?"), "Yes");
+  assert.equal(ask(us, "Are you an American citizen or permanent resident?"), "No");
+  assert.equal(ask(india, "What is your expected CTC?"), "12 LPA"); // home: your own answer
+  assert.equal(ask(unknown, "Will you require visa sponsorship?"), null); // not known: asked, never "No" from below
+  assert.equal(ask(unknown, "Are you authorized to work in the United States?"), "No"); // ...unless the question says where
+  assert.equal(ask(unknown, "Expected salary"), null);
+  assert.equal(ask(us, "Notice period"), null); // the rest: your answers, as before
+
+  const plain = store.effective(store.normalize({ profile: { answers: [["sponsorship", "No"]] } }), "hirist");
+  assert.equal(places.forJob(plain, us, sites.company), plain); // no list: as before
+  const job = cfgJob => places.forJob(cfg, cfgJob, sites.company);
+  assert.equal(job(us).run, cfg);
+  assert.equal(job(us).jobCountry, "United States");
+});
+
+test("jobs abroad: skipped when they won't sponsor the visa you need, or are somewhere you can't work", () => {
+  const cfg = store.effective(store.normalize({ profile: { country: "India",
+    workIn: [{ country: "United States", can: "visa" }, { country: "Germany", can: "allowed" }] } }), "company");
+  const skip = (where, text) => places.skipReason({ where, text }, cfg, sites.company);
+  assert.equal(skip("Austin, TX", "Great team. We are unable to sponsor visas for this role."), "in United States, says no visa sponsorship");
+  assert.equal(skip("Austin, TX", "Applicants must be U.S. citizens only."), "in United States, says no visa sponsorship");
+  assert.equal(skip("Austin, TX", "Must be authorized to work without the need for sponsorship."), "in United States, says no visa sponsorship");
+  assert.equal(skip("Austin, TX", "Visa sponsorship is available. We do not discriminate."), null);
+  assert.equal(skip("Austin, TX", "Python and ML."), null);
+  assert.equal(skip("Berlin, Germany", "We are unable to sponsor visas."), null); // allowed there: no visa needed
+  assert.equal(skip("Bengaluru, India", "Python."), null); // where you live
+  assert.equal(skip("Paris, France", "Python."), "in France, not a country you can work in");
+  assert.equal(skip("Remote", "We can't sponsor."), null); // not known: not skipped
+  assert.equal(places.skipReason({ where: "Paris" }, store.effective(store.normalize({}), "company"), sites.company), null); // no list
+});
+
+test("any field: a ready-made list of roles, taken out of the titles to skip", () => {
+  const mine = { includeTitle: ["machine learning"], requireRole: ["engineer"], excludeTitle: ["senior", "manager", "sales", "intern", "qa"], excludeCompanies: ["Acme"] };
+  const pm = filters.forField(mine, "Product and project management");
+  assert.deepEqual(pm.includeTitle, []);
+  assert.ok(pm.requireRole.includes("product manager"));
+  assert.deepEqual(pm.excludeTitle, ["senior", "sales", "intern", "qa"]); // "manager" went
+  assert.deepEqual(pm.excludeCompanies, ["Acme"]);
+  assert.equal(filters.skipReason({ title: "Senior Product Manager", text: "" }, pm), "title has 'senior'");
+  assert.equal(filters.skipReason({ title: "Product Manager", text: "" }, pm), null);
+  assert.equal(filters.skipReason({ title: "Software Engineer", text: "" }, pm), "not one of your roles");
+  assert.deepEqual(filters.forField(mine, "Sales and business development").excludeTitle, ["senior", "intern", "qa"]); // account managers too
+  assert.deepEqual(filters.forField(mine, "Software and IT").excludeTitle, ["senior", "manager", "sales", "intern"]);
+  for (const name of Object.keys(filters.FIELDS)) assert.ok(filters.forField({}, name).requireRole.length > 3, name);
+});
+
+test("forms' standard questions: self-identification, consent, when you can start", () => {
+  const s = store.normalize({ profile: { noticePeriod: "30 days", answers: [] } });
+  const a = q => answers.answerFor(q, store.effective(s, "company").answers);
+  for (const q of ["Gender", "Race", "Ethnicity", "Are you Hispanic or Latino?", "Veteran Status", "Disability Status", "Please identify your race"]) {
+    assert.equal(a(q), "Decline to self-identify", q);
+  }
+  assert.equal(a("Please describe any accommodations you need for a disability"), null); // not a self-identification
+  assert.equal(a("Do you embrace challenges?"), null);
+  assert.equal(a("I have read and agree to the Applicant Privacy Notice"), "Yes");
+  assert.equal(a("I consent to the processing of my personal data for this application"), "Yes");
+  assert.equal(a("I consent to being contacted about future opportunities and to my data being kept in the talent pool"), null);
+  assert.equal(a("I agree to receive marketing emails"), null);
+  assert.equal(a("Available start date"), "30 days");
+  assert.equal(a("When can you start?"), "30 days");
+  s.profile.selfIdentify = "ask";
+  assert.equal(a("Gender"), null);
+  assert.equal(answers.answerFor("Gender", store.effective(store.normalize({ profile: { answers: [["gender", "Female"]] } }), "company").answers), "Female"); // yours first
+
+  // a declining answer picks the form's own way of declining
+  assert.equal(answers.pick(["Male", "Female", "Decline To Self Identify"], "Decline to self-identify"), 2);
+  assert.equal(answers.pick(["Yes", "No", "I don't wish to answer"], "Decline to self-identify"), 2);
+  assert.equal(answers.pick(["Man", "Woman", "Prefer not to say"], "Decline to self-identify"), 2);
+  assert.equal(answers.pick(["Yes", "No"], "Decline to self-identify"), null); // none: asked
+
+  const today = new Date(2026, 9, 31);
+  assert.equal(answers.dateAnswer("30 days", "iso", today), "2026-11-30");
+  assert.equal(answers.dateAnswer("Immediately", "MM/DD/YYYY", today), "10/31/2026");
+  assert.equal(answers.dateAnswer("2 weeks", "dd.mm.yyyy", today), "14.11.2026");
+  assert.equal(answers.dateAnswer("2027-01-15", "DD/MM/YYYY", today), "15/01/2027");
+  assert.equal(answers.dateAnswer("15-30 days", "iso", today), null); // a range: no one date
+  assert.equal(answers.dateAnswer("30 days", "Your answer", today), null);
 });

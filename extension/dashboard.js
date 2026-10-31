@@ -116,7 +116,8 @@ function describe(status, note) {
   if (word) return `Title has "${word[1]}"`;
   const reasons = {
     "title not in include_title": "Title isn't one you look for",
-    "not an engineering role": "Not an engineering role",
+    "not one of your roles": "Not one of your roles",
+    "not an engineering role": "Not one of your roles", // from the Python bots, and before
     "couldn't read job title": "Couldn't read the job title",
     declined: "You chose to skip it",
     "no apply button found": "No apply button on the page",
@@ -1383,7 +1384,7 @@ function sitePanel(name, info) {
     info.list ? companySettings(base, field, area) : el("div", { className: "two" },
       field("field", "Search keywords", info.keywords, area(`${base}.keywords`, 12)),
       field("field", "Extra search pages", `Optional. Whole ${info.name} search addresses, one per line.`, area(`${base}.searchUrls`, 12))),
-    info.locations ? field("field", "Places", info.places || "One per line: a country or city, like india, or remote.", area(`${base}.locations`, 3)) : null,
+    info.locations ? field("field", "Places", info.places || "One per line: a country or city, like germany, or remote.", area(`${base}.locations`, 3)) : null,
     el("h3", { textContent: "How many" }),
     el("div", { className: "row-fields" },
       field("field narrow", "Per run", null, num(`${base}.limits.maxPerRun`, 1)),
@@ -1399,6 +1400,12 @@ function sitePanel(name, info) {
   return box;
 }
 
+/** Ticking "Other companies' forms": Chrome's access to all sites, asked for now (straight from the click), or the
+ * tick comes off again. */
+async function allowMoreForms(e) {
+  if (e.target.checked && !(await chrome.permissions.request(ALL_SITES))) e.target.checked = false;
+}
+
 /** Company sites: the job links to apply to, and whether to show you each form before it's sent. */
 function companySettings(base, field, area) {
   return el("div", { className: "site-extra first" },
@@ -1407,6 +1414,9 @@ function companySettings(base, field, area) {
     el("label", { className: "tick" }, el("input", { type: "checkbox", name: `${base}.fromOthers` }),
       el("span", {}, "Also the jobs the other sites found that apply on Greenhouse, Lever, Ashby or Workday",
         el("small", { textContent: "They're in History as Other site, with the link they opened." }))),
+    el("label", { className: "tick" }, el("input", { type: "checkbox", name: `${base}.moreForms`, onchange: allowMoreForms }),
+      el("span", {}, "Other companies' forms too: Workable, SmartRecruiters, Recruitee, Teamtailor, BambooHR, JazzHR, Breezy, Jobvite, Keka, Zoho Recruit, and any company's own one-page form",
+        el("small", { textContent: "Each is shown to you filled in before it's sent. Chrome asks to let Sendoff onto all sites for this (screenshots use the same access). Sites that want an account first, like iCIMS, SuccessFactors, Taleo or Darwinbox, are left for you." }))),
     field("field", "Before sending each application", null, el("div", { className: "checks" },
       el("label", {}, el("input", { type: "radio", name: `${base}.sendMode`, value: "review" }), "Show me the filled-in form first, with a Send button (recommended)"),
       el("label", {}, el("input", { type: "radio", name: `${base}.sendMode`, value: "direct" }), "Send it straight away"))));
@@ -1481,7 +1491,7 @@ function linkedinSettings(base, field) {
     tick(`${base}.readReplies`, "After each run, read what LinkedIn says about the jobs you applied to", "Viewed, got in touch, not selected: it goes into Applications."),
     referralSettings(base, field, checks, tick),
     el("h3", { textContent: "Answers for LinkedIn" }),
-    el("p", { className: "hint", textContent: "LinkedIn uses these instead of the shared answers: some of its questions are number boxes, so salaries are plain rupee amounts, and the phone number goes without +91 because the country code is its own dropdown." }),
+    el("p", { className: "hint", textContent: "LinkedIn uses these instead of the shared answers: some of its questions are number boxes, so salaries are plain amounts (800000, not 8 LPA), and the phone number goes without its country code, which is its own dropdown. Where you are fills these in too." }),
     table("answer-rows-linkedin", ["When the question matches", "Answer", ""]),
     el("div", {}, el("button", { type: "button", className: "btn", textContent: "Add an answer", onclick: () => { $("answer-rows-linkedin").append(answerRow()); dirty(); } })));
 }
@@ -1620,7 +1630,9 @@ function fillForm(s) {
   $("answer-rows-linkedin").replaceChildren(...(s.sites.linkedin.answers || []).map(([p, a]) => answerRow(p, a)));
   $("skill-rows-linkedin").replaceChildren(...Object.entries(s.sites.linkedin.skillYears || {}).map(([k, v]) => skillRow(k, v)));
   $("templates").replaceChildren(...s.tracker.templates.map(templateBox));
+  $("work-rows").replaceChildren(...(s.profile.workIn || []).map(workRow));
   for (const area of form.querySelectorAll("[data-counted]")) area.count();
+  fillPlace(s.profile.country);
   setDirty(false);
   $("errors").textContent = "";
 }
@@ -1646,6 +1658,10 @@ function readForm() {
     .filter(([k]) => k)
     .map(([k, v]) => [k, v === "" ? null : Number(v)]));
   s.tracker.templates = readTemplates();
+  s.profile.workIn = rowsOf("work-rows").map(tr => {
+    const v = k => tr.querySelector(`[data-key="${k}"]`).value.trim();
+    return { country: v("country"), can: v("can"), salary: v("salary") === "" ? null : Number(v("salary")), currency: v("currency").toUpperCase() };
+  }).filter(r => r.country || r.salary != null);
   return s;
 }
 
@@ -1671,6 +1687,17 @@ function check(s) {
     exp.forEach(bad);
     errors.push("Your experience: From is more than To.");
   }
+  if (s.profile.currency && !/^[a-z]{3}$/i.test(s.profile.currency)) { bad("profile.currency"); errors.push("Where you are: the currency is three letters, like EUR."); }
+  for (const name of ["profile.currentSalary", "profile.expectedSalary"]) {
+    const v = getPath(s, name);
+    if (v != null && !(v >= 0)) { bad(name); errors.push("Where you are: a salary can't be negative."); }
+  }
+  const work = s.profile.workIn.map(r => r.country);
+  if (work.some(c => !c)) errors.push("Where you can work: pick the country on each line.");
+  if (new Set(work).size < work.length) errors.push("Where you can work: a country is there twice.");
+  if (s.profile.workIn.some(r => (r.salary != null && !(r.salary >= 0)) || (r.currency && !/^[A-Z]{3}$/.test(r.currency)))) {
+    errors.push("Where you can work: a salary is a plain amount, and a currency three letters.");
+  }
   const most = s.profile.filters.maxExperienceRequired;
   if (most != null && !(most >= 0)) { bad("profile.filters.maxExperienceRequired"); errors.push("Most experience a job may ask for can't be negative."); }
 
@@ -1687,10 +1714,17 @@ function check(s) {
       errors.push(`${info.name}: the pause is two numbers of seconds, the first not more than the second.`);
     }
     if (info.list) {
-      const wrong = s.sites[name].searchUrls.filter(u => !JB.sites[name].parse(u));
+      const some = list => `${list.slice(0, 3).join(", ")}${list.length > 3 ? ", …" : ""}`;
+      const links = s.sites[name].searchUrls.map(u => [u, JB.sites[name].parse(u)]);
+      const wrong = links.filter(([, p]) => !p || p.system === "portal").map(([u]) => u);
+      const more = links.filter(([, p]) => p?.more && !s.sites[name].moreForms).map(([u]) => u);
       if (wrong.length) {
         bad(`sites.${name}.searchUrls`);
-        errors.push(`${info.name}: these aren't Greenhouse, Lever, Ashby or Workday job links: ${wrong.slice(0, 3).join(", ")}${wrong.length > 3 ? ", …" : ""}`);
+        errors.push(`${info.name}: these aren't job links it can apply on (a site that wants an account first is left for you): ${some(wrong)}`);
+      }
+      if (more.length) {
+        bad(`sites.${name}.searchUrls`);
+        errors.push(`${info.name}: tick "Other companies' forms too" for these: ${some(more)}`);
       }
     } else if (s.sites[name].searchUrls.some(u => !JB.sites[name].searchHost.test(u))) {
       bad(`sites.${name}.searchUrls`);
@@ -1743,13 +1777,31 @@ async function save(e) {
     $("saved").textContent = "";
     return;
   }
+  s.profile.currency = (s.profile.currency || "").trim().toUpperCase();
+  const { answers, places } = JB.places.apply(settings, s);
   await JB.store.saveSettings(s);
+  if (answers || places) fillForm(s); // show what it put in the answers and places
   setDirty(false);
-  $("saved").textContent = "Saved. The next run uses these.";
+  const into = [answers && `${answers} answer${answers > 1 ? "s" : ""}`, places && "the places LinkedIn and Wellfound search"].filter(Boolean);
+  $("saved").textContent = `Saved.${into.length ? ` Where you are went into ${into.join(" and ")}.` : ""} The next run uses these.`;
+}
+
+/** "Start from a field": its roles in "...and is a role like", and out of "Skip titles with" (lib/filters.js). */
+function useField() {
+  const name = $("field-pick").value;
+  if (!name) return;
+  const list = n => form.querySelector(`[name="profile.filters.${n}"]`);
+  const lines = n => list(n).value.split("\n").map(l => l.trim()).filter(Boolean);
+  const got = JB.filters.forField({ includeTitle: lines("includeTitle"), excludeTitle: lines("excludeTitle") }, name);
+  for (const n of ["includeTitle", "requireRole", "excludeTitle"]) list(n).value = got[n].join("\n");
+  $("field-status").textContent = `${name}: filled in below. Save to keep it; your search keywords are in Sites.`;
+  dirty();
 }
 
 function buildSettings() {
   buildSiteSettings();
+  $("field-pick").append(...Object.keys(JB.filters.FIELDS).map(name => new Option(name, name)));
+  $("field-use").onclick = useField;
   form.addEventListener("input", dirty);
   form.addEventListener("submit", save);
   $("discard").onclick = () => fillForm(settings);
@@ -1770,6 +1822,75 @@ function buildSettings() {
   window.addEventListener("beforeunload", e => {
     if ($("savebar").classList.contains("dirty")) e.preventDefault();
   });
+}
+
+// ---------------------------------------------------------------- where you are
+
+/** The country list, with this one picked: it may be one typed in before there was a list ("india"). */
+function fillPlace(name) {
+  const box = $("place-country");
+  const known = JB.places.country(name);
+  if (name && !known && ![...box.options].some(o => o.value === name)) box.append(new Option(name, name));
+  box.value = known ? known.name : name || "";
+  box.dataset.was = box.value;
+  showPlace();
+}
+
+/** What the forms will be told: "8 LPA", "65000 EUR a year", the country code. */
+function showPlace() {
+  const get = name => form.querySelector(`[name="profile.${name}"]`).value.trim();
+  const here = JB.places.country(get("country"));
+  const salary = name => JB.places.salaryText(get(name) === "" ? null : Number(get(name)), get("currency").toUpperCase(), get("salaryPeriod"));
+  const said = [["current salary", salary("currentSalary")], ["expected", salary("expectedSalary")],
+    ["notice period", get("noticePeriod")], ["country code", here ? `${here.name} (+${here.dial})` : ""]].filter(([, v]) => v);
+  $("place-preview").textContent = said.length ? `Forms will read: ${said.map(([k, v]) => `${k} "${v}"`).join(", ")}.` : "";
+  $("profile-phone").placeholder = here ? `+${here.dial} …` : "+91 98765 43210";
+}
+
+/** A line of Where you can work: the country, what you are there, the salary you'd ask there. */
+function workRow(r = { country: "", can: "visa", salary: null, currency: "" }) {
+  const tr = el("tr");
+  const labelled = (e, key, label) => {
+    e.dataset.key = key;
+    e.setAttribute("aria-label", label);
+    return e;
+  };
+  const country = labelled(el("select", {}, new Option("Choose…", ""), ...JB.places.COUNTRIES.map(c => new Option(c.name, c.name))), "country", "Country");
+  const known = JB.places.country(r.country);
+  if (r.country && !known) country.append(new Option(r.country, r.country));
+  country.value = known ? known.name : r.country || "";
+  const can = labelled(el("select", {}, ...[["citizen", "Citizen"], ["allowed", "Allowed to work"], ["visa", "Need a visa"]]
+    .map(([v, text]) => new Option(text, v, false, v === r.can))), "can", "You there");
+  const salary = labelled(el("input", { type: "number", min: 0, step: "any", value: r.salary ?? "" }), "salary", "Expected salary there");
+  const currency = labelled(el("input", { value: r.currency || "", maxLength: 3, spellcheck: false, autocomplete: "off" }), "currency", "Currency");
+  country.addEventListener("change", () => {
+    const here = JB.places.country(country.value);
+    if (here && (!currency.value.trim() || currency.value.trim().toUpperCase() === JB.places.country(country.dataset.was)?.currency)) currency.value = here.currency;
+    country.dataset.was = country.value;
+  });
+  country.dataset.was = country.value;
+  tr.append(el("td", {}, country), el("td", {}, can), el("td", {}, salary), el("td", {}, currency),
+    el("td", {}, el("button", { type: "button", className: "btn icon", textContent: "✕", title: "Remove", onclick: () => { tr.remove(); dirty(); } })));
+  return tr;
+}
+
+function buildPlace() {
+  const box = $("place-country");
+  box.append(new Option("Choose…", ""), ...JB.places.COUNTRIES.map(c => new Option(c.name, c.name)));
+  box.addEventListener("change", () => { // the currency goes with the country, unless you set another one
+    const currency = $("place-currency");
+    const was = JB.places.country(box.dataset.was), here = JB.places.country(box.value);
+    if (here && (!currency.value.trim() || currency.value.trim().toUpperCase() === was?.currency)) currency.value = here.currency;
+    box.dataset.was = box.value;
+  });
+  $("add-work").onclick = () => {
+    const row = workRow();
+    $("work-rows").append(row);
+    row.querySelector("select").focus();
+    dirty();
+  };
+  $("set-place").addEventListener("input", showPlace);
+  $("set-place").addEventListener("change", showPlace);
 }
 
 // ---------------------------------------------------------------- your resume
@@ -1850,7 +1971,8 @@ async function renderShots() {
   const button = $("shots");
   button.dataset.on = on ? "1" : "";
   button.textContent = on ? "Turn screenshots off" : "Allow screenshots";
-  $("shots-status").textContent = on ? "On: each job that needs you gets a screenshot." : "Off: the history still lists the questions it couldn't answer.";
+  $("shots-status").textContent = on ? "On: each job that needs you gets a screenshot. (Other companies' forms use the same access: turning this off stops those too.)"
+    : "Off: the history still lists the questions it couldn't answer.";
 }
 
 function buildShots() {
@@ -1913,6 +2035,7 @@ async function init() {
   buildHistory();
   buildApps();
   buildSettings();
+  buildPlace();
   buildResume();
   buildWorkdaySignIn();
   buildShots();

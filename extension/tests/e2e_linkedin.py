@@ -248,6 +248,9 @@ def main():
         check = Check(dash)
         dash.evaluate("""async () => {
             const s = await JB.store.getSettings();
+            const before = structuredClone(s);
+            Object.assign(s.profile, { country: "India", city: "Bengaluru", currency: "INR", noticePeriod: "30 days" });
+            JB.places.apply(before, s); // Settings > Where you are, saved: its country code and notice period
             const li = s.sites.linkedin;
             Object.assign(li, { keywords: ["machine learning engineer", "nomatch"], locations: ["India"], searchUrls: [], followCompanies: false });
             Object.assign(li.limits, { delaySeconds: [0, 0], maxPages: 2 });
@@ -382,6 +385,36 @@ def main():
         check(saved["referral"]["sendMode"] == "review", "the review-or-send choice is saved")
         check(saved["skillYears"].get("pytorch") == 1 and saved["workTypes"] == ["remote"] and saved["postedWithin"] == "day",
               f"saved ({saved['skillYears']}, {saved['workTypes']}, {saved['postedWithin']})")
+
+        print("\nSettings: where you are")
+        check(dash.locator("#place-country").input_value() == "India" and dash.locator("#place-currency").input_value() == "INR",
+              "the country and currency set before are shown")
+        dash.select_option("#place-country", "Germany")
+        check(dash.locator("#place-currency").input_value() == "EUR", "the currency goes with the country")
+        dash.fill('[name="profile.city"]', "Berlin")
+        dash.fill('[name="profile.expectedSalary"]', "70000")
+        check('expected "70000 EUR a year"' in dash.locator("#place-preview").inner_text(), "what forms will read is shown")
+        dash.click("#save")
+        check("Where you are went into" in dash.locator("#saved").inner_text(), f"saving says what it filled in ({dash.locator('#saved').inner_text()})")
+        dash.wait_for_function("""() => [...document.querySelectorAll('#answer-rows [data-key="answer"]')].some(i => i.value === "70000 EUR a year")""")
+        got = dash.evaluate("""async () => {
+            const s = await JB.store.getSettings(), ask = (site, q) => JB.answers.answerFor(q, JB.store.effective(s, site).answers);
+            return { expected: ask("hirist", "Expected salary"), li: ask("linkedin", "Expected CTC"), cc: ask("linkedin", "Country code"),
+                     here: ask("hirist", "Are you currently living in Berlin?"), there: ask("hirist", "Are you currently living in Bengaluru?"),
+                     places: s.sites.linkedin.locations };
+        }""")
+        check(got == {"expected": "70000 EUR a year", "li": "70000", "cc": "Germany (+49)", "here": "Yes", "there": "No", "places": ["Germany"]},
+              f"the answers and LinkedIn's places follow ({got})")
+        dash.click("#add-work")
+        row = dash.locator("#work-rows tr").last
+        row.locator('[data-key="country"]').select_option("United States")
+        check(row.locator('[data-key="currency"]').input_value() == "USD", "where you can work: the currency goes with the country")
+        row.locator('[data-key="can"]').select_option("visa")
+        row.locator('[data-key="salary"]').fill("140000")
+        dash.click("#save")
+        dash.wait_for_function("async () => (await JB.store.getSettings()).profile.workIn.length === 1")
+        work = dash.evaluate("async () => (await JB.store.getSettings()).profile.workIn")
+        check(work == [{"country": "United States", "can": "visa", "salary": 140000, "currency": "USD"}], f"...and is saved ({work})")
         check(not errors, f"no errors on the dashboard page {errors}")
         ctx.close()
 

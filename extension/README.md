@@ -24,9 +24,14 @@ Your settings and history stay.
 
 ## First run
 
-1. **Settings** (on the dashboard): check your answers to screening questions. They start as sample values
-   (salary, notice period; phone and college empty, so jobs asking for them are left for you). Then the search
-   keywords, which titles to apply to, and how many applications per run and per day. Save.
+1. **Settings** (on the dashboard): first **Where you are**: your country and city, the currency and your current
+   and expected salary, your notice period and whether you'd relocate. Saving puts these in your answers to screening
+   questions (salary "8 LPA" in India, "65000 EUR a year" elsewhere; LinkedIn's number boxes get the plain amount),
+   along with "Are you based in <your city or country>?" and the phone's country code, and makes LinkedIn and
+   Wellfound search your country instead of the sample India. Until you do, those answers are empty, so the jobs
+   asking them are left for you. Changing one there again changes those answers again; an answer you edit yourself
+   stays until then. Then check the other answers, the search keywords, which titles to apply to, and how many
+   applications per run and per day. Save.
    - **Coming from the Python bots?** Bring your settings and history over instead: in the repo folder run
      `.venv/bin/python tools/export_for_extension.py`, then on the dashboard pick the `extension-import.json`
      it writes (Settings > Bring over from the Python bots). The history makes the extension skip the jobs the
@@ -37,8 +42,13 @@ Your settings and history stay.
 3. **Dry run** lists what it would apply to, without applying. Then **Apply**. Each site runs on its own, so you
    can run several at once, each in its own window.
 
+**Any kind of work.** The sample filters are for software and AI jobs. For another field, in **Settings > Which jobs**
+pick it under **Start from a field** (design, product, marketing, sales, finance, HR, healthcare, teaching and more)
+and **Use it**: its roles become the "...and is a role like" list, and they come out of "Skip titles with" (so
+"manager" stops skipping product managers). Then set each site's search keywords for that work.
+
 Per site, in Settings > Sites: the search keywords (Hirist: any words; Instahyre: skills, searched once per year
-of your experience range; Wellfound: role names, plus the places to search, like `india` or `remote`; Cutshort:
+of your experience range; Wellfound: role names, plus the places to search, like `germany` or `remote`; Cutshort:
 skill names, each looked up once in Cutshort's Skills filter and remembered; Naukri: what you'd type in its search,
 plus the cities to search, empty for anywhere) and how many applications per run and per day. Cutshort applies from its
 logged-in feed, so it needs you logged in even for a dry run.
@@ -56,7 +66,8 @@ they are.
 LinkedIn has more in its tab: its own search filters (experience level, on-site/remote/hybrid, how recent),
 years of experience per skill (for "How many years of experience do you have with X?"), whether to follow the
 company, and **its own answers**, used instead of the shared ones (some of its questions are number boxes, so
-salaries are plain rupee amounts, and the phone goes without +91). It stops for the day when LinkedIn says you've
+salaries are plain amounts, 800000 rather than 8 LPA, and the phone goes without its country code, which is a
+dropdown of its own). It stops for the day when LinkedIn says you've
 hit its Easy Apply limit, and never sends an answer it didn't choose itself.
 
 **Asking for referrals (LinkedIn):** on LinkedIn's page, **Preview** shows who it would ask and the messages,
@@ -81,6 +92,32 @@ and the jobs that only needed those go again on the next run. Your answers are l
 If you choose to do a job in Chrome yourself, it notices what you enter there for the questions it didn't know and,
 when you continue, offers to keep those answers too.
 
+**Jobs in other countries.** Living in India and applying in the US or the UK, say, list those countries in
+**Settings > Where you are > Where you can work**: for each, whether you're a citizen, allowed to work there or would
+need a visa, and the salary you'd ask for there (in its currency). Then, for each job, it works out the job's
+country: India's job sites are in India; elsewhere from the location on the job page ("London, England, United
+Kingdom", "San Francisco, CA", "Remote - US"), or the place it was searched in (LinkedIn's and Wellfound's places).
+Questions about a work permit, sponsorship or a visa are answered for that country ("Will you require sponsorship?"
+is Yes for a US job, No for an Indian one), and so are questions naming a country ("Are you a U.S. citizen?"),
+before any other answer. The expected salary is the one you gave for there; it never sends your Indian one abroad.
+When the job's country isn't clear, those questions are left for you rather than guessed. Jobs in a country that
+isn't in the list are skipped, and so are jobs where you'd need a visa that say they won't sponsor one ("unable to
+sponsor", "U.S. citizens only", "must have the right to work in the UK"). With the list empty, nothing changes.
+
+**What most forms ask the same way.** After all your own answers come a few standard ones. US forms' voluntary
+gender, race and ethnicity, veteran and disability questions are declined, with whichever option the form uses for
+that ("Decline To Self Identify", "I don't wish to answer", "Prefer not to say"); to answer them yourself, choose
+*Leave them for me* in Settings > Your profile. A box consenting to the company handling your application's data
+(an applicant privacy notice, GDPR) is ticked; one about its talent pool, future roles or marketing is not. "When can
+you start?" gets your notice period from Where you are, and a box that wants a date gets the date that makes
+("30 days" on 31 October: 2026-11-30, or 11/30/2026 if its placeholder reads MM/DD/YYYY).
+
+**Forms in other languages.** A question in any language or script is kept and matched like an English one, and
+options are matched ignoring accents ("Si" picks "Sí"). The experience a job asks for ("3 bis 5 Jahre", "3 à 5 ans",
+"3〜5年") and lengths of time in options ("3 Monate", "moins de 15 jours", "De 1 a 3 meses") are read in English,
+German, French, Spanish, Portuguese, Italian, Dutch and Polish, and experience in Swedish, Russian, Japanese and
+Korean too.
+
 **Applications: what happened after applying.** Every job it applied to is on the Applications page by itself.
 When a company replies, click **They replied** and say how (email, call, a message on the site, LinkedIn, a
 referral) and who. Add its rounds in one click from a **template** (Startup, Product company, Service company, or
@@ -94,7 +131,8 @@ no reply in 21 days are marked gone quiet and close as ghosted in one go. Jobs y
 **Company sites (Greenhouse, Lever, Ashby, Workday).** Many jobs apply on the company's own form instead of the job
 site's. When that form is on Greenhouse, Lever, Ashby or Workday, **Company sites** in the sidebar applies there: to the job links you
 list in its Settings tab, and to the jobs the other sites found that lead to one of these (they're in History as
-Other site). First fill in **Settings > Your profile** (name, email, phone, city, links) and add your resume: they go in
+Other site). First fill in **Settings > Your profile** (name, email, phone, links) and **Where you are** (city,
+country), and add your resume: they go in
 the standard boxes, and the resume is uploaded. The company's own questions are answered from your answers like on
 any site, and the ones nothing answers are asked once (*When it's stuck, ask me*). Questions a form doesn't require
 are left alone unless you have an answer. By default it shows you each filled-in form with a **Send it** button; a
@@ -105,6 +143,15 @@ one, or when that doesn't work (some companies want you to confirm your email fi
 window. Then it goes page by page (My Information, My Experience, its questions) up to Review. Anything Workday still
 wants on a page that the bot can't fill, like a date, you do there and press Save and Continue. The sign-in is kept
 only in this Chrome, apart from the settings: never in a backup, and not shown again once saved.
+
+**Other companies' forms.** Tick *Other companies' forms too* in Company sites' Settings tab and it also applies on
+Workable, SmartRecruiters, Recruitee, Teamtailor, BambooHR, JazzHR, Breezy, Jobvite, Keka and Zoho Recruit, and on any
+company's own one-page form: your links, and the jobs LinkedIn, Naukri and the others found that lead there. Chrome
+asks once to let Sendoff onto all sites for this (the same access screenshots use). On the job's page it presses
+**Apply** if the form isn't there yet, fills it in the same way, and always shows it to you with **Send it** first,
+even with *Send it straight away* chosen: it's a form it hasn't seen the like of. A site that wants you to sign in or
+make an account first (iCIMS, SuccessFactors, Taleo, Oracle, Darwinbox, or a careers site asking for a password) is
+left for you.
 
 **Replies, read from the sites.** LinkedIn and Naukri list the jobs you applied to with what happened to each. After
 each run there (you can turn it off in their Settings tab), and whenever you click **Check for replies** on
@@ -127,6 +174,8 @@ Chrome asks for:
   e.g. to notice an apply button that leads to another site.
 - **Screenshots** are off by default. Turning them on (Settings > Screenshots) asks for access to all sites,
   because that's what Chrome requires for taking a screenshot; the bot still only goes to the job sites.
+- **Other companies' forms** (Company sites) ask for the same access to all sites, to fill in a form on whatever site
+  a company uses. It goes only to the job links you list and the ones the job sites led to.
 
 ## How it differs from the Python bot
 
@@ -187,6 +236,7 @@ Plain JavaScript, Manifest V3, no build step.
 | `lib/page.js` | Runs inside job pages: finds buttons, reads forms, fills them (from `core.py`) |
 | `lib/filters.js`, `lib/answers.js` | Which jobs to apply to, answers to questions (from `core.py`) |
 | `lib/store.js` | Settings, history, applications and the answers you gave, in `chrome.storage.local` |
+| `lib/places.js` | Where you are: the countries (calling code, currency), and the answers it fills in from them |
 | `lib/tracker.js` | Applications: where each one stands, what's next, the figures, round templates |
 | `lib/defaults.js` | Default settings, generated from the bots' `config.example.yaml` |
 | `sites/<site>.js` | Everything specific to one site (from `<site>/portal.py`; Naukri's is the extension's own): its search pages, how to read a job, its quirks |
@@ -215,6 +265,7 @@ node --test extension/tests/                     # filters and answers, checked 
 .venv/bin/python extension/tests/e2e_company.py  # company sites: Greenhouse, Lever and Ashby forms
 .venv/bin/python extension/tests/e2e_workday.py  # company sites: Workday, page by page, signing in
 .venv/bin/python extension/tests/e2e_replies.py  # replies read from LinkedIn's and Naukri's lists of your applications
+.venv/bin/python extension/tests/e2e_forms.py    # other companies' forms: behind an Apply button, a job abroad, sign-in
 .venv/bin/python tools/export_for_extension.py --defaults   # after changing a config.example.yaml
 ```
 

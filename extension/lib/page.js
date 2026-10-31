@@ -100,7 +100,9 @@
     let p = e.parentElement;
     while (p && !same.every(r => p.contains(r))) p = p.parentElement;
     const options = norm(same.map(optionOf).join(" ")); // the options' own text: a block with more has the question too
-    for (let i = 0; p && i < 4 && norm(p.innerText).length <= options.length + 5; i++) p = p.parentElement;
+    // ...but not one with other questions' boxes in it (the whole form): a lone "I agree to ..." box is its own question
+    const others = block => [...block.querySelectorAll("input, textarea, select")].some(x => !same.includes(x) && x.type !== "hidden");
+    for (let i = 0; p && i < 4 && norm(p.innerText).length <= options.length + 5 && p.parentElement && !others(p.parentElement); i++) p = p.parentElement;
     return p ? norm(p.innerText).slice(0, 200) : "";
   }
 
@@ -233,7 +235,8 @@
   }
 
   const NOTE_RE = /note|cover|message|pitch|recruiter|why|introduc|about (you|yourself)|interests? you|good fit/i;
-  const plainText = t => (t || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const DATE_HINT_RE = /^\s*(dd|mm|yyyy)[./ -](dd|mm|yyyy)[./ -](dd|mm|yyyy)\s*$/i; // a text box wanting a date
+  const plainText = t => JB.answers.plain(t); // any script, accents aside (lib/answers.js)
   const IGNORED_TYPES = new Set(["hidden", "submit", "button", "file", "search", "checkbox", "image", "reset"]);
 
   // a dropdown's real options: not its "Select…" (or an empty value, like Lever's "Click Here (If you encounter an issue…)")
@@ -244,7 +247,7 @@
    * ready to submit. With `requiredOnly` (long forms, like a company's own), a question that needn't be answered
    * is filled if there's an answer and otherwise left alone. */
   async function fillForm(root, answers, note, { requiredOnly = false } = {}) {
-    const { answerFor, numberAnswer, pick, pickDuration } = JB.answers;
+    const { answerFor, numberAnswer, pick, pickDuration, dateAnswer } = JB.answers;
     const inputs = [...root.querySelectorAll("input, textarea, select")];
     const missing = [];
     const radioGroups = new Map();
@@ -296,6 +299,8 @@
       const isMessageBox = f.tag === "textarea" && (!f.label || NOTE_RE.test(f.label));
       if (answer == null && isMessageBox && note) answer = note;
       if (answer == null && isMessageBox && !requiredOnly) continue; // no cover note set: send without a message
+      const dateFormat = f.type === "date" ? "iso" : DATE_HINT_RE.test(inputs[f.i].placeholder || "") ? inputs[f.i].placeholder : null;
+      if (answer != null && dateFormat) answer = dateAnswer(answer, dateFormat); // "30 days" -> the date 30 days from now
       if (answer == null) {
         ask(f, { q: f.label || f.name || f.tag, kind: f.tag === "textarea" ? "long" : f.type === "number" ? "number" : "text" });
         continue;
@@ -304,10 +309,12 @@
     }
     for (const group of radioGroups.values()) {
       if (group.checked) continue;
-      const answer = (answerFor(group.label, answers) || "").toLowerCase();
-      const chosen = group.options.find(([, option]) => answer && option.toLowerCase() === answer);
+      const given = answerFor(group.label, answers);
+      const options = group.options.map(([, option]) => option);
+      const k = given == null ? null : pick(options, given) ?? pickDuration(options, given); // like a dropdown's
+      const chosen = k == null ? null : group.options[k];
       if (!chosen) {
-        if (!requiredOnly || group.required) missing.push({ q: group.label || "choice", kind: "choice", options: group.options.map(([, option]) => option) });
+        if (!requiredOnly || group.required) missing.push({ q: group.label || "choice", kind: "choice", options });
         continue;
       }
       inputs[chosen[0]].click(); // radios are often hidden behind custom styling

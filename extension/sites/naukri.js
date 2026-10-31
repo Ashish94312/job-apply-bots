@@ -24,6 +24,7 @@
   const site = {
     name: "naukri",
     label: "Naukri",
+    country: "IN", // its jobs are all in India (lib/places.js)
     domain: "naukri.com",
     loginUrl: `${BASE}/nlogin/login`,
     loginCheckUrl: `${BASE}/mnjuser/homepage`, // sends you to the login page if you aren't
@@ -325,7 +326,6 @@
             return save(d);
           }
           if (c.boxes.length) { // "select all that apply": the answer lists the options, comma separated
-            const plain = s => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
             const chosen = JB.answers.pickSeveral(c.boxes.map(optionText), given).map(k => c.boxes[k]);
             if (!chosen.length) return false;
             for (const b of chosen) if (!b.checked) b.click();

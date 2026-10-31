@@ -56,6 +56,26 @@
     ].filter(([, answer]) => answer);
   }
 
+  // US forms' voluntary self-identification: gender, race and ethnicity, veteran and disability status
+  const SELF_ID = "^\\W*(what is your |please (select|identify) your |your )?(gender( identity)?|sex|race|ethnicity|race\\W+ethnicity|"
+    + "(protected )?veteran status|disability status|sexual orientation)\\b|hispanic or latin|are you hispanic|"
+    + "identify as (transgender|a (protected )?veteran|having a disability)|voluntary self.identification";
+  // Consent to the company handling your application's data (GDPR), not to its talent pool or marketing
+  const CONSENT = "^(?!.*(future|talent (pool|community)|other (roles|positions|opportunities|vacancies)|marketing|newsletter|sms|text message|whatsapp|promotion))"
+    + "(?=.*(consent|agree|acknowledge|accept|confirm|have read))(?=.*(privacy|data protection|gdpr|personal (data|information)|processing|applicant data))";
+  const START = "start date|when (can|could) you (start|join)|earliest (start|joining)|available (to start|from)|availability (date|to start)|date (you are |you're )?available";
+
+  /** Answers most forms want the same way, after all of yours: US forms' self-identification declined (unless you
+   * said to leave it for you, Settings > Your profile), consent to the company handling your application's data,
+   * and when you can start: your notice period, as the date that makes where a form wants a date. */
+  function standardAnswers(p) {
+    return [
+      [SELF_ID, (p.selfIdentify ?? "decline") === "decline" ? "Decline to self-identify" : ""],
+      [CONSENT, "Yes"],
+      [START, p.noticePeriod || ""],
+    ].filter(([, answer]) => answer);
+  }
+
   /** What one site's run uses: the shared profile with that site's own settings on top. A site with answers of
    * its own (LinkedIn: number boxes, phone without +91) uses those instead of the shared ones. Answers you gave
    * when it asked (`kept`, see learn) come first, each for its own question; your profile's details last. */
@@ -64,7 +84,8 @@
     const answers = own.answers && own.answers.length ? own.answers : settings.profile.answers;
     return {
       ...settings.profile, ...own,
-      answers: [...Object.entries(kept).map(([k, a]) => [`=${k}`, a.answer]), ...answers, ...profileAnswers(settings.profile)],
+      answers: [...Object.entries(kept).map(([k, a]) => [`=${k}`, a.answer]), ...answers, ...profileAnswers(settings.profile),
+        ...standardAnswers(settings.profile)],
     };
   }
 
@@ -203,10 +224,23 @@
 
   // ------------------------------------------------------------ answers you gave when it asked
 
+  /** Under today's question keys: they used to drop every letter outside a-z ("Kündigungsfrist" was
+   * "k ndigungsfrist", and a question in Japanese had none). Two that are now one: the newer, with both's jobs. */
+  function rekey(map) {
+    const out = {};
+    for (const [k, v] of Object.entries(map)) {
+      const now = JB.answers.questionKey(v.q) || k;
+      const was = out[now];
+      out[now] = was && (was.ts || "") > (v.ts || "") ? was : v;
+      if (was?.jobs) out[now] = { ...out[now], jobs: [...new Set([...was.jobs, ...(v.jobs || [])])] };
+    }
+    return out;
+  }
+
   // question key (JB.answers.questionKey) -> { q, answer, kind, options, site, ts }
-  const kept = async () => (await local.get("kept")).kept || {};
+  const kept = async () => rekey((await local.get("kept")).kept || {});
   // question key -> { q, kind, options, site, jobs: ["site:jobId" left for you over it], ts }: not answered yet
-  const waiting = async () => (await local.get("waiting")).waiting || {};
+  const waiting = async () => rekey((await local.get("waiting")).waiting || {});
 
   /** Keep answers you gave, each { q, answer, kind, options }, for next time. A job left for you only over
    * questions answered now is forgotten, so the next run tries it again. Returns how many that is. */

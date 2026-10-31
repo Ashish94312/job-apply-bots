@@ -13,7 +13,7 @@
   const POSTED_WITHIN = { day: "r86400", week: "r604800", month: "r2592000" };
   const MAX_STEPS = 12;
 
-  const EXPERIENCE_RE = /(?<![\d.])(\d+(?:\.\d+)?)\s*(?:-|–|to)\s*\d+(?:\.\d+)?\s*(?:years?|yrs?)/gi;
+  const EXPERIENCE_RE = new RegExp(JB.filters.RANGE, "giu"); // "3 - 5 years", "3 bis 5 Jahre"... (lib/filters.js)
   // "3+ years of experience", "minimum 2 years experience": LinkedIn job pages state experience like this.
   const PLUS_YEARS_RE = /(?<![\d.])(\d{1,2})\s*\+?\s*(?:years?|yrs?)\b[^.\n]{0,40}?\bexperience/gi;
 
@@ -25,8 +25,8 @@
     return `${n} - ${n} years. ${text}`;
   }
 
-  const plain = s => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
-  const pick = (options, answer) => JB.answers.pick(options, answer); // lib/answers.js
+  const plain = s => JB.answers.plain(s); // lib/answers.js
+  const pick = (options, answer) => JB.answers.pick(options, answer);
 
   // "How many years of work experience do you have with Python?", "Years of Java experience", "Experience with
   // Python?", "React experience?": the skill is the group that matched.
@@ -108,6 +108,15 @@
 
     searchPageUrl(url, n) {
       return n === 1 ? url : `${url}${url.includes("?") ? "&" : "?"}start=${(n - 1) * 25}`;
+    },
+
+    /** The place a search page searches in: its "location". */
+    placeOf(url) {
+      try {
+        return new URL(url).searchParams.get("location") || "";
+      } catch {
+        return "";
+      }
     },
 
     searchLabel(url) {
@@ -387,7 +396,10 @@
           let p = h && h.parentElement;
           for (let i = 0; p && i < 4 && p.innerText.trim().length < 200; i++) p = p.parentElement;
           const about = (p && p.innerText) || (document.querySelector("main") || {}).innerText || "";
-          return { title, company, text: withRange(about) };
+          // "Bengaluru, Karnataka, India · Reposted 2 weeks ago · Over 100 applicants", under the title
+          const card = document.querySelector(".job-details-jobs-unified-top-card__tertiary-description-container, .job-details-jobs-unified-top-card__primary-description-container");
+          const where = card ? norm(card.innerText).split(" · ")[0] : "";
+          return { title, company, text: withRange(about), where };
         },
 
         /** The job shows "Applied 3 minutes ago" and a "See application" button once you've applied. */

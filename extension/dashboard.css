@@ -629,7 +629,11 @@ dialog.panel::backdrop { background: rgb(10 12 14 / .32); }
   background: var(--surface); font-weight: 600;
 }
 .rounds-table td:first-child { width: 190px; }
-.rounds-table select { width: 100%; height: 32px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface); }
+.rounds-table select, .work-table select { width: 100%; height: 32px; padding: 0 6px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface); }
+.work-table td:first-child { width: 32%; min-width: 170px; }
+.work-table td:nth-child(4) { width: 80px; }
+#set-place .field select, #set-jobs .inline .field select { width: 100%; }
+#set-jobs .inline { align-items: end; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

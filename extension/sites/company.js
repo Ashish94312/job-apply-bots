@@ -1,4 +1,6 @@
-// Company sites: applying on a company's own application form when it's on Greenhouse, Lever, Ashby or Workday. It has no
+// Company sites: applying on a company's own application form when it's on Greenhouse, Lever, Ashby or Workday, and
+// with "Other companies' forms" on (it needs access to all sites), on Workable, SmartRecruiters, Recruitee and other
+// systems like them, or any company's own one-page form. It has no
 // search: it works through the job links you list in Settings, and the jobs the other sites found that apply on one
 // of these (recorded as "Other site", with the link it opened). Your profile and resume fill the standard fields;
 // the company's own questions are answered like any site's, asked once when nothing answers them.
@@ -11,8 +13,38 @@
   const SIGN_IN = [["Signed in, continue", "continue", "primary"], ["Skip this job", "skip"], ["Stop run", "stop", "stop"]];
   const CONTINUE = [["Done, continue", "continue", "primary"], ["Stop run", "stop", "stop"]];
   const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+  // Systems whose forms fill like these (one page: your details, the company's questions), often behind the job page's
+  // Apply button: [system, host, the job's id in the path]. On hosts every company shares, the company is the path's first part.
+  const MORE = [
+    ["workable", /^apply\.workable\.com$/, /^\/[\w-]+\/j\/(\w+)/],
+    ["smartrecruiters", /^jobs\.smartrecruiters\.com$/, /^\/[\w-]+\/(\d+)/],
+    ["recruitee", /\.recruitee\.com$/, /^\/o\/([\w-]+)/],
+    ["teamtailor", /\.teamtailor\.com$/, /^\/jobs\/(\d+)/],
+    ["bamboohr", /\.bamboohr\.com$/, /^\/careers\/(\d+)/],
+    ["jazzhr", /\.applytojob\.com$/, /^\/apply\/(\w+)/],
+    ["breezy", /\.breezy\.hr$/, /^\/p\/([\w-]+)/],
+    ["jobvite", /^jobs\.jobvite\.com$/, /^\/[\w-]+\/job\/(\w+)/],
+    ["keka", /\.keka\.com$/, /^\/careers\/jobdetails\/(\d+)/],
+    ["zoho", /\.zohorecruit\.(com|in|eu)$/, /\/jobs\/careers\/(\d+)/i],
+  ];
+  // Systems that want an account of their own first and go page after page: left for you
+  const PORTAL_RE = /(^|\.)(icims\.com|taleo\.net|successfactors\.(com|eu)|oraclecloud\.com|darwinbox\.(in|com)|jobs\.sap\.com)$/;
+  // Job boards, not a company's form
+  const BOARD_RE = /(^|\.)(linkedin|naukri|hirist|instahyre|wellfound|cutshort|indeed|glassdoor|monster|foundit)\.[a-z.]+$/;
+  const SHARED_HOSTS = ["apply.workable.com", "jobs.smartrecruiters.com", "jobs.jobvite.com"];
+  const TRACKING_RE = /^(utm|gh_src$|src$|source$|ref$|refid$|trk|trid$|lever-|codes$|fbclid$|gclid$)/i;
+  const OWN_RE = /(^|\.)(greenhouse\.io|jobs\.lever\.co|jobs\.ashbyhq\.com|myworkdayjobs\.com|myworkdaysite\.com)$/;
 
-  /** A job link it can apply on: { system, jobId, url } with the form's own address, else null. */
+  /** A short fixed id for an address. */
+  function hash(text) {
+    let h = 5381;
+    for (const ch of text) h = ((h * 33) ^ ch.charCodeAt(0)) >>> 0;
+    return h.toString(36);
+  }
+
+  /** A job link it can apply on: { system, jobId, url } with the form's own address (`more`: one of the systems
+   * that need "Other companies' forms", or `system` "web" for any company's own), { system: "portal" } for one that
+   * wants an account first, else null. */
   function parse(link) {
     let u;
     try {
@@ -39,7 +71,17 @@
     if (u.protocol === "https:" && /\.(myworkdayjobs|myworkdaysite)\.com$/.test(u.hostname) && (m = u.pathname.match(/^(.*\/job\/.+_([\w-]+?))(?:\/apply.*)?\/?$/))) {
       return { system: "workday", jobId: `wd-${u.hostname.split(".")[0]}-${m[2]}`.toLowerCase(), url: `https://${u.hostname}${m[1]}` };
     }
-    return null;
+    if (u.protocol !== "https:" || BOARD_RE.test(u.hostname) || OWN_RE.test(u.hostname)) return null; // the ones above, but not a job
+    if (PORTAL_RE.test(u.hostname)) return { system: "portal" };
+    for (const [system, host, path] of MORE) {
+      if (!host.test(u.hostname) || !(m = u.pathname.match(path))) continue;
+      const company = SHARED_HOSTS.includes(u.hostname) ? u.pathname.split("/")[1] : u.hostname.split(".")[0];
+      return { system, jobId: `${system}-${company}-${m[1]}`.toLowerCase(), url: `https://${u.hostname}${u.pathname}`, more: true };
+    }
+    const path = u.pathname.replace(/\/+$/, "");
+    if (!path && !u.search) return null; // a site's front page, not a job
+    const ids = [...u.searchParams].filter(([k]) => !TRACKING_RE.test(k)).sort(); // "?jobId=5" is the job; "?utm_source=x" isn't
+    return { system: "web", jobId: `web-${hash(u.hostname + path + (ids.length ? `?${new URLSearchParams(ids)}` : ""))}`, url: u.href, more: true };
   }
 
   /** The link an "Other site" job opened, from its note ("apply opens an external site: <url>", "redirected to <url>"). */
@@ -49,15 +91,16 @@
   function queue(cfg, history) {
     const seen = new Set(Object.values(history).filter(r => r.site === "company" && r.status !== "failed").map(r => r.jobId));
     const out = new Map();
+    const can = p => p && p.jobId && (!p.more || cfg.moreForms) && !seen.has(p.jobId);
     for (const link of cfg.searchUrls || []) {
       const p = parse(link);
-      if (p && !seen.has(p.jobId)) out.set(p.jobId, { url: p.url, jobId: p.jobId, title: "", company: "", text: "" });
+      if (can(p)) out.set(p.jobId, { url: p.url, jobId: p.jobId, title: "", company: "", text: "" });
     }
     if (cfg.fromOthers) {
       const found = Object.values(history).filter(r => r.status === "external").sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
       for (const r of found) {
         const p = parse(linkIn(r.note));
-        if (p && !seen.has(p.jobId) && !out.has(p.jobId)) {
+        if (can(p) && !out.has(p.jobId)) {
           out.set(p.jobId, { url: p.url, jobId: p.jobId, title: r.title, company: r.company, text: "", from: `${r.site}:${r.jobId}` });
         }
       }
@@ -82,7 +125,12 @@
     /** The job and its form are open: fill it from your answers, profile and resume, ask about what's left, then
      * send it (after you've had a look, unless Settings says to send straight away). Returns [status, note]. */
     async apply(run, cfg, job) {
-      if ((parse(job.url) || {}).system === "workday") return this.workday(run, cfg, job);
+      const link = parse(job.url) || {};
+      if (link.system === "workday") return this.workday(run, cfg, job);
+      if (link.more) {
+        const form = await this.openForm(run);
+        if (form !== true) return status("needs_manual", form);
+      }
       const resume = await JB.store.resume();
       const note = JB.answers.coverNote(cfg.coverNote, job);
       run.step(`Filling in the application for ${named(job)}`);
@@ -93,7 +141,7 @@
         if (learned !== true) return run.unanswered(missing, learned);
         missing = await run.exec("site.fill", cfg.answers, note, resume);
       }
-      if (cfg.sendMode !== "direct") {
+      if (cfg.sendMode !== "direct" || link.more) { // a form it hasn't seen the like of: always shown to you first
         const go = await run.ask("Filled in: send it?", `${named(job)}. Have a look in the bot's window first if you like.`, REVIEW);
         if (go === "skip") return status("skipped", "declined");
         if (go === "manual") return this.byHand(run, job, "Send it in the bot's window.");
@@ -197,6 +245,20 @@
     },
 
     /** You finish it in the bot's window; then see if it went. */
+    /** The application form, on the job's page or behind its Apply button: true, else why it's left for you. */
+    async openForm(run) {
+      for (let i = 0; i < 3; i++) {
+        const got = await run.exec("site.openForm");
+        if (got === true) return true;
+        if (got === "sign-in") return "it wants you to sign in or make an account there";
+        if (got !== "pressed") break;
+        await run.sleep(2500);
+        await run.loaded({ fresh: false });
+        await run.sleep(1500); // forms draw themselves after the page loads
+      }
+      return "no application form on its page";
+    },
+
     async byHand(run, job, what) {
       await run.ask("Do this in Chrome, then continue", `${named(job)}: ${what}`, CONTINUE);
       return (await run.exec("site.result")).sent ? status("applied", "finished by hand") : status("needs_manual", "not sent");
@@ -209,6 +271,7 @@
       const SENT_RE = /thank you for (applying|your application)|application (was |has been )?(successfully )?(submitted|received|sent)|we('ve| have) received your application|your application is on its way/i;
       const CODE_RE = /(verification|security|confirmation) code|enter the code/i;
       const SUBMIT_RE = /^\s*submit( (your|my))?( application)?\s*$/i;
+      const APPLY_RE = /^\s*(apply( now| online| here| for (this|the) (job|position|role))?|i'?m interested|start (your |my )?application)\s*$/i;
 
       const form = () => document.querySelector("#application-form, .application-form form, form#application_form")
         || document.querySelector(".ashby-application-form-container") || document.querySelector("main form") || document.body;
@@ -420,7 +483,12 @@
           else company = /Job Application for .+ at (.+)$/.exec(document.title)?.[1] || ""; // Greenhouse
           // else the company's name in the address: greenhouse "for=<board>", lever and ashby "/<company>/"
           company = company || new URL(location.href).searchParams.get("for") || location.pathname.split("/")[1] || "";
-          return { title: norm(title ? title.innerText : fromTitle[0]).slice(0, 150), company: norm(company).slice(0, 100), text: norm(document.body.innerText).slice(0, 4000) };
+          // where: Greenhouse ".job__location" (or ".location"), Lever's categories, Workday's "locations", else a "Location" heading's next
+          const place = [".job__location", "#header .location", ".posting-categories .location", "[data-automation-id=locations] dd", "[data-automation-id=locations]"]
+            .map(css => document.querySelector(css)).find(e => e && norm(e.innerText));
+          const heading = !place && [...document.querySelectorAll("h2, h3, dt, label, strong")].find(e => /^location$/i.test(norm(e.innerText)));
+          const where = norm((place || heading?.nextElementSibling)?.innerText || "").slice(0, 200);
+          return { title: norm(title ? title.innerText : fromTitle[0]).slice(0, 150), company: norm(company).slice(0, 100), text: norm(document.body.innerText).slice(0, 4000), where };
         },
 
         /** Fill the form; returns the questions that must be answered and have no answer ([{ q, kind, options }],
@@ -443,6 +511,22 @@
             missing.splice(0, missing.length, ...missing.filter(m => !where.length || m.q !== where[0].q), ...where);
           }
           return missing;
+        },
+
+        /** Is there an application form here: your name or email and a few more boxes, or a resume box? Else press
+         * the job's Apply button, in this tab ("pressed"). "sign-in" for a page wanting a password; false for neither. */
+        openForm() {
+          const boxes = [...form().querySelectorAll("input, textarea, select")]
+            .filter(e => !["hidden", "search", "submit", "button", "image", "reset"].includes(e.type)
+              && JB.page.isVisible(e.type === "file" ? e.closest("label, li, div") || e : e)); // a file box hides behind its button
+          if (boxes.some(e => e.type === "password" && JB.page.isVisible(e))) return "sign-in";
+          const said = e => `${e.name} ${e.id} ${e.getAttribute("autocomplete") || ""} ${e.getAttribute("aria-label") || ""} ${e.placeholder || ""}`;
+          if (boxes.some(isResumeBox) || (boxes.length >= 3 && boxes.some(e => /name|e-?mail/i.test(said(e))))) return true;
+          const apply = JB.page.firstVisible(document, APPLY_RE);
+          if (!apply) return false;
+          if (apply.target) apply.target = "_self"; // a new tab is one the bot can't follow
+          JB.page.click(apply);
+          return "pressed";
         },
 
         submit() {

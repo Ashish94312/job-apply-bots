@@ -108,7 +108,7 @@ Opens the window the extension works in, waits for its pages to load, and reads 
 
 Host permissions
 ```text
-Each listed site is a job board the extension searches and applies on for the user: hirist.tech, instahyre.com, wellfound.com, cutshort.io and linkedin.com. On LinkedIn it also sends the referral messages the user sets up and confirms. No other sites are accessed. Access to all sites is optional and only requested if the user turns on screenshots, because chrome.tabs.captureVisibleTab requires it.
+Each listed site is a job board or company application form the extension searches and applies on for the user: hirist.tech, instahyre.com, wellfound.com, cutshort.io, linkedin.com and naukri.com, and companies' application forms on greenhouse.io, jobs.lever.co, jobs.ashbyhq.com, myworkdayjobs.com and myworkdaysite.com. On LinkedIn it also sends the referral messages the user sets up and confirms, and on LinkedIn and Naukri it reads the replies to the user's applications so it can show what happened after applying. No other sites are accessed unless the user allows it. Access to all sites is optional and only requested if the user turns on screenshots (chrome.tabs.captureVisibleTab requires it) or other companies' application forms: then it fills in and, after the user reviews it, sends the application form on the site the company uses, only for the job links the user lists or that the job sites led to.
 ```
 
 **Are you using remote code?** No.
@@ -120,7 +120,8 @@ All JavaScript is in the package. Nothing is downloaded or evaluated at runtime.
 
 - Personally identifiable information (the phone number, city, college and similar the user enters as answers; the names of LinkedIn members they ask for a referral)
 - Location (the city the user enters as an answer)
-- Personal communications (the referral messages the user writes and sends)
+- Authentication information (the Workday email and password, only if the user saves one)
+- Personal communications (the referral messages the user writes and sends; the replies to their applications on LinkedIn and Naukri)
 - Web history (the job pages the extension has handled)
 - Website content (the job listings and forms it reads)
 
