@@ -175,7 +175,7 @@
 
   /** Candidates at the company: people you're connected with first, then alumni of `school`, then the rest. */
   async function findPeople(r, ids, rc, want) {
-    const searches = [...(rc.school ? [rc.school] : []), ...(rc.peopleKeywords && rc.peopleKeywords.length ? rc.peopleKeywords : ["engineer"])];
+    const searches = [...(rc.school ? [rc.school] : []), ...(rc.peopleKeywords && rc.peopleKeywords.length ? rc.peopleKeywords : [""])]; // none: anyone there
     const skip = rc.skipHeadline || [];
     const found = new Map();
     for (const [rank, keywords] of searches.entries()) {

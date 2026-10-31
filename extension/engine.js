@@ -342,7 +342,7 @@
     async screenshot(jobId) {
       try {
         // Chrome lets an extension take screenshots only with access to all sites: you allow that on the dashboard.
-        if (!(await chrome.permissions.contains({ origins: ["<all_urls>"] }))) return false;
+        if ((await JB.store.screenshots()) === false || !(await chrome.permissions.contains({ origins: ["<all_urls>"] }))) return false;
         const image = await chrome.tabs.captureVisibleTab(this.windowId, { format: "jpeg", quality: 70 });
         await JB.store.saveShot(this.site.name, jobId, image);
         return true;

@@ -50,7 +50,7 @@ code from the internet: everything it runs is in the extension you installed.
   pages and fill in applications on those sites, and (on LinkedIn) send the referral messages you set up.
 - **greenhouse.io, jobs.lever.co, jobs.ashbyhq.com, myworkdayjobs.com, myworkdaysite.com:** to fill in a company's own
   application form there, with your profile, resume and answers, and send it to that company. On Workday you sign in
-  yourself; Sendoff never sees or keeps your password.
+  yourself, or with the sign-in you saved (above), which is typed only into Workday's own sign-in and create-account forms.
 - **Tabs and scripting:** to open the window it works in, follow where its pages go, and read and fill those
   pages.
 - **Storage:** to keep your settings and history on your computer.

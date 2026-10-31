@@ -30,8 +30,11 @@ Your settings and history stay.
    along with "Are you based in <your city or country>?" and the phone's country code, and makes LinkedIn and
    Wellfound search your country instead of the sample India. Until you do, those answers are empty, so the jobs
    asking them are left for you. Changing one there again changes those answers again; an answer you edit yourself
-   stays until then. Then check the other answers, the search keywords, which titles to apply to, and how many
-   applications per run and per day. Save.
+   stays until then. Then, under **Which jobs**, pick the kind of work you want in **Start from a field** and **Use it**:
+   it fills in the roles to apply to and what LinkedIn, Naukri, Wellfound and Hirist search for. Sendoff starts with
+   none of anyone's own: no search keywords, title filters, experience range or skills, and no answers made up about
+   you (your years of experience, a degree, a work permit), so those questions are asked once rather than guessed.
+   Check the answers, your experience range, and how many applications per run and per day. Save.
    - **Coming from the Python bots?** Bring your settings and history over instead: in the repo folder run
      `.venv/bin/python tools/export_for_extension.py`, then on the dashboard pick the `extension-import.json`
      it writes (Settings > Bring over from the Python bots). The history makes the extension skip the jobs the
@@ -42,10 +45,11 @@ Your settings and history stay.
 3. **Dry run** lists what it would apply to, without applying. Then **Apply**. Each site runs on its own, so you
    can run several at once, each in its own window.
 
-**Any kind of work.** The sample filters are for software and AI jobs. For another field, in **Settings > Which jobs**
-pick it under **Start from a field** (design, product, marketing, sales, finance, HR, healthcare, teaching and more)
-and **Use it**: its roles become the "...and is a role like" list, and they come out of "Skip titles with" (so
-"manager" stops skipping product managers). Then set each site's search keywords for that work.
+**Any kind of work.** In **Settings > Which jobs**, pick it under **Start from a field** (software, data, design,
+product, marketing, sales, finance, HR, healthcare, teaching and more) and **Use it**: its roles become the "...and is
+a role like" list, they come out of "Skip titles with" (so "manager" stops skipping product managers), and the sites
+that take any words (LinkedIn, Naukri, Wellfound, Hirist) get what to search for, where you hadn't set it. Instahyre
+and Cutshort search by skill: add yours there.
 
 Per site, in Settings > Sites: the search keywords (Hirist: any words; Instahyre: skills, searched once per year
 of your experience range; Wellfound: role names, plus the places to search, like `germany` or `remote`; Cutshort:
@@ -140,14 +144,16 @@ captcha or a code the company emails you is left for you to do in the bot's wind
 On Workday each company has its own account. Save a sign-in in **Settings > Your profile** (an email and a password,
 best one used only for these) and the bot signs in by itself, or makes the account when a company has none yet; without
 one, or when that doesn't work (some companies want you to confirm your email first), it asks you to sign in in its
-window. Then it goes page by page (My Information, My Experience, its questions) up to Review. Anything Workday still
-wants on a page that the bot can't fill, like a date, you do there and press Save and Continue. The sign-in is kept
+window. Then it goes page by page (My Information, My Experience, its questions) up to Review; a date (a box each for
+the month, day and year) is typed in from your answer, a start date from your notice period. Anything Workday still
+wants on a page that the bot can't fill, you do there and press Save and Continue. The sign-in is kept
 only in this Chrome, apart from the settings: never in a backup, and not shown again once saved.
 
 **Other companies' forms.** Tick *Other companies' forms too* in Company sites' Settings tab and it also applies on
 Workable, SmartRecruiters, Recruitee, Teamtailor, BambooHR, JazzHR, Breezy, Jobvite, Keka and Zoho Recruit, and on any
 company's own one-page form: your links, and the jobs LinkedIn, Naukri and the others found that lead there. Chrome
-asks once to let Sendoff onto all sites for this (the same access screenshots use). On the job's page it presses
+asks once to let Sendoff onto all sites for this (the same access screenshots use; screenshots stay on or off as you
+set them). On the job's page it presses
 **Apply** if the form isn't there yet, fills it in the same way, and always shows it to you with **Send it** first,
 even with *Send it straight away* chosen: it's a form it hasn't seen the like of. A site that wants you to sign in or
 make an account first (iCIMS, SuccessFactors, Taleo, Oracle, Darwinbox, or a careers site asking for a password) is

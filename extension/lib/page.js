@@ -417,7 +417,18 @@
     return link && link.target === "_blank" ? link.href : null;
   }
 
+  /** Where a job is, as its page says: an element marked as its location (data-test, class), else what follows a
+   * "Location" heading. Short text only; "" when there's none. */
+  function locationText(root = document) {
+    const marked = [...root.querySelectorAll("[data-test*=location i], [data-testid*=location i], [class*=location i]")]
+      .filter(isVisible).map(e => norm(e.innerText)).find(t => t && t.length < 120 && !/^locations?:?$/i.test(t));
+    if (marked) return marked;
+    const heading = [...root.querySelectorAll("h2, h3, h4, dt, label, strong")].find(e => /^locations?:?$/i.test(norm(e.innerText)));
+    return heading ? norm(heading.nextElementSibling?.innerText).slice(0, 120) : "";
+  }
+
   JB.page = {
+    locationText,
     norm,
     isVisible,
     click,

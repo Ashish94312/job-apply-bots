@@ -1403,7 +1403,11 @@ function sitePanel(name, info) {
 /** Ticking "Other companies' forms": Chrome's access to all sites, asked for now (straight from the click), or the
  * tick comes off again. */
 async function allowMoreForms(e) {
-  if (e.target.checked && !(await chrome.permissions.request(ALL_SITES))) e.target.checked = false;
+  if (!e.target.checked) return;
+  const had = allSites; // known before asking: request() has to come straight from the click
+  if (!(await chrome.permissions.request(ALL_SITES))) e.target.checked = false;
+  else if (!had && (await JB.store.screenshots()) == null) await JB.store.setScreenshots(false); // the access, not screenshots
+  renderShots();
 }
 
 /** Company sites: the job links to apply to, and whether to show you each form before it's sent. */
@@ -1416,7 +1420,7 @@ function companySettings(base, field, area) {
         el("small", { textContent: "They're in History as Other site, with the link they opened." }))),
     el("label", { className: "tick" }, el("input", { type: "checkbox", name: `${base}.moreForms`, onchange: allowMoreForms }),
       el("span", {}, "Other companies' forms too: Workable, SmartRecruiters, Recruitee, Teamtailor, BambooHR, JazzHR, Breezy, Jobvite, Keka, Zoho Recruit, and any company's own one-page form",
-        el("small", { textContent: "Each is shown to you filled in before it's sent. Chrome asks to let Sendoff onto all sites for this (screenshots use the same access). Sites that want an account first, like iCIMS, SuccessFactors, Taleo or Darwinbox, are left for you." }))),
+        el("small", { textContent: "Each is shown to you filled in before it's sent. Chrome asks to let Sendoff onto all sites for this; screenshots stay as you set them. Sites that want an account first, like iCIMS, SuccessFactors, Taleo or Darwinbox, are left for you." }))),
     field("field", "Before sending each application", null, el("div", { className: "checks" },
       el("label", {}, el("input", { type: "radio", name: `${base}.sendMode`, value: "review" }), "Show me the filled-in form first, with a Send button (recommended)"),
       el("label", {}, el("input", { type: "radio", name: `${base}.sendMode`, value: "direct" }), "Send it straight away"))));
@@ -1794,7 +1798,15 @@ function useField() {
   const lines = n => list(n).value.split("\n").map(l => l.trim()).filter(Boolean);
   const got = JB.filters.forField({ includeTitle: lines("includeTitle"), excludeTitle: lines("excludeTitle") }, name);
   for (const n of ["includeTitle", "requireRole", "excludeTitle"]) list(n).value = got[n].join("\n");
-  $("field-status").textContent = `${name}: filled in below. Save to keep it; your search keywords are in Sites.`;
+  // ...and what to search for, on the sites that take any words and have none yet
+  const filled = ["linkedin", "naukri", "wellfound", "hirist"].filter(site => {
+    const box = form.querySelector(`[name="sites.${site}.keywords"]`);
+    if (!box || box.value.trim()) return false;
+    box.value = JB.filters.fieldSearches(name).join("\n");
+    return true;
+  });
+  const where = filled.map(site => SITES[site].name).join(", ");
+  $("field-status").textContent = `${name}: filled in below${filled.length ? `, and what ${where} search for (Sites)` : ""}. Save to keep it.`;
   dirty();
 }
 
@@ -1965,22 +1977,27 @@ function buildWorkdaySignIn() {
 // ---------------------------------------------------------------- screenshots
 
 const ALL_SITES = { origins: ["<all_urls>"] };
+let allSites = false; // Chrome lets Sendoff onto all sites (screenshots, other companies' forms)
 
 async function renderShots() {
-  const on = await chrome.permissions.contains(ALL_SITES);
+  allSites = await chrome.permissions.contains(ALL_SITES);
+  const on = allSites && (await JB.store.screenshots()) !== false;
   const button = $("shots");
   button.dataset.on = on ? "1" : "";
   button.textContent = on ? "Turn screenshots off" : "Allow screenshots";
-  $("shots-status").textContent = on ? "On: each job that needs you gets a screenshot. (Other companies' forms use the same access: turning this off stops those too.)"
+  $("shots-status").textContent = on ? "On: each job that needs you gets a screenshot."
     : "Off: the history still lists the questions it couldn't answer.";
 }
 
 function buildShots() {
   const button = $("shots");
   button.onclick = async () => {
-    // request() has to come straight from the click, before anything else is awaited
-    if (button.dataset.on) await chrome.permissions.remove(ALL_SITES);
-    else await chrome.permissions.request(ALL_SITES);
+    if (button.dataset.on) {
+      await JB.store.setScreenshots(false);
+      if (!settings.sites.company.moreForms) await chrome.permissions.remove(ALL_SITES); // nothing else needs it
+    } else if (allSites || (await chrome.permissions.request(ALL_SITES))) { // request() has to come straight from the click
+      await JB.store.setScreenshots(true);
+    }
     renderShots();
   };
   chrome.permissions.onAdded.addListener(renderShots);

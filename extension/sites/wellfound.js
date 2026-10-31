@@ -36,7 +36,7 @@
     /** One role page per keyword (a Wellfound role name) and place, plus any extra URLs. */
     searchUrls(cfg) {
       const { slug } = JB.filters;
-      const places = cfg.locations && cfg.locations.length ? cfg.locations : ["india"];
+      const places = cfg.locations && cfg.locations.length ? cfg.locations : [cfg.country || "remote"]; // none: where you are
       const urls = [];
       for (const role of cfg.keywords || []) {
         for (const place of places) {
@@ -86,7 +86,7 @@
         const h1 = document.querySelector("h1");
         let title = h1 ? JB.page.norm(h1.innerText) : "";
         if (company && title.endsWith(` at ${company}`)) title = title.slice(0, -` at ${company}`.length);
-        return { title, company, text: withRange(document.body ? document.body.innerText : "") };
+        return { title, company, text: withRange(document.body ? document.body.innerText : ""), where: JB.page.locationText() };
       },
 
       /** A confirmation message, or the job's own button saying "Applied". The left menu has an "Applied"

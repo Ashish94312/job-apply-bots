@@ -74,12 +74,32 @@
     "Finance and accounting": "accountant, accounting, finance, financial, auditor, controller, tax, bookkeeper, treasury",
     "HR and recruiting": "recruiter, recruiting, talent acquisition, hr, human resources, people partner, hrbp, payroll",
     "Operations and supply chain": "operations, supply chain, logistics, procurement, purchasing, coordinator, planner",
-    "Healthcare": "nurse, nursing, doctor, physician, pharmacist, therapist, medical, clinical, dentist, caregiver",
+    "Healthcare": "nurse, nursing, doctor, physician, pharmacist, therapist, physiotherapist, medical, clinical, dentist, caregiver",
     "Teaching and training": "teacher, tutor, lecturer, professor, instructor, trainer, educator, faculty",
     "Writing and content": "writer, editor, copywriter, content, journalist, translator",
     "Legal": "lawyer, attorney, counsel, paralegal, legal, advocate, solicitor",
   };
-  const fieldRoles = name => (FIELDS[name] || "").split(",").map(r => r.trim()).filter(Boolean);
+  // ...and what to search for on the job sites that take any words (LinkedIn, Naukri, Wellfound's role names, Hirist)
+  const SEARCHES = {
+    "Software and IT": "software engineer, software developer, backend developer, frontend developer, full stack developer, devops engineer",
+    "AI and data science": "machine learning engineer, data scientist, ai engineer, nlp engineer, computer vision engineer",
+    "Data and analytics": "data analyst, business analyst, business intelligence analyst",
+    "Design": "product designer, ux designer, ui designer, graphic designer",
+    "Product and project management": "product manager, project manager, program manager, product owner",
+    "Marketing": "marketing manager, digital marketing, content marketing, seo specialist, growth marketing",
+    "Sales and business development": "sales executive, account executive, business development, inside sales",
+    "Customer support and success": "customer success manager, customer support, customer service",
+    "Finance and accounting": "accountant, financial analyst, finance manager, auditor",
+    "HR and recruiting": "recruiter, talent acquisition, hr generalist, hr business partner",
+    "Operations and supply chain": "operations manager, supply chain, logistics, procurement",
+    "Healthcare": "nurse, staff nurse, pharmacist, medical officer, physiotherapist",
+    "Teaching and training": "teacher, tutor, lecturer, trainer",
+    "Writing and content": "content writer, copywriter, technical writer, editor",
+    "Legal": "lawyer, legal counsel, paralegal, legal associate",
+  };
+  const list = text => (text || "").split(",").map(r => r.trim()).filter(Boolean);
+  const fieldRoles = name => list(FIELDS[name]);
+  const fieldSearches = name => list(SEARCHES[name]);
 
   /** Your filters with a field's roles as "...and is a role like" (any title among them: "Title has one of" emptied),
    * and its roles out of "Skip titles with" ("manager" goes for product managers, "sales" for sales). */
@@ -89,5 +109,5 @@
     return { ...filters, includeTitle: [], requireRole: roles, excludeTitle: (filters.excludeTitle || []).filter(w => !clash(w)) };
   }
 
-  JB.filters = { hasWord, minYears, tooSenior, previewOk, skipReason, uniqueUrls, slug, RANGE, FIELDS, forField };
+  JB.filters = { hasWord, minYears, tooSenior, previewOk, skipReason, uniqueUrls, slug, RANGE, FIELDS, forField, fieldSearches };
 })(globalThis.JB = globalThis.JB || {});

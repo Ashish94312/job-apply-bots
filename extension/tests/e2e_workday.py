@@ -12,6 +12,7 @@ import re
 import sys
 import tempfile
 import time
+from datetime import date as day, timedelta
 
 from playwright.sync_api import sync_playwright
 
@@ -32,6 +33,14 @@ def text(id, label, required=True, kind="text"):
     star = "<abbr title='required'>*</abbr>" if required else ""
     return (f'<div data-automation-id="formField-{id}"><label for="{id}">{label}{star}</label>'
             f'<input id="{id}" name="{id}" type="{kind}" {"aria-required=true" if required else ""}></div>')
+
+
+def date(id, label):
+    """Workday's date: a box each for the month, day and year."""
+    part = lambda name: (f'<div data-automation-id="dateSection{name}"><input id="{id}-{name.lower()}" data-automation-id="dateSection{name}-input"'
+                         f' role="spinbutton" aria-label="{name}" type="text"></div>')
+    return (f'<div data-automation-id="formField-{id}"><label>{label}<abbr>*</abbr></label>'
+            f'<div data-automation-id="dateInputWrapper">{part("Month")}{part("Day")}{part("Year")}</div></div>')
 
 
 def dropdown(id, label, options, required=True):
@@ -163,7 +172,8 @@ class Workday:
             content = ('<div data-automation-id="formField-resume"><label>Resume/CV<abbr>*</abbr></label>'
                        '<input type="file" data-automation-id="file-upload-input-ref" name="resume"></div>' + text("linkedin", "LinkedIn", required=False))
         elif current == 3:
-            content = radios("sponsor", "Will you now or in the future require sponsorship?", ["Yes", "No"]) + text("notice", "Notice Period (days)")
+            content = (radios("sponsor", "Will you now or in the future require sponsorship?", ["Yes", "No"]) + text("notice", "Notice Period (days)")
+                       + date("start", "Expected Start Date"))
         else:
             content = "<h3>Review</h3>" + "".join(f"<p>{k}: {v}</p>" for k, v in app.values.items())
         label = "Submit" if current == 4 else "Save and Continue"
@@ -243,7 +253,7 @@ def main():
         dash.evaluate("""async link => {
             const s = await JB.store.getSettings();
             Object.assign(s.profile, { firstName: 'Asha', lastName: 'Rao', email: 'asha@example.com', phone: '+91 98765 43210', country: 'India',
-              answers: [['hear about', 'LinkedIn'], ['sponsorship', 'No'], ['notice period', '30']] });
+              noticePeriod: '30 days', answers: [['hear about', 'LinkedIn'], ['sponsorship', 'No'], ['notice period', '30']] });
             Object.assign(s.sites.company, { searchUrls: [link], fromOthers: false, sendMode: 'review' });
             s.sites.company.limits.delaySeconds = [0, 0];
             await JB.store.saveSettings(s);
@@ -285,6 +295,9 @@ def main():
         t.check(v.get("worked") == "No", "and the one you were asked")
         t.check(v.get("resume") == "Asha_Rao_Resume.pdf" and v.get("linkedin") == "", "My Experience: your resume, optional boxes left alone")
         t.check(v.get("sponsor") == "No" and v.get("notice") == "30", "Application Questions from your answers")
+        start = day.today() + timedelta(days=30)
+        t.check([v.get("start-month"), v.get("start-day"), v.get("start-year")] == [f"{start.month:02}", f"{start.day:02}", str(start.year)],
+                f"its date, a box each for month, day and year: 30 days' notice from today ({[v.get(k) for k in ('start-month', 'start-day', 'start-year')]})")
         t.check(status.get("title") == "ML Engineer" and status.get("company") == "acme", "the job's title, not the site's header")
 
         print("\nWith a sign-in saved: it signs in, or makes the account, itself")

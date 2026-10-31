@@ -18,7 +18,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from playwright.sync_api import sync_playwright
 
-from e2e import CACHE, EXT, REACT
+from e2e import CACHE, EXT, REACT, sample_settings
 
 REACT_TAGS = '<script src="/static/react.js"></script><script src="/static/react-dom.js"></script>'
 MODAL_JS = """
@@ -363,6 +363,7 @@ def main():
         ctx.route(re.compile(r"^https://(www\.)?wellfound\.com/"), fake(wf.handle))
         ctx.route(re.compile(r"^https://(www\.)?cutshort\.io/"), fake(cs.handle))
         worker = ctx.service_workers[0] if ctx.service_workers else ctx.wait_for_event("serviceworker")
+        worker.evaluate("s => chrome.storage.local.set({ settings: s })", sample_settings())  # what these tests are written for
         dash = ctx.new_page()
         dash.goto(f"chrome-extension://{worker.url.split('/')[2]}/dashboard.html")
         dash.on("dialog", lambda d: d.accept())

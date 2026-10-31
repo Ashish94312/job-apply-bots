@@ -165,8 +165,8 @@
     /** Workday, a page at a time. Apply; you sign in (each company has its own Workday account, and the bot never
      * sees your password); then each page is filled from your profile, resume and answers, what nothing answers is
      * asked, and Save and Continue, up to Review; there it's sent after you've had a look (unless Settings says to
-     * send straight away). Anything Workday still wants on a page (a date, a list the bot doesn't know) you do in
-     * the bot's window. Returns [status, note]. */
+     * send straight away). Anything Workday still wants on a page (a list the bot doesn't know) you do in the bot's
+     * window. Returns [status, note]. */
     async workday(run, cfg, job) {
       const resume = await JB.store.resume();
       const note = JB.answers.coverNote(cfg.coverNote, job);
@@ -374,6 +374,16 @@
         });
       }
 
+      /** Workday's dates: a box each for the month, day and year (some only month and year), under one question. */
+      function wdDates(root) {
+        return [...root.querySelectorAll("[data-automation-id=dateInputWrapper]")].filter(JB.page.isVisible).map(w => {
+          const field = w.closest("[data-automation-id^=formField], fieldset") || w.parentElement;
+          const label = norm((field.querySelector("label, legend") || {}).innerText);
+          const part = name => w.querySelector(`[data-automation-id=dateSection${name}-input]`);
+          return { label, month: part("Month"), day: part("Day"), year: part("Year"), required: /[*✱]\s*$/.test(label) };
+        });
+      }
+
       /** Open a Workday list, return its options; `want` picks the one that's the answer. */
       async function wdList(b, want) {
         JB.page.click(b);
@@ -450,7 +460,19 @@
               missing.push({ q: "Resume", kind: "file" });
             }
           }
-          missing.push(...(await JB.page.fillForm(root, answers, note, { requiredOnly: true })));
+          const dates = [];
+          for (const d of wdDates(root)) { // typed a part at a time, the way Workday takes them
+            if (d.year?.value) continue;
+            const iso = JB.answers.dateAnswer(JB.answers.answerFor(d.label, answers)); // "30 days" -> 30 days from today
+            if (!iso) {
+              if (d.required) dates.push({ q: d.label, kind: "text" });
+              continue;
+            }
+            const [year, month, day] = iso.split("-");
+            for (const [box, value] of [[d.month, month], [d.day, day], [d.year, year]]) if (box) await JB.page.typeIn(box, value);
+          }
+          const parts = new Set(["month", "day", "year"]);
+          missing.push(...(await JB.page.fillForm(root, answers, note, { requiredOnly: true })).filter(m => !parts.has(m.q.toLowerCase())), ...dates);
           for (const d of wdDropdowns(root)) {
             if (d.picked) continue;
             const given = JB.answers.answerFor(d.label, answers);

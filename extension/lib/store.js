@@ -406,11 +406,15 @@
   const saveWorkdaySignIn = value => (value ? local.set({ workdaySignIn: value }) : local.remove("workdaySignIn"));
 
   const saveShot = (site, jobId, dataUrl) => local.set({ [shotKey(site, jobId)]: dataUrl });
+  // Screenshots on or off. Null: not chosen since that was its own choice, when they were on whenever Chrome let
+  // Sendoff onto all sites (which other companies' forms need too now).
+  const screenshots = async () => (await local.get("screenshots")).screenshots ?? null;
+  const setScreenshots = on => local.set({ screenshots: on });
   const shot = async (site, jobId) => (await local.get(shotKey(site, jobId)))[shotKey(site, jobId)] || null;
 
   JB.store = {
     STATUSES, now, normalize, getSettings, saveSettings, effective, profileAnswers, resume, saveResume, workdaySignIn, saveWorkdaySignIn, jobs, seen, record, appliedToday, forget, importHistory,
-    saveShot, shot,
+    saveShot, shot, screenshots, setScreenshots,
     CONTACT_STATUSES, contacts, referralJobs, jobsToAsk, jobDone, askedAbout, knownContact, askedAt, sentToday, pendingInvites,
     saveContact, importReferrals, tracks, saveTracks, importTracks, markApplied, noteReplies,
     kept, waiting, learn, unlearn, noteQuestions, dropQuestions, importKept,

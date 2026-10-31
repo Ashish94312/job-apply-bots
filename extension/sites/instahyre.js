@@ -23,14 +23,15 @@
       return this.jobUrlRe.exec(url)[1];
     },
 
-    /** One search per keyword and year of experience, plus any extra URLs. */
+    /** One search per keyword and year of experience (any, with no range in Settings), plus any extra URLs. */
     searchUrls(cfg) {
       const lo = cfg.minExperience ?? 0;
       const hi = cfg.maxExperience ?? lo;
       const skill = k => encodeURIComponent(k).replace(/%2F/gi, "/"); // like Python's quote()
       const urls = [];
       for (const k of cfg.keywords || []) {
-        for (let y = lo; y <= hi; y++) urls.push(`https://www.instahyre.com/search-jobs?skills=${skill(k)}&years=${y}`);
+        if (cfg.minExperience == null && cfg.maxExperience == null) urls.push(`https://www.instahyre.com/search-jobs?skills=${skill(k)}`);
+        else for (let y = lo; y <= hi; y++) urls.push(`https://www.instahyre.com/search-jobs?skills=${skill(k)}&years=${y}`);
       }
       return JB.filters.uniqueUrls([...urls, ...(cfg.searchUrls || [])]);
     },

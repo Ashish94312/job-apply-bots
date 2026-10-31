@@ -171,8 +171,25 @@
     return m ? [m[1], m[3], m[4]].map(k => parts[k.toLowerCase()]).join(m[2]) : null;
   }
 
-  /** For number boxes: "15 LPA" -> "15"; "+91 98765 43210" -> "919876543210". */
+  /** A number as written with its digits grouped: "1,200,000", "12,00,000" (lakhs), "55.000", "55 000", "1'000'000"
+   * -> "1200000"..., with a decimal part after the other mark ("1,234.56", "1.234,56", "2,5" -> "2.5"); null if it's
+   * no one number (a phone number in groups). A dot or comma before exactly three digits groups them ("55.000"). */
+  function plainNumber(token) {
+    const t = token.replace(/[\u00a0\u202f]/g, " ").replace(/\u2019/g, "'");
+    const m = /^([1-9]\d{0,2}(?:([,.' ])\d{3})(?:\2\d{3})*|[1-9]\d?(?:,\d\d)+,\d{3}|\d+)(?:([.,])(\d+))?$/.exec(t);
+    if (!m || (m[3] && m[3] === m[2])) return null;
+    const whole = m[1].replace(/[,.' ]/g, "");
+    return m[3] ? `${whole}.${m[4]}` : whole;
+  }
+
+  /** For number boxes: "15 LPA" -> "15"; "1,200,000 INR" -> "1200000"; "120k USD" -> "120000";
+   * "+91 98765 43210" -> "919876543210". */
   function numberAnswer(answer) {
+    answer = String(answer);
+    const at = answer.search(/\d/);
+    const token = at < 0 ? "" : /^\d[\d,.'\u2019 \u00a0\u202f]*\d|^\d/.exec(answer.slice(at))[0];
+    const number = token && plainNumber(token);
+    if (number) return /^\s?k\b/i.test(answer.slice(at + token.length)) ? String(Math.round(Number(number) * 1000)) : number;
     if (/[a-z]/i.test(answer)) {
       const m = answer.match(/\d+(?:\.\d+)?/);
       return m ? m[0] : answer;

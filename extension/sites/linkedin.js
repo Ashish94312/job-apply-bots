@@ -98,10 +98,10 @@
       }
       if (POSTED_WITHIN[cfg.postedWithin]) params.push(["f_TPR", POSTED_WITHIN[cfg.postedWithin]]);
       params.push(["sortBy", "DD"]); // newest first
-      const places = cfg.locations && cfg.locations.length ? cfg.locations : ["India"];
+      const places = cfg.locations && cfg.locations.length ? cfg.locations : [cfg.country || ""]; // none: where you are, else anywhere
       const urls = [];
       for (const keyword of cfg.keywords || []) {
-        for (const place of places) urls.push(`${BASE}/jobs/search/?${new URLSearchParams([["keywords", keyword], ["location", place], ...params])}`);
+        for (const place of places) urls.push(`${BASE}/jobs/search/?${new URLSearchParams([["keywords", keyword], ...(place ? [["location", place]] : []), ...params])}`);
       }
       return JB.filters.uniqueUrls([...urls, ...(cfg.searchUrls || [])]);
     },

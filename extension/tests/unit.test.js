@@ -41,6 +41,11 @@ test("answer helpers", () => {
   assert.equal(answers.numberAnswer("15 LPA"), "15");
   assert.equal(answers.numberAnswer("+91 98765 43210"), "919876543210");
   assert.equal(answers.numberAnswer("2.5"), "2.5");
+  for (const [said, n] of [["1,200,000 INR", "1200000"], ["Rs. 12,00,000", "1200000"], ["€55.000", "55000"], ["55 000 EUR", "55000"],
+    ["1'000'000 CHF", "1000000"], ["1,234.56", "1234.56"], ["1.234,56", "1234.56"], ["2,5 years", "2.5"], ["120k USD", "120000"],
+    ["12.5 LPA", "12.5"], ["Between 10,000 and 20,000", "10000"], ["0.5", "0.5"]]) {
+    assert.equal(answers.numberAnswer(said), n, said); // digits grouped the way people write them, anywhere
+  }
   assert.equal(answers.coverNote("  Keen on {title} at {company}. ", { title: "SDE", company: "Acme" }), "Keen on SDE at Acme.");
   assert.equal(answers.coverNote("Hi {company}", { title: "", company: "" }), "Hi your company");
   assert.deepEqual(answers.badPatterns([["notice", "x"], ["(unclosed", "y"], ["", "z"]]), ["(unclosed", ""]);
@@ -85,7 +90,9 @@ test("Instahyre, Wellfound and Cutshort search pages match the Python bots", asy
   const kept = {};
   globalThis.chrome = { storage: { local: { get: async k => ({ [k]: kept[k] }), set: async o => Object.assign(kept, o) } } };
   for (const c of cases.siteUrls) {
-    const got = sites[c.site].searches ? await sites[c.site].searches(c.cfg, async () => null, () => {}) : sites[c.site].searchUrls(c.cfg);
+    // with no places the Python bot searches India; the extension, where you are (Settings > Where you are)
+    const cfg = ["wellfound", "linkedin"].includes(c.site) && !(c.cfg.locations || []).length ? { ...c.cfg, country: "India" } : c.cfg;
+    const got = sites[c.site].searches ? await sites[c.site].searches(cfg, async () => null, () => {}) : sites[c.site].searchUrls(cfg);
     assert.deepEqual(got, c.expected, `${c.site} ${JSON.stringify(c.cfg)}`);
   }
 });
@@ -127,8 +134,15 @@ test("Instahyre and Wellfound job ids and paging", () => {
 test("defaults have each site's own settings", () => {
   const s = store.normalize(undefined);
   assert.ok(s.sites.instahyre.limits.maxScrolls >= 0 && s.sites.instahyre.limits.maxPages === undefined);
-  assert.deepEqual(s.sites.wellfound.locations, ["india", "remote"]);
+  assert.deepEqual(s.sites.wellfound.locations, []); // none: it searches where you are
   assert.ok(s.sites.wellfound.limits.maxPages >= 1);
+  // nobody's own to start with: no keywords, title filters or experience, and no made-up answers about you
+  assert.deepEqual([s.sites.hirist.keywords, s.sites.linkedin.keywords, s.profile.filters.requireRole, s.profile.filters.excludeTitle], [[], [], [], []]);
+  assert.equal(s.profile.maxExperience, null);
+  for (const [site, q] of [["hirist", "How many years of experience do you have?"], ["linkedin", "Are you authorized to work in the US?"],
+    ["linkedin", "Will you require sponsorship?"], ["hirist", "Are you willing to relocate?"], ["linkedin", "Do you have a bachelor's degree?"]]) {
+    assert.equal(answers.answerFor(q, store.effective(s, site).answers.slice(0, -2)), null, q); // the last two: standard ones
+  }
 });
 
 test("Naukri search pages, paging, job ids", () => {
@@ -497,6 +511,8 @@ test("where you are: countries, with their calling code and currency", () => {
 
 test("where you are goes into your answers, the shared ones and LinkedIn's", () => {
   const before = store.normalize(undefined); // a new install: those answers start empty
+  before.sites.linkedin.locations = ["India"]; // as installs from before Where you are search
+  before.sites.wellfound.locations = ["india", "remote"];
   const ask = (s, site, q) => answers.answerFor(q, store.effective(s, site).answers);
   assert.equal(ask(before, "hirist", "What is your expected CTC?"), null);
   assert.equal(ask(before, "hirist", "Are you currently living in Bangalore?"), "No"); // no sample city says Yes
@@ -569,6 +585,10 @@ test("jobs abroad: which country a job is in", () => {
   assert.equal(places.jobCountry({ where: "Austin, Texas, United States", place: "United Kingdom" }, sites.linkedin).code, "US"); // the page wins
   assert.equal(sites.linkedin.placeOf("https://www.linkedin.com/jobs/search/?keywords=ml&location=United+States"), "United States");
   assert.equal(sites.wellfound.placeOf("https://wellfound.com/role/l/software-engineer/united-kingdom"), "united kingdom");
+  assert.deepEqual(sites.wellfound.searchUrls({ keywords: ["designer"], locations: [] }), ["https://wellfound.com/role/r/designer"]); // nowhere said: remote
+  assert.deepEqual(sites.wellfound.searchUrls({ keywords: ["designer"], locations: [], country: "Germany" }), ["https://wellfound.com/role/l/designer/germany"]);
+  assert.ok(!sites.linkedin.searchUrls({ keywords: ["designer"], locations: [] })[0].includes("location=")); // anywhere
+  assert.ok(sites.linkedin.searchUrls({ keywords: ["designer"], locations: [], country: "Germany" })[0].includes("location=Germany"));
 });
 
 test("jobs abroad: from India, applying in the US and the UK", () => {
@@ -633,7 +653,10 @@ test("any field: a ready-made list of roles, taken out of the titles to skip", (
   assert.equal(filters.skipReason({ title: "Software Engineer", text: "" }, pm), "not one of your roles");
   assert.deepEqual(filters.forField(mine, "Sales and business development").excludeTitle, ["senior", "intern", "qa"]); // account managers too
   assert.deepEqual(filters.forField(mine, "Software and IT").excludeTitle, ["senior", "manager", "sales", "intern"]);
-  for (const name of Object.keys(filters.FIELDS)) assert.ok(filters.forField({}, name).requireRole.length > 3, name);
+  for (const name of Object.keys(filters.FIELDS)) {
+    assert.ok(filters.forField({}, name).requireRole.length > 3 && filters.fieldSearches(name).length >= 3, name);
+    for (const words of filters.fieldSearches(name)) assert.ok(!filters.skipReason({ title: words, text: "" }, filters.forField({}, name)), `${name}: ${words}`); // its searches fit its roles
+  }
 });
 
 test("forms' standard questions: self-identification, consent, when you can start", () => {

@@ -252,8 +252,20 @@ def bot_tabs(dash):
     return dash.evaluate(BOT_TABS_JS)
 
 
+def sample_settings():
+    """The bots' example settings (an engineer's, in India), which these tests are written for. The extension itself
+    starts with nobody's (tools/export_for_extension.py start_settings)."""
+    sys.path.insert(0, str(EXT.parent / "tools"))
+    import export_for_extension as bots
+    data = bots.settings("config.example.yaml")
+    data["sites"].update(bots.EXTENSION_ONLY)
+    data["profile"].update(bots.EXTENSION_PROFILE)
+    return data
+
+
 def launch(pw, ext, profile, headed, site):
-    """Chromium with the extension, the fake Hirist in place of the real one; returns (context, dashboard page)."""
+    """Chromium with the extension, the fake Hirist in place of the real one, and the bots' example settings (as if
+    never saved: the first-run banner still shows); returns (context, dashboard page)."""
     ctx = pw.chromium.launch_persistent_context(
         str(profile), channel="chromium", headless=not headed,
         args=[f"--disable-extensions-except={ext}", f"--load-extension={ext}"],
@@ -269,6 +281,7 @@ def launch(pw, ext, profile, headed, site):
             break
         time.sleep(0.5)
     dash = ctx.new_page()  # our own copy: Playwright may not see the tab the extension opened
+    worker.evaluate("s => chrome.storage.local.set({ settings: s })", sample_settings())
     dash.goto(dash_url)
     dash.opened_by_extension = opened
     dash.on("dialog", lambda d: d.accept())
