@@ -12,6 +12,7 @@
   const REVIEW = [["Send it", "send", "primary"], ["I'll send it in Chrome", "manual"], ["Skip this job", "skip"], ["Stop run", "stop", "stop"]];
   const SIGN_IN = [["Signed in, continue", "continue", "primary"], ["Skip this job", "skip"], ["Stop run", "stop", "stop"]];
   const CONTINUE = [["Done, continue", "continue", "primary"], ["Stop run", "stop", "stop"]];
+  const CLOSED = "the job is closed";
   const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
   // Systems whose forms fill like these (one page: your details, the company's questions), often behind the job page's
   // Apply button: [system, host, the job's id in the path]. On hosts every company shares, the company is the path's first part.
@@ -87,7 +88,8 @@
   /** The link an "Other site" job opened, from its note ("apply opens an external site: <url>", "redirected to <url>"). */
   const linkIn = note => ((/(https:\/\/\S+)/.exec(note || "") || [])[1] || "").replace(/[).,]+$/, "");
 
-  /** The jobs to apply to, in order, not done before: your links, then the ones other sites found. */
+  /** The jobs to apply to, in order, not done before: your links, then the ones other sites found, the one-page
+   * forms before Workday's (an account at each company), newest first (an older one is likelier to have closed). */
   function queue(cfg, history) {
     const seen = new Set(Object.values(history).filter(r => r.site === "company" && r.status !== "failed").map(r => r.jobId));
     const out = new Map();
@@ -97,7 +99,9 @@
       if (can(p)) out.set(p.jobId, { url: p.url, jobId: p.jobId, title: "", company: "", text: "" });
     }
     if (cfg.fromOthers) {
-      const found = Object.values(history).filter(r => r.status === "external").sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+      const workday = r => /\.(myworkdayjobs|myworkdaysite)\.com\//.test(linkIn(r.note));
+      const found = Object.values(history).filter(r => r.status === "external")
+        .sort((a, b) => workday(a) - workday(b) || String(b.ts).localeCompare(String(a.ts)));
       for (const r of found) {
         const p = parse(linkIn(r.note));
         if (can(p) && !out.has(p.jobId)) {
@@ -127,10 +131,8 @@
     async apply(run, cfg, job) {
       const link = parse(job.url) || {};
       if (link.system === "workday") return this.workday(run, cfg, job);
-      if (link.more) {
-        const form = await this.openForm(run);
-        if (form !== true) return status("needs_manual", form);
-      }
+      const form = await this.openForm(run); // there already on Greenhouse, Lever and Ashby, else behind Apply
+      if (form !== true) return status(form === CLOSED ? "skipped" : "needs_manual", form);
       const resume = await JB.store.resume();
       const note = JB.answers.coverNote(cfg.coverNote, job);
       run.step(`Filling in the application for ${named(job)}`);
@@ -175,6 +177,7 @@
       if (!(await run.exec("site.wdStart"))) {
         const step = await run.exec("site.wdStep");
         if (step.done) return status("already_applied");
+        if (await run.exec("site.closed")) return status("skipped", CLOSED);
         return status("needs_manual", "no Apply button on the job's page");
       }
       await run.sleep(1500);
@@ -244,13 +247,18 @@
       return status("needs_manual", "the application had too many pages");
     },
 
-    /** You finish it in the bot's window; then see if it went. */
-    /** The application form, on the job's page or behind its Apply button: true, else why it's left for you. */
+    /** The application form, on the job's page or behind its Apply button: true, else why it's left for you
+     * (CLOSED: the job is gone). */
     async openForm(run) {
       for (let i = 0; i < 3; i++) {
         const got = await run.exec("site.openForm");
         if (got === true) return true;
         if (got === "sign-in") return "it wants you to sign in or make an account there";
+        if (got === "closed") return CLOSED;
+        if (got === false && i === 0) { // nothing yet: some forms draw themselves a while after the page loads
+          await run.sleep(2500);
+          continue;
+        }
         if (got !== "pressed") break;
         await run.sleep(2500);
         await run.loaded({ fresh: false });
@@ -259,6 +267,7 @@
       return "no application form on its page";
     },
 
+    /** You finish it in the bot's window; then see if it went. */
     async byHand(run, job, what) {
       await run.ask("Do this in Chrome, then continue", `${named(job)}: ${what}`, CONTINUE);
       return (await run.exec("site.result")).sent ? status("applied", "finished by hand") : status("needs_manual", "not sent");
@@ -272,9 +281,28 @@
       const CODE_RE = /(verification|security|confirmation) code|enter the code/i;
       const SUBMIT_RE = /^\s*submit( (your|my))?( application)?\s*$/i;
       const APPLY_RE = /^\s*(apply( now| online| here| for (this|the) (job|position|role))?|i'?m interested|start (your |my )?application)\s*$/i;
+      // A job that's gone: Greenhouse "The job you are looking for is no longer open", Lever "The job posting you're
+      // looking for might have closed", Ashby "Job not found", Workday "The page you are looking for doesn't exist"
+      const CLOSED_RE = /no longer (open|available|active|accepting applications)|(job|posting|position)[^.]{0,40}(might|may) have (been )?closed|(job|posting|position) has (been )?(closed|filled|removed|expired)|job not found|job you requested was not found|couldn.t find anything here|page you(.re| are) looking for (doesn.t|does not) exist/i;
 
       const form = () => document.querySelector("#application-form, .application-form form, form#application_form")
         || document.querySelector(".ashby-application-form-container") || document.querySelector("main form") || document.body;
+
+      /** The boxes of an application form on the page: your name or email and a few more, or a resume box. */
+      function hasForm() {
+        const boxes = [...form().querySelectorAll("input, textarea, select")]
+          .filter(e => !["hidden", "search", "submit", "button", "image", "reset"].includes(e.type)
+            && JB.page.isVisible(e.type === "file" ? e.closest("label, li, div") || e : e)); // a file box hides behind its button
+        const said = e => `${e.name} ${e.id} ${e.getAttribute("autocomplete") || ""} ${e.getAttribute("aria-label") || ""} ${e.placeholder || ""}`;
+        return { boxes, found: boxes.some(isResumeBox) || (boxes.length >= 3 && boxes.some(e => /name|e-?mail/i.test(said(e)))) };
+      }
+
+      /** The job is gone: Greenhouse sends its form to the company's board ("?error=true"), the others say so. */
+      function closed() {
+        if (/\/job_board\b/.test(location.pathname) && new URLSearchParams(location.search).get("error") === "true") return true;
+        if (hasForm().found || auto("adventureButton") || auto("applyFlowPage")) return false;
+        return CLOSED_RE.test(norm(document.body ? document.body.innerText : "").slice(0, 3000));
+      }
 
       /** The resume box: its id, name or label says resume or CV, and it isn't a cover letter or an "autofill from your resume". */
       function isResumeBox(e) {
@@ -283,16 +311,6 @@
         const said = [e.id, e.name, e.getAttribute("data-qa"), groupLabel, (e.closest("label") || {}).innerText].join(" ");
         const around = norm((e.closest("[class*=autofill]") || {}).innerText);
         return /resume|\bcv\b/i.test(said) && !/cover|autofill/i.test(said + around);
-      }
-
-      /** Put your resume in a file box the way picking it would. */
-      function attach(box, file) {
-        const bytes = Uint8Array.from(atob(file.data), c => c.charCodeAt(0));
-        const transfer = new DataTransfer();
-        transfer.items.add(new File([bytes], file.name, { type: file.type || "application/pdf" }));
-        box.files = transfer.files;
-        box.dispatchEvent(new Event("input", { bubbles: true }));
-        box.dispatchEvent(new Event("change", { bubbles: true }));
       }
 
       /** Ashby asks yes/no questions with two buttons (a hidden checkbox behind them): press the one that's the answer. */
@@ -454,7 +472,7 @@
           const box = root.querySelector("input[type=file]");
           if (box && !box.files.length && !auto("file-upload-item") && !root.querySelector("[data-automation-id*=fileName], [data-automation-id=delete-file]")) {
             if (resume) {
-              attach(box, resume);
+              JB.page.attach(box, resume);
               await sleep(3000);
             } else if (/resume|\bcv\b/i.test(norm(root.innerText)) && /[*✱]/.test(norm((box.closest("[data-automation-id*=formField], fieldset, div") || {}).innerText))) {
               missing.push({ q: "Resume", kind: "file" });
@@ -493,14 +511,21 @@
 
         isLoggedIn: () => true,
 
+        closed,
+
+        /** The job's title, company, where it is and its text; for a job that's gone, only that (`closed`): the
+         * page's own title is then the board's, and the job keeps the one the other site gave it. */
         readJob() {
+          if (closed()) return { closed: CLOSED, text: norm(document.body.innerText).slice(0, 4000) };
           // in this order: a page has its site's name in an h1 before the job's own title (Workday's header)
           const title = ["[data-automation-id=jobPostingHeader]", ".posting-headline h2", "h1.section-header", ".job__title h1", "h1"]
             .map(css => document.querySelector(css)).find(Boolean);
-          const fromTitle = document.title.split(/ @ | - | at /); // Ashby "<title> @ <company>", Lever "<company> - <title>"
+          let fromTitle = document.title.split(/ @ | - | at /); // Ashby "<title> @ <company>"
           let company = "";
-          if (location.hostname === "jobs.lever.co") company = fromTitle[0];
-          else if (location.hostname === "jobs.ashbyhq.com") company = fromTitle.length > 1 ? fromTitle[fromTitle.length - 1] : "";
+          if (location.hostname === "jobs.lever.co") { // "<company> - <title>", the title with dashes of its own
+            const m = /^(.+?) - (.+)$/.exec(document.title) || [, document.title, ""];
+            [company, fromTitle] = [m[1], [m[2]]];
+          } else if (location.hostname === "jobs.ashbyhq.com") company = fromTitle.length > 1 ? fromTitle[fromTitle.length - 1] : "";
           else if (/myworkday/.test(location.hostname)) company = location.hostname.split(".")[0]; // nvidia.wd5.myworkdayjobs.com
           else company = /Job Application for .+ at (.+)$/.exec(document.title)?.[1] || ""; // Greenhouse
           // else the company's name in the address: greenhouse "for=<board>", lever and ashby "/<company>/"
@@ -521,7 +546,7 @@
           const box = [...root.querySelectorAll("input[type=file]")].find(isResumeBox);
           if (box && !box.files.length && !/\.(pdf|docx?)\b/i.test(norm(box.closest("div, label")?.innerText))) {
             if (resume) {
-              attach(box, resume);
+              JB.page.attach(box, resume);
               await sleep(3000); // Lever reads it and fills in what it finds
             } else if (JB.page.isRequired(box, "") || /[*✱]/.test(norm((box.closest("label") || {}).innerText))) {
               missing.push({ q: "Resume", kind: "file" });
@@ -535,15 +560,13 @@
           return missing;
         },
 
-        /** Is there an application form here: your name or email and a few more boxes, or a resume box? Else press
-         * the job's Apply button, in this tab ("pressed"). "sign-in" for a page wanting a password; false for neither. */
+        /** Is there an application form here (hasForm)? Else press the job's Apply button, in this tab ("pressed").
+         * "sign-in" for a page wanting a password, "closed" for a job that's gone; false for neither. */
         openForm() {
-          const boxes = [...form().querySelectorAll("input, textarea, select")]
-            .filter(e => !["hidden", "search", "submit", "button", "image", "reset"].includes(e.type)
-              && JB.page.isVisible(e.type === "file" ? e.closest("label, li, div") || e : e)); // a file box hides behind its button
+          const { boxes, found } = hasForm();
           if (boxes.some(e => e.type === "password" && JB.page.isVisible(e))) return "sign-in";
-          const said = e => `${e.name} ${e.id} ${e.getAttribute("autocomplete") || ""} ${e.getAttribute("aria-label") || ""} ${e.placeholder || ""}`;
-          if (boxes.some(isResumeBox) || (boxes.length >= 3 && boxes.some(e => /name|e-?mail/i.test(said(e))))) return true;
+          if (found) return true;
+          if (closed()) return "closed";
           const apply = JB.page.firstVisible(document, APPLY_RE);
           if (!apply) return false;
           if (apply.target) apply.target = "_self"; // a new tab is one the bot can't follow

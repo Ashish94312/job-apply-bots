@@ -159,8 +159,8 @@ def publish(args):
     import package_extension  # noqa: E402
 
     try:
-        package_extension.main()
-        zip_path = ROOT / "dist" / f"sendoff-{new}.zip"
+        options = ["--billing-origin", args.billing_origin, "--live-billing"] if args.billing_origin else []
+        zip_path = package_extension.main(options)
         print(f"Uploading {zip_path.name}...")
         up = call("POST", item_url("upload", upload=True), zip_path.read_bytes(), {**auth, "Content-Type": "application/zip"})
         for _ in range(60):  # big uploads are processed for a while
@@ -189,6 +189,7 @@ def publish(args):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--billing-origin", help="Build the paid edition for this HTTPS merchant origin")
     parser.add_argument("--bump", choices=["patch", "minor", "major"], default="patch", help="which part of the version to raise")
     parser.add_argument("--no-bump", action="store_true", help="keep the version in manifest.json as it is")
     parser.add_argument("--draft", action="store_true", help="upload, but don't submit for review")

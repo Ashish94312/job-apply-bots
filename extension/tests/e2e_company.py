@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """End-to-end test of applying on company sites (Greenhouse, Lever, Ashby) in a real Chromium, on fake forms built
 like the real ones (their markup: tests/e2e_company.py's notes): profile and resume fill the standard boxes, your
-answers the company's questions, the rest is asked once; sending straight away and after a look.
+answers the company's questions, the rest is asked once; sending straight away and after a look; and jobs that are gone.
 
   .venv/bin/python extension/tests/e2e_company.py            # headless
   .venv/bin/python extension/tests/e2e_company.py --headed   # watch it
@@ -21,6 +21,7 @@ from playwright.sync_api import sync_playwright
 from e2e import EXT, Hirist, Test, launch
 
 LEVER_ID = "6ed76ce8-4156-4b60-b120-403538bd66cd"
+LEVER_GONE = "0b7f6a52-9c1e-4d3a-8f2b-5e6d7c8b9a01"  # a job that has closed
 ASHBY_ID = "34413f8d-26bf-4bbc-8ade-eb309a0e2245"
 GREENHOUSE = {"1001": "ML Engineer", "1002": "Data Engineer", "1003": "AI Engineer"}
 
@@ -146,6 +147,15 @@ document.getElementById('application-form').addEventListener('submit', async e =
 def greenhouse_done():
     return PAGE.format(title="Acme", body="<h1>Thank you for applying.</h1><p>Your application has been received.</p>", script="")
 
+
+def greenhouse_board():
+    """Where Greenhouse sends a closed job's form: the company's board, with a search box and filters."""
+    body = """<div class="flash-error">The job you are looking for is no longer open.</div><h1>Current openings at Acme</h1>
+<input type="text" placeholder="Search" aria-label="Search"><label for="dept">Department</label>
+<input id="dept" role="combobox" aria-autocomplete="list"><label for="office">Office</label><input id="office" role="combobox" aria-autocomplete="list">
+<a href="/acme/jobs/1001">ML Engineer</a>"""
+    return PAGE.format(title="Jobs at Acme", body=body, script="")
+
 # ---------------------------------------------------------------- Lever (jobs.lever.co, a plain form)
 
 
@@ -159,7 +169,7 @@ def lever():
     radios = "".join(f'<li><label><input type="radio" name="cards[a][field0]" value="{v}" required="required"><span>{v}</span></label></li>' for v in ["Yes", "No"])
     boxes = "".join(f'<li><label><input type="checkbox" name="cards[b][field0]" value="{v}" required=""><span>{v}</span></label></li>' for v in ["English (ENG)", "Hindi (HIN)", "Tamil (TAM)"])
     select = '<div class="application-dropdown"><select name="cards[c][field0]" required=""><option value="">Select...</option><option>LinkedIn</option><option>A friend</option></select></div>'
-    body = f"""<div class="posting-headline"><h2>Backend Engineer</h2><div class="posting-categories"><div class="location">London, United Kingdom</div></div></div>
+    body = f"""<div class="posting-header"><div class="posting-categories"><div class="location">London, United Kingdom</div></div></div>
 <form id="application-form" method="POST" enctype="multipart/form-data"><ul>
 <li class="application-question resume"><label><div class="application-label">Resume/CV <span class="required">✱</span></div>
 <div class="application-field"><a href="#" class="postings-btn visible-resume-upload"><span class="filename"></span><span class="default-label">ATTACH RESUME/CV</span>
@@ -219,6 +229,12 @@ document.getElementById('btn-submit').addEventListener('click', async () => {{
 
 def lever_done():
     return PAGE.format(title="Acme", body="<h3>Application submitted!</h3>", script="")
+
+
+def lever_gone():
+    body = """<div class="content"><h2>Sorry, we couldn't find anything here</h2><p>The job posting you're looking for might have closed,
+or it has been removed. (404 error).</p></div>"""
+    return PAGE.format(title="Not found – 404 error", body=body, script="")
 
 # ---------------------------------------------------------------- Ashby (jobs.ashbyhq.com, a React app with no <form>)
 
@@ -290,13 +306,19 @@ class Forms:
         html = None
         q = parse_qs(urlsplit(req.url).query)
         if u == "job-boards.greenhouse.io/embed/job_app" and q.get("for") == ["acme"]:  # the form, as companies embed it
-            html = greenhouse(q["token"][0]) if q.get("token", [""])[0] in GREENHOUSE else None
+            if q.get("token", [""])[0] not in GREENHOUSE:  # closed: Greenhouse sends you to the board
+                return route.fulfill(status=302, headers={"Location": "https://job-boards.greenhouse.io/embed/job_board?for=acme&error=true"})
+            html = greenhouse(q["token"][0])
+        elif u == "job-boards.greenhouse.io/embed/job_board":
+            html = greenhouse_board()
         elif re.match(r"^job-boards\.greenhouse\.io/acme/jobs/\d+/confirmation$", u):
             html = greenhouse_done()
         elif u == f"jobs.lever.co/acme/{LEVER_ID}/apply":
             html = lever()
         elif u == f"jobs.lever.co/acme/{LEVER_ID}/thanks":
             html = lever_done()
+        elif u == f"jobs.lever.co/acme/{LEVER_GONE}/apply":
+            return route.fulfill(status=404, body=lever_gone(), content_type="text/html; charset=utf-8")
         elif u == f"jobs.ashbyhq.com/acme/{ASHBY_ID}/application":
             html = ashby()
         if html is None:
@@ -454,6 +476,7 @@ def main():
         t.check(f"https://jobs.ashbyhq.com/acme/{ASHBY_ID}/application" in log, "the job another site found is applied to on its company site")
         apps = dash.evaluate("async () => JB.tracker.list((await chrome.storage.local.get('jobs')).jobs, {}).map(a => [a.key, a.title, a.company])")
         t.check(["company:gh-1001", "ML Engineer", "Acme"] in apps, f"applied ones are in Applications, with title and company ({apps})")
+        t.check([f"company:lever-{LEVER_ID}", "Backend Engineer", "Acme"] in apps, "Lever's title from the tab's title when its page has no headline")
 
         print("\nA look before it's sent")
         settings(company={"searchUrls": [gh("1002")], "sendMode": "review"})
@@ -465,6 +488,24 @@ def main():
         wait_done()
         t.check(status("gh-1002") == "applied" and forms.posted.get("greenhouse:1002", {}).get("before") == "No",
                 "sent when you say, the question you answered once answered again")
+
+        print("\nJobs that are gone")
+        dash.evaluate("""async () => {
+            const jobs = (await chrome.storage.local.get('jobs')).jobs || {};
+            jobs['linkedin:888'] = { site: 'linkedin', jobId: '888', url: 'https://www.linkedin.com/jobs/view/888', title: 'Platform Engineer', company: 'Acme',
+              status: 'external', note: 'apply opens an external site: https://jobs.lever.co/acme/%s', ts: '2026-10-21 10:00:00', shot: false };
+            await chrome.storage.local.set({ jobs });
+        }""".replace("%s", LEVER_GONE))
+        settings(company={"searchUrls": [gh("1099")], "sendMode": "review"})
+        t.click("apply")
+        s = wait_done()
+        log = "\n".join(s["log"])
+        gone = t.jobs().get("company:gh-1099", {})
+        t.check(gone.get("status") == "skipped" and gone.get("note") == "the job is closed",
+                f"Greenhouse sending a closed job's form to the board: skipped as closed, not asked about ({gone.get('status')}, {gone.get('note')!r})\n{log[-500:]}")
+        lg = t.jobs().get(f"company:lever-{LEVER_GONE}", {})
+        t.check(lg.get("status") == "skipped" and lg.get("note") == "the job is closed" and lg.get("title") == "Platform Engineer",
+                f"Lever's \"might have closed\": skipped too, keeping the title the other site gave it ({lg.get('status')}, {lg.get('title')!r})")
 
         print("\nNothing left")
         t.click("apply")

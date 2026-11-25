@@ -138,13 +138,26 @@
 
   /** Set a value the way typing would, so React and friends notice it. */
   function setValue(e, value, { blur = true } = {}) {
-    const proto = e instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype
-      : e instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+    // The setter from the element's own prototype chain, past React's setter on the element itself. Not by
+    // instanceof: LinkedIn builds its dialogs in an iframe and moves them into the page, so their elements
+    // come from another window's classes.
+    let proto = Object.getPrototypeOf(e);
+    while (proto && !Object.getOwnPropertyDescriptor(proto, "value")) proto = Object.getPrototypeOf(proto);
     e.focus();
-    Object.getOwnPropertyDescriptor(proto, "value").set.call(e, value); // past React's own value setter
+    Object.getOwnPropertyDescriptor(proto, "value").set.call(e, value);
     e.dispatchEvent(new Event("input", { bubbles: true }));
     e.dispatchEvent(new Event("change", { bubbles: true }));
     if (blur) e.blur();
+  }
+
+  /** Put your resume (a file kept as { name, type, data: base64 }) in a file box the way picking it would. */
+  function attach(box, file) {
+    const bytes = Uint8Array.from(atob(file.data), c => c.charCodeAt(0));
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([bytes], file.name, { type: file.type || "application/pdf" }));
+    box.files = transfer.files;
+    box.dispatchEvent(new Event("input", { bubbles: true }));
+    box.dispatchEvent(new Event("change", { bubbles: true }));
   }
 
   const OPTION_CSS = "[id*='-option-'], [role=option]";
@@ -322,7 +335,8 @@
     for (const group of boxGroups.values()) {
       const options = group.options.map(([, option]) => option);
       if (group.checked || !options.some(o => o && o !== "on")) continue; // ticked already, or no option to read (a custom control's own)
-      const given = answerFor(group.label, answers) || "";
+      // a lone box under a bare heading ("Data Privacy Policy" over "I agree to ..."): the two together are the question
+      const given = answerFor(group.label, answers) || (options.length === 1 && answerFor(`${group.label} ${options[0]}`, answers)) || "";
       // a lone box ("I agree") takes yes; several take the ones the answer lists, comma separated
       const wanted = options.length === 1 ? (/^(yes|y|true|i agree|agree)$/i.test(given.trim()) || plainText(given) === plainText(options[0]) ? [0] : [])
         : JB.answers.pickSeveral(options, given);
@@ -400,7 +414,7 @@
     if (!form) return { found: false };
     const missing = await fillForm(form, answers, note);
     if (missing.length) return { found: true, missing };
-    const submit = firstVisible(form, SUBMIT_RE);
+    const submit = (JB.site.page.submitButton && JB.site.page.submitButton(form)) || firstVisible(form, SUBMIT_RE);
     if (!submit) return { found: true, missing: [], submitted: false };
     await whenEnabled(submit);
     click(submit);
@@ -442,6 +456,7 @@
     matching,
     isRequired,
     setValue,
+    attach,
     visibleDialog,
     whenEnabled,
     exists: css => !!document.querySelector(css),

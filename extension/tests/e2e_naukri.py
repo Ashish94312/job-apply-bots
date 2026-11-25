@@ -29,6 +29,10 @@ JOBS = {  # id: (title, company, years, kind)
     "231024500107": ("Machine Learning Engineer", "Chip Co", "1-3", "chips"),
     "231024500108": ("Software Developer", "Quota Co", "1-3", "quota"),
     "231024500109": ("Backend Developer", "Late Co", "1-3", "direct"),
+    # Apply on company site, the other ways a page opens it: after asking its server, an empty tab sent on, its own redirect
+    "231024500110": ("AI Engineer", "Slow Co", "1-3", "external-late"),
+    "231024500111": ("ML Engineer", "Blank Co", "1-3", "external-blank"),
+    "231024500112": ("Python Developer", "Hop Co", "1-3", "external-redirect"),
 }
 PAGES = [list(JOBS)[:6], list(JOBS)[6:]]  # page 3 and on repeat page 2, as Naukri does past the end
 
@@ -145,8 +149,15 @@ class Naukri:
         lo, hi = years.split("-")
         if jid in self.applied:
             action = '<button id="already-applied" disabled>Applied</button>'
-        elif kind == "external":
-            action = f'<button id="company-site-button" onclick="window.open(\'https://careers.example.com/jobs/{jid}\')">Apply on company site</button>'
+        elif kind.startswith("external"):
+            there = f"https://careers.example.com/jobs/{jid}"
+            on_click = {
+                "external": f"window.open('{there}')",
+                "external-late": f"setTimeout(() => window.open('{there}', '_blank'), 2500)",
+                "external-blank": f"const w = window.open('', '_blank'); setTimeout(() => {{ w.location.href = '{there}'; }}, 300)",
+                "external-redirect": f"window.open('/redirect/jobs/{jid}', '_blank')",
+            }[kind]
+            action = f'<button id="company-site-button" onclick="{on_click}">Apply on company site</button>'
         else:
             action = '<button id="apply-button">Apply</button>'
         on_apply = {
@@ -183,6 +194,8 @@ class Naukri:
             self.applied.add(jid)
             self.posted[jid] = json.loads(req.post_data or "{}")
             return route.fulfill(json={"ok": True})
+        if m := re.match(r"^/redirect/jobs/(\d+)$", path):  # Naukri's own address, sending you on to the company's
+            return redirect(route, f"https://careers.example.com/jobs/{m.group(1)}")
         if path.startswith("/api/close/"):
             self.closed.add(path.rsplit("/", 1)[1])
             return route.fulfill(json={"ok": True})
@@ -215,6 +228,7 @@ def main():
             args=[f"--disable-extensions-except={EXT}", f"--load-extension={EXT}"],
         )
         ctx.route(re.compile(r"^https://(www\.)?naukri\.com/"), fake(nk.handle))
+        ctx.route("https://careers.example.com/**", lambda r: r.fulfill(body="<h1>Careers</h1>", content_type="text/html"))
         worker = ctx.service_workers[0] if ctx.service_workers else ctx.wait_for_event("serviceworker")
         worker.evaluate("s => chrome.storage.local.set({ settings: s })", sample_settings())  # what these tests are written for
         dash = ctx.new_page()
@@ -231,7 +245,7 @@ def main():
               ["notice period", "30 days"], ["current.*ctc", "8 LPA"], ["relocat", "Yes"], ["join immediately", "Yes"],
               ["worked with", "Python, PyTorch"], ["date of birth", ""]] });
             Object.assign(s.sites.naukri, { keywords: ["machine learning engineer"], locations: ["bengaluru"], postedWithin: "week", searchUrls: [] });
-            Object.assign(s.sites.naukri.limits, { delaySeconds: [0, 0], maxPages: 3 });
+            Object.assign(s.sites.naukri.limits, { delaySeconds: [0, 0], maxPages: 3, maxPerRun: 20 });
             await JB.store.saveSettings(s);
         }""")
 
@@ -251,7 +265,7 @@ def main():
         check("6 jobs listed, 5 new and matching" in log and "No more jobs for this search." in log,
               "waits for the cards; the 5-8 Yrs job is filtered out; page 3 repeating ends the search")
         would = re.findall(r"~ would apply\s+(.+?)\s{2}", log)
-        check(would[:2] == ["ML Engineer @ Acme", "Python Developer @ Beta"] and len(would) == 8, f"reads title and company from each job ({would[:2]}, {len(would)} in all)")
+        check(would[:2] == ["ML Engineer @ Acme", "Python Developer @ Beta"] and len(would) == 11, f"reads title and company from each job ({would[:2]}, {len(would)} in all)")
         check(not nk.posted, "dry run applied to nothing")
 
         print("\nNaukri: apply, logging in when asked")
@@ -285,6 +299,10 @@ def main():
         s = check.wait_done("naukri")
         check(check.status("naukri", "231024500108") == "applied" and check.status("naukri", "231024500109") == "applied", "picks up where the quota stopped it")
         check("Done: applied to 2." in "\n".join(s["log"]), "and only those")
+        for jid, how in [("231024500110", "opened a moment after the click"), ("231024500111", "an empty tab sent there afterwards"),
+                         ("231024500112", "through Naukri's own redirect")]:
+            check(check.status("naukri", jid) == "external" and check.note("naukri", jid) == f"apply opens an external site: https://careers.example.com/jobs/{jid}",
+                  f"Apply on company site {how}: where it leads is kept ({check.note('naukri', jid)})")
 
         print("\nSettings")
         dash.evaluate("location.hash = '#settings'")

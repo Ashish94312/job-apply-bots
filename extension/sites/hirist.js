@@ -38,6 +38,14 @@
 
     // Runs inside Hirist's pages.
     page: {
+      // The Apply request can finish after the job page itself has finished loading.
+      applyResult() {
+        if (JB.page.isApplied()) return "applied";
+        const form = JB.page.visibleDialog() || this.questionPage();
+        if (form && [...form.querySelectorAll('button, [role=button], input, select, textarea')].some(JB.page.isVisible)) return "form";
+        return null;
+      },
+
       isLoggedIn() {
         return !JB.page.firstVisible(document, /^\s*login\s*$/i);
       },
@@ -57,9 +65,18 @@
         return { title: title.trim(), company, text: document.body ? document.body.innerText : "" };
       },
 
-      /** After "Apply", Hirist may ask recruiter questions on a separate /screening page. */
+      /** After "Apply", Hirist may ask recruiter questions: on /job/<id>/review-apply since Nov 2026 (its steps:
+       * Submit a Form, Add Audio/Video Profile, Review & Submit), before on a separate /screening page. */
       questionPage() {
-        return location.pathname.includes("/screening") ? document.body : null;
+        return /\/(review-apply|screening)(\/|$)/.test(location.pathname) ? document.body : null;
+      },
+
+      /** What moves those steps on: Next (after the questions), Skip this step (the audio/video profile, which needs a
+       * recording), then Review & Submit. Never "Save & Apply Later". An enabled one first. */
+      submitButton(form) {
+        const steps = [/^\s*next\s*$/i, /^\s*review\s*(&|and)\s*submit\s*$/i, /^\s*skip this step\s*$/i, /^\s*submit\s*$/i];
+        const found = steps.map(re => JB.page.firstVisible(form, re, ["button"])).filter(Boolean);
+        return found.find(b => !b.disabled && b.getAttribute("aria-disabled") !== "true") || found[0] || null;
       },
     },
   };

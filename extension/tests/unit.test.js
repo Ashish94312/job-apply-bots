@@ -7,7 +7,7 @@ const path = require("node:path");
 globalThis.JB = {};
 globalThis.chrome = { storage: { local: {} } }; // store.js only touches it when called
 const local = chrome.storage.local; // the one store.js keeps
-for (const file of ["referral.js", "lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/tracker.js", "lib/store.js", "lib/places.js", "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js", "sites/cutshort.js", "sites/linkedin.js", "sites/naukri.js", "sites/company.js", "sites/yc.js"]) {
+for (const file of ["referral.js", "lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/tracker.js", "lib/store.js", "lib/places.js", "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js", "sites/cutshort.js", "sites/linkedin.js", "sites/naukri.js", "sites/indeed.js", "sites/company.js", "sites/yc.js"]) {
   require(path.join(__dirname, "..", file));
 }
 const cases = require("./cases.json");
@@ -449,7 +449,12 @@ test("company sites: which links it can apply on, and what's next to apply to", 
   assert.deepEqual([jobs[2].title, jobs[2].company, jobs[2].from], ["ML Engineer", "Acme", "hirist:1"]);
   assert.deepEqual(queue({ searchUrls: [], fromOthers: false }, history), []);
   const more = queue({ searchUrls: ["https://acme.icims.com/jobs/1/x/job"], fromOthers: true, moreForms: true }, history);
-  assert.deepEqual(more.map(j => j.jobId), [`lever-${id}`, parse("https://careers.example.com/2").jobId, "gh-33"]); // not the account one
+  assert.deepEqual(more.map(j => j.jobId), ["gh-33", `lever-${id}`, parse("https://careers.example.com/2").jobId]); // newest first, not the account one
+  // Workday's (an account at each company) after the one-page forms, even when newer
+  const wd = "https://acme.wd5.myworkdayjobs.com/External/job/Pune/ML-Engineer_R123";
+  const mixed = queue({ searchUrls: [], fromOthers: true }, { ...history,
+    "instahyre:9": { site: "instahyre", jobId: "9", status: "external", note: `apply opens an external site: ${wd}`, ts: "2026-10-09 10:00:00" } });
+  assert.deepEqual(mixed.map(j => j.jobId), ["gh-33", `lever-${id}`, "wd-acme-r123"]);
 });
 
 test("your profile answers what forms ask about you, after your own answers", () => {
@@ -671,8 +676,13 @@ test("forms' standard questions: self-identification, consent, when you can star
   assert.equal(a("I consent to the processing of my personal data for this application"), "Yes");
   assert.equal(a("I consent to being contacted about future opportunities and to my data being kept in the talent pool"), null);
   assert.equal(a("I agree to receive marketing emails"), null);
+  assert.equal(a("Data Privacy Policy*"), "Yes"); // a question that's only the notice's name
+  assert.equal(a("Applicant Privacy Notice"), "Yes");
+  assert.equal(a("Data Privacy Policy I have read and agree to the privacy policy"), "Yes"); // a lone box's heading and its option
+  assert.equal(a("Where did you read our privacy policy?"), null);
   assert.equal(a("Available start date"), "30 days");
   assert.equal(a("When can you start?"), "30 days");
+  assert.equal(a("How soon you can join if everything goes well with Backbase?"), "30 days");
   s.profile.selfIdentify = "ask";
   assert.equal(a("Gender"), null);
   assert.equal(answers.answerFor("Gender", store.effective(store.normalize({ profile: { answers: [["gender", "Female"]] } }), "company").answers), "Female"); // yours first
@@ -725,4 +735,68 @@ test("YC startups: its searches, its jobs, and the note to the founders", () => 
   assert.equal(skip("San Francisco, CA, US", "US citizen/visa only\nWe build things."), "in United States, says no visa sponsorship");
   assert.equal(skip("San Francisco, CA, US", "Will sponsor\nWe build things."), null);
   assert.equal(skip("IN / Remote (IN)", "US citizenship/visa not required"), null);
+});
+
+test("Indeed: the Indeed of your country, its searches, its jobs", () => {
+  const indeed = sites.indeed;
+  const cfg = { country: "India", keywords: ["ml engineer"], locations: ["bengaluru", ""], postedWithin: "7", searchUrls: ["https://uk.indeed.com/jobs?q=x"] };
+  assert.deepEqual(indeed.searchUrls(cfg), [
+    "https://in.indeed.com/jobs?q=ml+engineer&l=bengaluru&fromage=7&sc=0kf%3Aattr%28DSQF7%29%3B",
+    "https://in.indeed.com/jobs?q=ml+engineer&fromage=7&sc=0kf%3Aattr%28DSQF7%29%3B",
+    "https://uk.indeed.com/jobs?q=x",
+  ]);
+  const plain = indeed.searchUrls({ country: "United States", keywords: ["nurse"], postedWithin: "", easyApplyOnly: false });
+  assert.deepEqual(plain, ["https://www.indeed.com/jobs?q=nurse"]); // any time, and the jobs that apply elsewhere too
+  assert.equal(indeed.searchUrls({ country: "United Kingdom", keywords: ["a"] })[0].split("?")[0], "https://uk.indeed.com/jobs");
+  assert.equal(indeed.searchUrls({ country: "", keywords: ["a"] })[0].split("?")[0], "https://www.indeed.com/jobs"); // not said: the US one
+  assert.equal(indeed.searchPageUrl(plain[0], 1), plain[0]);
+  assert.equal(indeed.searchPageUrl(plain[0], 3), "https://www.indeed.com/jobs?q=nurse&start=20");
+  assert.equal(indeed.searchLabel("https://in.indeed.com/jobs?q=ml+engineer&l=bengaluru"), "ml engineer, bengaluru");
+  assert.equal(indeed.jobId("https://in.indeed.com/viewjob?jk=3F2A9C0D1E4B5A67&from=serp"), "3f2a9c0d1e4b5a67");
+  assert.equal(indeed.jobId("https://in.indeed.com/rc/clk?from=x&jk=0123456789abcdef"), "0123456789abcdef");
+  assert.ok(indeed.searchHost.test("https://de.indeed.com/jobs?q=x") && !indeed.searchHost.test("https://in.indeed.com/viewjob?jk=1"));
+  assert.equal(indeed.placeOf("https://in.indeed.com/jobs?q=x"), "India"); // where its jobs are (lib/places.js)
+  assert.equal(places.jobCountry({ where: "Remote", place: indeed.placeOf("https://uk.indeed.com/jobs?q=x") }, indeed).code, "GB");
+  assert.equal(indeed.withRange("Must have 3+ years of experience in Python"), "3 - 3 years. Must have 3+ years of experience in Python");
+  assert.equal(filters.minYears(indeed.withRange("2-4 years of experience")), 2);
+});
+
+test("Indeed, for settings saved before it came: it searches what Naukri does, until you change it", () => {
+  const before = { sites: { naukri: { keywords: ["ml engineer", "data scientist"], locations: ["bengaluru"] }, linkedin: { keywords: ["ai engineer"] } } };
+  const s = store.normalize(before);
+  assert.deepEqual([s.sites.indeed.keywords, s.sites.indeed.locations], [["ml engineer", "data scientist"], ["bengaluru"]]);
+  assert.equal(s.sites.indeed.easyApplyOnly, true); // its own settings from the defaults
+  s.sites.naukri.keywords.push("x"); // its own copy: changing Naukri's leaves it
+  assert.deepEqual(s.sites.indeed.keywords, ["ml engineer", "data scientist"]);
+  const noNaukriWords = store.normalize({ sites: { naukri: { keywords: [], locations: ["pune"] }, linkedin: { keywords: ["ai engineer"] } } });
+  assert.deepEqual([noNaukriWords.sites.indeed.keywords, noNaukriWords.sites.indeed.locations], [["ai engineer"], []]); // LinkedIn's places are countries
+  const mine = store.normalize({ sites: { naukri: { keywords: ["a"] }, indeed: { keywords: ["nurse"], locations: [] } } });
+  assert.deepEqual(mine.sites.indeed.keywords, ["nurse"]); // once Indeed has its own, they stay
+  assert.deepEqual(store.normalize({ sites: { naukri: { keywords: ["a"] }, indeed: { keywords: [] } } }).sites.indeed.keywords, []); // even none
+  assert.deepEqual(store.normalize(undefined).sites.indeed.keywords, []); // a new install: nobody's
+});
+
+test("Other site jobs kept without where they lead are forgotten, once", async () => {
+  const data = {
+    jobs: {
+      "naukri:1": { site: "naukri", jobId: "1", status: "external", note: "applies on the company website" },
+      "naukri:2": { site: "naukri", jobId: "2", status: "external", note: "apply opens an external site: https://jobs.lever.co/a/b" },
+      "naukri:3": { site: "naukri", jobId: "3", status: "applied", note: "" },
+      "linkedin:4": { site: "linkedin", jobId: "4", status: "external", note: "redirected to https://acme.com/careers/4" },
+      "linkedin:5": { site: "linkedin", jobId: "5", status: "external", note: "applies on the company website" },
+    },
+  };
+  local.get = async key => ({ [key]: data[key] });
+  local.set = async items => Object.assign(data, items);
+  try {
+    assert.equal(await store.forgetLinkless(), 2);
+    assert.deepEqual(Object.keys(data.jobs).sort(), ["linkedin:4", "naukri:2", "naukri:3"]);
+    assert.ok(data["cleaned:linkless"]);
+    data.jobs["naukri:6"] = { site: "naukri", jobId: "6", status: "external", note: "applies on the company website" };
+    assert.equal(await store.forgetLinkless(), 0); // only once: later ones stay as they are
+    assert.ok(data.jobs["naukri:6"]);
+  } finally {
+    delete local.get;
+    delete local.set;
+  }
 });

@@ -32,7 +32,7 @@ REACT = {
 
 JOBS = {  # id: (company, title, experience, kind)
     "2001": ("Nice Co", "Python Developer", "1 - 3", "direct"),
-    "2002": ("Good Co", "Backend Engineer", "1 - 2", "screening"),
+    "2002": ("Good Co", "Backend Engineer", "1 - 2", "review-apply"),
     "2003": ("Hard Co", "AI Engineer", "0 - 2", "screening-hard"),
     "2004": ("Ext Co", "ML Engineer", "1 - 3", "external"),
     "2005": ("Old Co", "Python Developer", "5 - 8", "direct"),
@@ -51,6 +51,7 @@ class Hirist:
         self.logged_in = False
         self.listed = ["2001", "2002", "2003", "2004", "2005", "2006", "2007", "2008"]
         self.applied = {"2007"}
+        self.later = set()  # jobs saved with "Save & Apply Later": never wanted
         self.posted = {}  # job id -> what its form sent
         self.pages = []
 
@@ -80,11 +81,17 @@ class Hirist:
             action = '<button id="apply">Apply</button><div id="modal"></div>'
         on_apply = {
             "direct": "post({}).then(() => { b.outerHTML = '<button>Applied</button><p>Applied successfully</p>'; });",
-            "screening": f"location.href = '/screening/{jid}';",
+            "review-apply": f"location.href = '/job/{jid}/review-apply';",
             "screening-hard": f"location.href = '/screening/{jid}';",
             "external": f"window.open('https://careers.example.com/jobs/{jid}', '_blank');",
             "dialog": "openModal();",
         }.get(kind, "")
+        if jid == "2001":
+            # Hirist can show its confirmation banner after the request finishes.
+            on_apply = """if (!b.disabled) { b.disabled = true; post({}).then(() => setTimeout(() => {
+                b.outerHTML = '<p>Your application has been submitted successfully!</p>'; }, 4500)); }"""
+        elif jid == "2008":
+            on_apply = "setTimeout(openModal, 4500);"
         script = f"""<script src="/static/react.js"></script><script src="/static/react-dom.js"></script><script>
 const post = data => fetch('/api/apply/{jid}', {{method: 'POST', body: JSON.stringify(data)}});
 const b = document.getElementById('apply');
@@ -108,18 +115,31 @@ function openModal() {{
                 f"<section><h2>Job description</h2><p>Build things with Python. Great team.</p></section></main>")
         return self.page(f"{company} - {title} - {company} Pvt Ltd | hirist.tech", body, script)
 
-    def screening(self, jid):
+    def screening(self, jid, steps=False):
+        """The recruiter's questions: on their own /screening page (before Nov 2026), or `steps` as Hirist has them now,
+        on /job/<id>/review-apply: Submit a Form, Add Audio/Video Profile (skippable), Review & Submit."""
         company, title, _, kind = JOBS[jid]
         hard = "true" if kind == "screening-hard" else "false"
         script = f"""<script src="/static/react.js"></script><script src="/static/react-dom.js"></script><script>
-const e = React.createElement, HARD = {hard};
+const e = React.createElement, HARD = {hard}, STEPS = {'true' if steps else 'false'};
 function App() {{
   const [join, setJoin] = React.useState(''), [notice, setNotice] = React.useState('');
   const [ctc, setCtc] = React.useState(''), [colour, setColour] = React.useState('');
+  const [step, setStep] = React.useState(0), [sent, setSent] = React.useState(false);
   const ready = join && notice && ctc && (!HARD || colour);
   const submit = () => fetch('/api/apply/{jid}', {{method: 'POST', body: JSON.stringify({{join, notice, ctc, colour}})}})
-    .then(() => {{ location.href = '/j/{self.slug(jid)}'; }});
-  return e('div', null,
+    .then(() => {{ if (STEPS) setSent(true); else location.href = '/j/{self.slug(jid)}'; }});
+  const later = () => fetch('/api/later/{jid}', {{method: 'POST'}});
+  const stepper = STEPS && e('div', {{className: 'stepper'}}, e('span', null, 'Apply'), e('span', null, '02 Submit a Form'),
+    e('span', null, 'Add Audio/Video Profile'), e('span', null, 'Review & Submit'));
+  if (sent) return e('h2', null, 'Job Applied Successfully');
+  if (step === 1) return e('div', null, stepper, e('p', null, 'Record a short audio/video profile'),
+    e('input', {{type: 'file', accept: 'video/*', style: {{display: 'none'}}}}),
+    e('button', {{onClick: later}}, 'Save & Apply Later'), e('button', {{onClick: () => setStep(2)}}, 'Skip this step'),
+    e('button', {{disabled: true, title: 'Record your resume to continue to the next step'}}, 'Next'));
+  if (step === 2) return e('div', null, stepper, e('p', null, 'Review your application'),
+    e('button', {{onClick: later}}, 'Save & Apply Later'), e('button', {{onClick: submit}}, 'Review & Submit'));
+  return e('div', null, stepper,
     e('h2', null, 'Before you submit your application, tell the recruiter more about yourself'),
     e('div', {{className: 'q'}}, e('p', null, '1. Can you join immediately? *'),
       e('div', {{className: 'opts'}}, ['Yes', 'No'].map(v => e('label', {{key: v}},
@@ -130,7 +150,7 @@ function App() {{
       e('input', {{id: 'ctc', type: 'number', value: ctc, onChange: ev => setCtc(ev.target.value)}})),
     HARD && e('div', {{className: 'q'}}, e('label', {{htmlFor: 'colour'}}, '4. Describe your favourite colour'),
       e('textarea', {{id: 'colour', value: colour, onChange: ev => setColour(ev.target.value)}})),
-    e('button', {{disabled: !ready, onClick: submit}}, 'Next'));
+    e('button', {{disabled: !ready, onClick: STEPS ? () => setStep(1) : submit}}, 'Next'));
 }}
 ReactDOM.createRoot(document.getElementById('root')).render(e(App));
 </script>"""
@@ -144,6 +164,9 @@ ReactDOM.createRoot(document.getElementById('root')).render(e(App));
         html = None
         if path.startswith("/static/"):
             return route.fulfill(path=str(CACHE / path.split("/")[-1]), content_type="text/javascript")
+        if path.startswith("/api/later/"):
+            self.later.add(path.rsplit("/", 1)[1])
+            return route.fulfill(json={"ok": True})
         if path.startswith("/api/apply/") and req.method == "POST":
             jid = path.rsplit("/", 1)[1]
             self.applied.add(jid)
@@ -157,6 +180,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(e(App));
             html = self.job(m.group(1)) if m.group(1) in JOBS else None
         elif m := re.match(r"^/screening/(\d+)$", path):
             html = self.screening(m.group(1))
+        elif m := re.match(r"^/job/(\d+)/review-apply$", path):
+            html = self.screening(m.group(1), steps=True)
         if html is None:
             return route.fulfill(status=404, body="not found")
         route.fulfill(body=html, content_type="text/html; charset=utf-8")
@@ -225,7 +250,8 @@ class Test:
             if s and not s["running"]:
                 return s
             self.dash.wait_for_timeout(500)  # not time.sleep: the fake sites answer only while Playwright runs
-        raise AssertionError(f"run didn't finish; log so far:\n" + "\n".join((self.run_state() or {}).get("log", [])))
+        s = self.run_state() or {}
+        raise AssertionError(f"run didn't finish (doing: {s.get('now')!r}, asking: {s.get('prompt')}); log so far:\n" + "\n".join(s.get("log", [])))
 
     def wait_prompt(self, title, timeout=60):
         self.front()
@@ -344,9 +370,10 @@ def main():
         s = t.wait_done()
         log = t.log(s)
         jobs = t.jobs()
-        t.check(t.status("2001") == "applied", "direct apply")
+        t.check(t.status("2001") == "applied" and "2001" in site.posted, "direct apply confirmed by the delayed Hirist success banner")
         t.check(t.status("2002") == "applied" and site.posted.get("2002") == {"join": "Yes", "notice": "30 days", "ctc": "12", "colour": ""},
-                f"React screening form filled: radio, text, number ({site.posted.get('2002')})")
+                f"Hirist's review-apply steps: questions filled, audio/video skipped, Review & Submit ({site.posted.get('2002')})")
+        t.check(not site.later, "never Save & Apply Later")
         t.check(t.status("2003") == "needs_manual" and "Describe your favourite colour" in jobs["hirist:2003"]["note"],
                 f"unanswerable question left for you ({jobs.get('hirist:2003', {}).get('note')})")
         t.check(jobs.get("hirist:2003", {}).get("shot") is False, "no screenshot unless you allow them")

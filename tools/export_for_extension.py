@@ -34,6 +34,15 @@ EXTENSION_ONLY = {
         "locations": [],  # cities, e.g. bengaluru; empty searches all of India
         "postedWithin": "week",
     },
+    "indeed": {  # the Indeed of your country (in.indeed.com in India, www.indeed.com in the US), its own application
+        "keywords": ["machine learning engineer", "ai engineer", "data scientist", "python developer", "backend developer",
+                     "software engineer"],
+        "searchUrls": [],
+        "limits": {"maxPerRun": 10, "maxPerDay": 25, "delaySeconds": [30, 60], "maxPages": 3},
+        "locations": [],  # cities, e.g. bengaluru; empty searches the whole country
+        "postedWithin": "7",  # days: 1, 3, 7 or 14; empty for any time
+        "easyApplyOnly": True,  # only jobs that apply on Indeed; the others are recorded as Other site, for Company sites
+    },
     "yc": {  # Y Combinator's Work at a Startup: jobs at YC companies, applied to with a note to the founders
         "keywords": [],  # YC's roles: software engineer, designer, product manager, ...
         "searchUrls": [],
