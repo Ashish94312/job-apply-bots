@@ -1,20 +1,25 @@
 """Run from a scheduler for the configured environment. Report failures for retry."""
 import logging
+from urllib.error import HTTPError
 
 from .web import configured_app
 
 
 def sweep(app):
+    orders = app.ledger.unpaid()  # older orders have expired at Cashfree, so they can no longer be paid
     with app.ledger.connection() as db:
-        orders = db.execute("SELECT id FROM orders WHERE paid_at IS NULL").fetchall()
         refunds = db.execute("SELECT order_id, refund_id FROM pending_refunds").fetchall()
         events = db.execute("SELECT * FROM notifications WHERE done=0").fetchall()
     failures = 0
-    for order in orders:
+    for order_id in orders:
         try:
-            app.ledger.reconcile(app.gateway, order["id"])
+            app.ledger.reconcile(app.gateway, order_id)
+        except HTTPError as error:
+            if error.code != 404:  # 404: checkout failed before Cashfree created the order, so nothing to confirm
+                logging.error("Reconcile order %s: HTTP %s", order_id, error.code)
+                failures += 1
         except Exception as error:
-            logging.error("Reconcile order %s: %s", order["id"], type(error).__name__)
+            logging.error("Reconcile order %s: %s", order_id, type(error).__name__)
             failures += 1
     for event in events:
         try:
@@ -36,4 +41,9 @@ def sweep(app):
 
 
 if __name__ == "__main__":
-    raise SystemExit(bool(sweep(configured_app())))
+    app = configured_app()
+    failures = sweep(app)
+    stuck = app.ledger.problems()["paid without access"]
+    if stuck:
+        logging.error("billing: %d paid orders have no access. Run `billing-admin status`.", stuck)
+    raise SystemExit(bool(failures or stuck))

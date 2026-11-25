@@ -6,8 +6,13 @@ import sqlite3
 import time
 import uuid
 from contextlib import closing, contextmanager
+from datetime import datetime, timezone
 from decimal import Decimal
 from urllib.request import HTTPRedirectHandler, Request, build_opener
+
+
+ORDER_TTL = 86400  # Cashfree refuses payment on an order after this; the recovery sweep looks a day past it
+SWEEP_WINDOW = ORDER_TTL + 86400
 
 
 class NoRedirect(HTTPRedirectHandler):
@@ -37,6 +42,8 @@ class CashfreeGateway:
     def create(self, order, phone, origin=None):
         return self.request("", {
             "order_id": order["id"],
+            "order_expiry_time": datetime.fromtimestamp((order.get("created_at") or time.time()) + ORDER_TTL,
+                                                        timezone.utc).isoformat(timespec="seconds"),
             **({"order_meta": {"return_url": origin + "/receipt?id=" + order["id"],
                                 "notify_url": origin + "/webhook"}} if origin else {}),
             "order_amount": order["paise"] / 100,
@@ -84,7 +91,11 @@ class Ledger:
                 CREATE TABLE IF NOT EXISTS trials (
                     account TEXT, product TEXT, ends_at INTEGER NOT NULL, PRIMARY KEY(account, product)
                 );
+                CREATE TABLE IF NOT EXISTS paused (product TEXT PRIMARY KEY);
+                CREATE TABLE IF NOT EXISTS accounts (id TEXT PRIMARY KEY, email TEXT);
             """)
+            if "created_at" not in {r["name"] for r in db.execute("PRAGMA table_info(orders)")}:
+                db.execute("ALTER TABLE orders ADD COLUMN created_at INTEGER")
 
     @contextmanager
     def connection(self):
@@ -115,10 +126,61 @@ class Ledger:
             if not offer:
                 raise ValueError("Unknown offer")
             order_id = str(uuid.uuid4())
-            db.execute("""INSERT INTO orders (id, account, retry_key, product, version, paise, days)
-                          VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                       (order_id, account, retry_key, product, version, offer["paise"], offer["days"]))
+            db.execute("""INSERT INTO orders (id, account, retry_key, product, version, paise, days, created_at)
+                          VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                       (order_id, account, retry_key, product, version, offer["paise"], offer["days"],
+                        int(time.time())))
             return dict(db.execute("SELECT * FROM orders WHERE id=?", (order_id,)).fetchone())
+
+    def pause(self, product, paused=True):
+        """Stop (or restart) new purchases of a product. Confirmations, refunds and restoring carry on."""
+        with self.connection() as db:
+            db.execute("INSERT OR IGNORE INTO paused VALUES (?)" if paused else "DELETE FROM paused WHERE product=?",
+                       (product,))
+
+    def paused(self, product):
+        with self.connection() as db:
+            return bool(db.execute("SELECT 1 FROM paused WHERE product=?", (product,)).fetchone())
+
+    def unpaid(self):
+        """Orders that may still be paid: created within the sweep window (or before creation times were kept)."""
+        with self.connection() as db:
+            return [r["id"] for r in db.execute(
+                "SELECT id FROM orders WHERE paid_at IS NULL AND (created_at IS NULL OR created_at>?)",
+                (int(time.time()) - SWEEP_WINDOW,))]
+
+    def problems(self):
+        """What needs an operator: paid orders without access, and confirmations or refunds still waiting."""
+        with self.connection() as db:
+            def count(sql, *args):
+                return db.execute(sql, args).fetchone()[0]
+            web = {r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            return {
+                "paid without access": count("""SELECT COUNT(*) FROM orders o WHERE paid_at IS NOT NULL
+                    AND expires_at IS NULL AND paise > (SELECT COALESCE(SUM(paise),0) FROM refunds WHERE order_id=o.id)"""),
+                "notifications waiting": count("SELECT COUNT(*) FROM notifications WHERE done=0")
+                    if "notifications" in web else 0,
+                "refunds waiting": count("SELECT COUNT(*) FROM pending_refunds") if "pending_refunds" in web else 0,
+                "orders awaiting payment": len(self.unpaid()),
+            }
+
+    def lookup(self, reference):
+        """Support: the account behind an order ID or email, its trial and every order."""
+        with self.connection() as db:
+            accounts = [r[0] for r in db.execute("SELECT account FROM orders WHERE id=?", (reference,))]
+            accounts += [r[0] for r in db.execute("SELECT id FROM accounts WHERE lower(email)=lower(?)", (reference,))]
+            found = []
+            for account in dict.fromkeys(accounts):
+                email = db.execute("SELECT email FROM accounts WHERE id=?", (account,)).fetchone()
+                trials = db.execute("SELECT product, ends_at FROM trials WHERE account=?", (account,)).fetchall()
+                orders = db.execute("""SELECT o.id, o.product, o.version, o.paise, o.created_at, o.paid_at,
+                    o.expires_at, COALESCE(SUM(r.paise),0) refunded FROM orders o
+                    LEFT JOIN refunds r ON o.id=r.order_id WHERE account=? GROUP BY o.id ORDER BY o.rowid""",
+                                    (account,)).fetchall()
+                found.append({"account": account, "email": email and email[0],
+                              "trials": {t["product"]: t["ends_at"] for t in trials},
+                              "orders": [dict(o) for o in orders]})
+            return found
 
     def start_trial(self, account, product, days):
         """One free trial per account and product, from its first sign-in. Later calls keep the first."""

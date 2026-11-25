@@ -82,3 +82,37 @@ class BillingTests(unittest.TestCase):
         self.ledger.reconcile_refund(self.gateway, self.order["id"], "all")
         self.assertEqual(self.ledger.expiry("carol", "sendoff"), trial_end)
         self.assertIsNone(self.ledger.expiry("alice", "sendoff"))  # trials belong to one account
+
+    def test_order_expiry_and_sweep_window(self):
+        from billing.service import ORDER_TTL, SWEEP_WINDOW, CashfreeSandbox
+        self.assertAlmostEqual(self.order["created_at"], __import__("time").time(), delta=5)
+        sent = Mock(return_value={})
+        gateway = CashfreeSandbox()
+        gateway.request = sent
+        gateway.create(self.order, "9999999999")
+        from datetime import datetime
+        expiry = datetime.fromisoformat(sent.call_args.args[1]["order_expiry_time"]).timestamp()
+        self.assertEqual(expiry, self.order["created_at"] + ORDER_TTL)
+        self.assertEqual(self.ledger.unpaid(), [self.order["id"]])
+        with self.ledger.connection() as db:
+            db.execute("UPDATE orders SET created_at=created_at-?", (SWEEP_WINDOW + 1,))
+        self.assertEqual(self.ledger.unpaid(), [])
+
+    def test_pause_lookup_and_problems(self):
+        self.assertFalse(self.ledger.paused("sendoff"))
+        self.ledger.pause("sendoff")
+        self.ledger.pause("sendoff")
+        self.assertTrue(self.ledger.paused("sendoff"))
+        self.ledger.pause("sendoff", False)
+        self.assertFalse(self.ledger.paused("sendoff"))
+        self.check()
+        with self.ledger.connection() as db:
+            db.execute("INSERT INTO accounts VALUES ('alice', 'Alice@Example.test')")
+        by_email = self.ledger.lookup("alice@example.test")
+        self.assertEqual(by_email, self.ledger.lookup(self.order["id"]))
+        self.assertEqual(by_email[0]["orders"][0]["id"], self.order["id"])
+        self.assertEqual(self.ledger.lookup("nobody@example.test"), [])
+        self.assertEqual(self.ledger.problems()["paid without access"], 0)
+        with self.ledger.connection() as db:  # a grant lost to a bug
+            db.execute("UPDATE orders SET expires_at=NULL")
+        self.assertEqual(self.ledger.problems()["paid without access"], 1)

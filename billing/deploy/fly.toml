@@ -1,6 +1,6 @@
 # Fly.io settings for the billing service. Set `app` to the name you created with `fly apps create`.
 app = "sendoff-billing"
-primary_region = "bom" # Mumbai
+primary_region = "sin" # Singapore, the closest region to India (Fly closed Mumbai)
 
 [build]
   dockerfile = "Dockerfile"
@@ -8,8 +8,8 @@ primary_region = "bom" # Mumbai
 [env]
   BILLING_MODE = "sandbox"
   BILLING_ORIGIN = "https://sendoff-billing.fly.dev" # your app's address; later your own domain
-  BILLING_OFFERS = '{"sendoff":"v1"}'
-  BILLING_TRIALS = '{"sendoff":7}'
+  BILLING_OFFERS = '{"sendoff":"v2"}' # v2: ₹251 for 30 days
+  BILLING_TRIALS = '{}' # no free trial
   # BILLING_EXTENSION_ID is set with `fly secrets set` (it changes per install), like the keys.
 
 [mounts]

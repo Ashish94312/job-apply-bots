@@ -14,3 +14,9 @@ extension-import.json
 extension/tests/.cache/
 # Chrome Web Store packages: tools/package_extension.py
 dist/
+
+# Google OAuth client downloads
+client_secret_*.json
+# Cashfree API key downloads
+APIKey.csv
+*apikey*.csv

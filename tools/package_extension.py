@@ -59,10 +59,9 @@ def main(argv=None):
             name = f.relative_to(EXT).as_posix()
             if origin and name == "manifest.json":
                 z.writestr(name, json.dumps(manifest, indent=2))
-            elif args.live_billing and name == "dashboard.html":
-                z.writestr(name, f.read_text().replace("Sandbox billing", "Account and billing"))
             elif origin and name == "billing-config.js":
-                z.writestr(name, "globalThis.SENDOFF_BILLING_ORIGIN = " + json.dumps(origin) + ";")
+                z.writestr(name, "globalThis.SENDOFF_BILLING_ORIGIN = " + json.dumps(origin) + ";\n"
+                           "globalThis.SENDOFF_BILLING_LIVE = " + json.dumps(args.live_billing) + ";\n")
             else:
                 z.write(f, name)  # manifest.json at the top of the ZIP, as the store wants
     print(f"Wrote {out.relative_to(ROOT)}: {len(files)} files, {out.stat().st_size // 1024} KB, version {manifest['version']}.")

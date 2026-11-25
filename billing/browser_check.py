@@ -2,7 +2,7 @@
 
     python -m billing.browser_check dist/sendoff-<version>-billing-sandbox.zip
 
-Covers: sign in with Google (first sign-in starts the free trial), the trial ending, buying a pass in a checkout tab
+Covers: sign in with Google (locked until a pass is bought; no free trial), buying a pass in a checkout tab
 that is closed before Cashfree's notification, the pass surviving a Chrome restart, signing out, and restoring the
 pass in a fresh profile. The worker refuses product messages without an active trial or pass."""
 import base64
@@ -59,6 +59,18 @@ def gated(page):
     return page.evaluate("chrome.runtime.sendMessage({type: 'track', items: []})")
 
 
+def shot(page, name):
+    """With BILLING_SCREENSHOTS=<dir>, saves the dashboard in light and dark, to review the billing screens."""
+    import os
+    folder = os.environ.get("BILLING_SCREENSHOTS")
+    if folder:
+        for scheme in ("light", "dark"):
+            page.emulate_media(color_scheme=scheme)
+            page.screenshot(path=f"{folder}/{name}-{scheme}.png")
+            page.locator("#billing").screenshot(path=f"{folder}/{name}-{scheme}-panel.png")
+        page.emulate_media(color_scheme=None)
+
+
 def main():
     import sys
     with tempfile.TemporaryDirectory() as directory, sync_playwright() as pw:
@@ -70,12 +82,12 @@ def main():
         extension_id = hashlib.sha256(str(ext.resolve()).encode()).hexdigest()[:32].translate(
             str.maketrans("0123456789abcdef", "abcdefghijklmnop"))
         ledger = Ledger(root / "data.sqlite")
-        ledger.add_offer("sendoff", "fixture", 9900, 30)
+        ledger.add_offer("sendoff", "fixture", 25100, 30)
         gateway = Mock()
         gateway.create.return_value = {"payment_session_id": "test_session"}
         google = GoogleLogin("client", "secret", GOOGLE + "/auth", GOOGLE + "/token")
         app = Billing(ledger, gateway, ORIGIN, extension_id, {"sendoff": "fixture"}, "test",
-                      google=google, trials={"sendoff": 7})
+                      google=google)
         account = digest("google:subject-1")[:48]
         servers = [make_server("127.0.0.1", 8766, app, handler_class=Quiet),
                    make_server("127.0.0.1", 8767, fake_google(), handler_class=Quiet)]
@@ -95,32 +107,32 @@ def main():
         try:
             ctx, dash = browser("profile")
             status = dash.locator("#billing output")
-            signin = dash.get_by_role("button", name="Sign in with Google")
-            expect(status).to_contain_text("7-day free trial")
+            wall = dash.locator("#paywall")
+            action = dash.locator("#paywall-action")
+            expect(status).to_contain_text("Sign in with Google to use Sendoff")
             expect(dash.locator("main")).to_be_hidden()
+            expect(wall).to_be_visible()
+            expect(wall).to_contain_text("₹251")
+            expect(action).to_have_text("Sign in with Google")
+            shot(dash, "1-signed-out")
             assert "Sign in" in gated(dash)["error"]
 
-            signin.click()
-            expect(status).to_contain_text("Free trial until", timeout=15000)
-            expect(dash.locator("#billing-account")).to_have_text("Signed in as " + EMAIL)
-            expect(dash.locator("main")).to_be_visible()
-            assert gated(dash).get("ok"), "the trial opens Sendoff"
-            print("ok: Google sign-in starts the 7-day trial")
-
-            with ledger.connection() as db:
-                db.execute("UPDATE trials SET ends_at=? WHERE account=?", (int(time.time()) - 60, account))
-            dash.get_by_role("button", name="Refresh").click()
-            expect(status).to_contain_text("Your free trial ended")
-            expect(status).to_contain_text("₹99 for 30 days")
+            action.click()
+            expect(status).to_contain_text("No active pass. A pass is ₹251 for 30 days.", timeout=15000)
+            expect(dash.locator("#billing-account .account-email")).to_have_text(EMAIL)
             expect(dash.locator("main")).to_be_hidden()
-            assert "ended" in gated(dash)["error"]
-            print("ok: an ended trial locks Sendoff and offers the pass")
+            expect(action).to_have_text("Buy pass · ₹251")
+            shot(dash, "2-no-pass")
+            assert "Buy a pass" in gated(dash)["error"]
+            with ledger.connection() as db:
+                assert not db.execute("SELECT 1 FROM trials").fetchone(), "no free trial"
+            print("ok: signing in without a pass keeps Sendoff locked and offers the ₹251 pass")
 
             with ctx.expect_page() as new:
-                dash.get_by_role("button", name="Buy pass").click()
+                action.click()
             checkout = new.value
             expect(checkout.locator("body")).to_contain_text("For the Sendoff account " + EMAIL)
-            expect(checkout.locator("body")).to_contain_text("₹99.00 for 30 days")
+            expect(checkout.locator("body")).to_contain_text("₹251.00 for 30 days")
             assert "code=" not in checkout.url, "the one-time link leaves the address"
             checkout.get_by_label("Test billing phone").fill("9999999999")
             checkout.get_by_role("button", name="Continue to Cashfree sandbox").click()
@@ -128,7 +140,7 @@ def main():
             checkout.close()
             order_id = gateway.create.call_args.args[0]["id"]
             assert gateway.create.call_args.args[0]["account"] == account
-            gateway.get.return_value = dict(order_id=order_id, order_currency="INR", order_amount=99, order_status="PAID")
+            gateway.get.return_value = dict(order_id=order_id, order_currency="INR", order_amount=251, order_status="PAID")
             raw = json.dumps(dict(type="PAYMENT_SUCCESS_WEBHOOK", data=dict(order=dict(order_id=order_id),
                              payment=dict(cf_payment_id="123", payment_status="SUCCESS")))).encode()
             signature = base64.b64encode(hmac.digest(b"test", b"123" + raw, "sha256")).decode()
@@ -137,6 +149,10 @@ def main():
                 assert response.status == 200
             expect(status).to_contain_text("Pass valid until", timeout=20000)  # looks again once checkout closes
             expect(dash.locator("main")).to_be_visible()
+            expect(wall).to_be_hidden()
+            expect(dash.locator("#billing-badge")).to_have_text("Active · 30 days left")
+            expect(dash.locator("[data-billing=upgrade]")).to_have_text("Extend pass · ₹251")
+            shot(dash, "3-active")
             assert gated(dash).get("ok")
             print("ok: buying a pass in a closed checkout tab unlocks Sendoff")
 
@@ -149,13 +165,13 @@ def main():
             dash.get_by_role("button", name="Sign out").click()
             expect(dash.locator("main")).to_be_hidden()
             assert "Sign in" in gated(dash)["error"]
-            dash.get_by_role("button", name="Sign in with Google").click()
+            dash.locator("#paywall-action").click()
             expect(dash.locator("main")).to_be_visible(timeout=15000)
             ctx.close()
 
             ctx, fresh = browser("new-profile")
             expect(fresh.locator("main")).to_be_hidden()
-            fresh.get_by_role("button", name="Sign in with Google").click()
+            fresh.locator("#paywall-action").click()
             expect(fresh.locator("#billing output")).to_contain_text("Pass valid until", timeout=15000)
             expect(fresh.locator("main")).to_be_visible()
             print("ok: sign-out, sign-in and restoring the pass in a fresh profile")

@@ -71,7 +71,8 @@ class Billing:
     def offer(self, product):
         """The offer on sale for a product, or None while its purchases are paused."""
         with self.ledger.connection() as db:
-            row = db.execute("SELECT paise, days FROM offers WHERE product=? AND version=?",
+            row = db.execute("""SELECT paise, days FROM offers WHERE product=? AND version=?
+                                AND product NOT IN (SELECT product FROM paused)""",
                              (product, self.offers.get(product))).fetchone()
         return dict(row) if row else None
 
@@ -122,7 +123,8 @@ class Billing:
                    ("Referrer-Policy", "same-origin"), ("X-Content-Type-Options", "nosniff"),
                    ("Content-Security-Policy", "default-src 'none'; script-src 'self' https://sdk.cashfree.com; "
                     "frame-src https://*.cashfree.com; connect-src 'self' https://*.cashfree.com; "
-                    "form-action 'self'; frame-ancestors 'none'; base-uri 'none'")]
+                    # Cashfree's script opens checkout by submitting a form to *.cashfree.com.
+                    "form-action 'self' https://*.cashfree.com; frame-ancestors 'none'; base-uri 'none'")]
         start(f"{status} {HTTPStatus(status).phrase}", headers + extra)
         return [body.encode()]
 
@@ -179,7 +181,9 @@ class Billing:
         if (method, path) == ("GET", "/checkout.js"):
             return 200, "text/javascript", (
                 f"Cashfree({{mode:{json.dumps(self.mode)}}}).checkout({{paymentSessionId:document.body.dataset.session,"
-                "redirectTarget:'_self'}).catch(()=>document.body.textContent='Checkout unavailable. Please retry.');"), []
+                "redirectTarget:'_self'}).then(r=>{if(r&&r.error)throw r.error})"
+                ".catch(e=>document.body.textContent='Checkout unavailable'+(e&&e.message?': '+e.message:'')+"
+                "'. Close this tab and choose Buy pass in Sendoff again.');"), []
         if (method, path) == ("GET", "/authorize"):
             if not all(re.fullmatch(r"[A-Za-z0-9_-]{32,128}", query[k]) for k in ("challenge", "state")):
                 raise ValueError()
@@ -285,8 +289,8 @@ class Billing:
             title = seller
             rows = []
             with self.ledger.connection() as db:
-                for product, version in self.offers.items():
-                    offer = db.execute("SELECT * FROM offers WHERE product=? AND version=?", (product, version)).fetchone()
+                for product in self.offers:
+                    offer = self.offer(product)
                     if offer:
                         trial = self.trials.get(product, 0)
                         rows.append(f'<li>{html.escape(product)} · ₹{offer["paise"]/100:.2f}'
@@ -360,7 +364,7 @@ def configured_app():
                    if "BILLING_CLIENTS" in os.environ else os.environ["BILLING_EXTENSION_ID"]),
                    json.loads(os.environ.get("BILLING_OFFERS", "{}")), os.environ[gateway.key_prefix + "SECRET"],
                    mode, json.loads(os.environ.get("BILLING_SELLER", "{}")), google,
-                   json.loads(os.environ.get("BILLING_TRIALS", '{"sendoff": 7}')))
+                   json.loads(os.environ.get("BILLING_TRIALS", "{}")))  # e.g. {"sendoff": 7}; none by default
 
 
 if __name__ == "__main__":

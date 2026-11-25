@@ -21,16 +21,23 @@
       <h2 id="sites-title">Sites</h2>
       <ul id="site-list"></ul>
     </section>
-    <section id="billing" hidden aria-label="Billing">
-      <h2>Sandbox billing</h2>
-      <p id="billing-account" hidden></p>
-      <output aria-live="polite"></output>
-      <button class="btn" data-billing="signin">Sign in with Google</button>
-      <button hidden class="btn" data-billing="upgrade">Buy pass</button>
-      <button hidden class="btn" data-billing="refresh">Refresh</button>
-      <button hidden class="btn" data-billing="logout">Sign out</button>
-      <button class="btn" id="billing-export" hidden>Export existing data</button>
-      <button class="btn" id="billing-stop" hidden>Stop active runs</button>
+    <section id="billing" class="account" hidden aria-labelledby="billing-title">
+      <h2 id="billing-title">Account <span class="tag" id="billing-mode">Sandbox</span></h2>
+      <div class="account-card">
+        <p class="account-who" id="billing-account" hidden>
+          <span class="avatar" aria-hidden="true"></span><span class="account-email"></span>
+        </p>
+        <p class="pill" id="billing-badge" hidden></p>
+        <output aria-live="polite"></output>
+        <button class="btn primary" data-billing="signin">Sign in with Google</button>
+        <button hidden class="btn" data-billing="upgrade">Buy pass</button>
+        <button class="btn" id="billing-export" hidden>Export existing data</button>
+        <button class="btn stop" id="billing-stop" hidden>Stop active runs</button>
+        <p class="account-links">
+          <button hidden class="link" data-billing="refresh">Refresh</button>
+          <button hidden class="link" data-billing="logout">Sign out</button>
+        </p>
+      </div>
     </section>
     <p class="side-foot">Your settings and history stay in this Chrome.</p>
   </aside>
@@ -44,8 +51,8 @@
       Before the first run, say <a href="#settings" data-goto="place">where you are</a> (it fills in the answers about
       salary, notice period and your city), pick the kind of work you want under <a href="#settings" data-goto="jobs">Which
       jobs</a> (it fills in what to search for), and check your <a href="#settings" data-goto="answers">answers to screening
-      questions</a>. Coming from the Python bots?
-      <a href="#settings" data-goto="bring-over">Bring your settings and history over</a>.
+      questions</a>. Have a backup?
+      <a href="#settings" data-goto="bring-over">Restore your settings and history</a>.
     </p>
 
     <!-- ===================================================== overview -->
@@ -271,7 +278,7 @@
           <a href="#settings" data-goto="message">Message to recruiters</a>
           <a href="#settings" data-goto="applications">Applications</a>
           <a href="#settings" data-goto="screenshots">Screenshots</a>
-          <a href="#settings" data-goto="bring-over">Bring over, back up</a>
+          <a href="#settings" data-goto="bring-over">Back up, restore</a>
         </nav>
 
         <div class="settings-body">
@@ -458,20 +465,38 @@
           </section>
 
           <section class="set" id="set-bring-over" aria-labelledby="bring-over-title">
-            <h2 id="bring-over-title">Bring over from the Python bots</h2>
-            <p class="hint">In the bots' folder, run <code>.venv/bin/python tools/export_for_extension.py</code> and pick the
-              <code>extension-import.json</code> it writes. It replaces your settings here and adds the jobs the Python bots
-              already handled to the history, so they aren't applied to again.</p>
+            <h2 id="bring-over-title">Back up and restore</h2>
+            <p class="hint">Download your settings and history as a file. To restore them, here or in another Chrome, pick
+              that file below. It replaces your settings and adds its jobs to the history, so they aren't applied to again.</p>
+            <div><button type="button" class="btn" id="export">Download backup</button></div>
+            <h2 class="sub">Restore</h2>
+            <p class="hint" id="from-bots" hidden>Coming from the Python bots? In the bots' folder, run
+              <code>.venv/bin/python tools/export_for_extension.py</code> and pick the <code>extension-import.json</code> it
+              writes here.</p>
             <div class="inline"><input type="file" id="import-file" accept=".json,application/json">
               <span class="saved" id="import-status" aria-live="polite"></span></div>
-            <h2 class="sub">Back up</h2>
-            <p class="hint">Download your settings and history as a file. Bring it back the same way, here or in another Chrome.</p>
-            <div><button type="button" class="btn" id="export">Download backup</button></div>
           </section>
         </div>
       </div>
     </section>
   </main>
+
+  <section class="paywall" id="paywall" hidden aria-labelledby="paywall-title">
+    <div class="paywall-card">
+      <p class="paywall-eyebrow">Sendoff pass</p>
+      <h1 id="paywall-title">Sign in to use Sendoff</h1>
+      <p class="paywall-lede" id="paywall-lede">Sign in with Google to buy a pass, or to restore one you bought.</p>
+      <p class="paywall-price" id="paywall-price" hidden></p>
+      <ul class="paywall-list">
+        <li>Applies for you on every site you choose, with your filters</li>
+        <li>Fills in screening questions with your own answers</li>
+        <li>Asks for referrals and writes to recruiters on LinkedIn</li>
+        <li>Your settings and history stay in this Chrome</li>
+      </ul>
+      <button class="btn primary paywall-action" id="paywall-action">Sign in with Google</button>
+      <p class="paywall-fine" id="paywall-fine">One payment through Cashfree. No auto-renewal. Bought on another computer? Sign in with the same Google account to restore it.</p>
+    </div>
+  </section>
 </div>
 
 <div class="tip" id="tip" role="tooltip" hidden></div>

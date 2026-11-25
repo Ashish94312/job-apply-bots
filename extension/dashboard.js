@@ -2129,6 +2129,10 @@ function buildShots() {
 
 // ---------------------------------------------------------------- bring over, back up
 
+// Chrome adds update_url to the manifest of a Web Store install; a folder loaded unpacked has none. Only someone who
+// loads it from this repo has the Python bots, so only they see how to bring those over.
+const DEV_INSTALL = !("update_url" in chrome.runtime.getManifest());
+
 async function importFile(e) {
   const status = $("import-status");
   const file = e.target.files[0];
@@ -2141,7 +2145,8 @@ async function importFile(e) {
     if (data.format !== FORMAT || !data.settings || !Array.isArray(data.history)) throw new Error();
   } catch {
     status.classList.add("err");
-    status.textContent = "That isn't a file from export_for_extension.py or a backup from here.";
+    status.textContent = DEV_INSTALL ? "That isn't a file from export_for_extension.py or a backup from here."
+      : "That isn't a Sendoff backup.";
     return;
   }
   if (!confirm(`Replace your settings with the ones in ${file.name}, and add its ${data.history.length} past jobs to the history?`)) return;
@@ -2178,6 +2183,7 @@ async function init() {
   buildResume();
   buildWorkdaySignIn();
   buildShots();
+  $("from-bots").hidden = !DEV_INSTALL;
   for (const link of document.querySelectorAll("[data-goto]")) {
     link.addEventListener("click", e => { e.preventDefault(); goto(link.dataset.goto); });
   }

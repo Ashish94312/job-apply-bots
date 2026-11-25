@@ -47,7 +47,7 @@ THE DASHBOARD
 • Settings for every site in one place, and a backup to a file.
 
 PRIVATE BY DESIGN
-Your settings, answers and history stay in your Chrome. In the paid edition, all features require a pass after a 7-day free trial. Sign in with Google to start the trial, buy or restore a pass. The merchant verifies your purchase through Cashfree. It uses the logins you already have on the job sites.
+Your settings, answers and history stay in your Chrome. In the paid edition, all features require a pass (₹251 for 30 days, no free trial). Sign in with Google to buy or restore a pass. The merchant verifies your purchase through Cashfree. It uses the logins you already have on the job sites.
 
 PLEASE USE IT RESPONSIBLY
 Automating applications may go against a site's terms. Keep the limits low and apply only to jobs you'd take.

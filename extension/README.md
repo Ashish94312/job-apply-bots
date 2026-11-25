@@ -14,7 +14,7 @@ twice. When it needs you (a login, a check, a question it can't answer) it asks 
 
 ## Billing edition
 
-In the billing edition everything needs a free trial or a pass. Choose **Sign in with Google** on the dashboard: the first sign-in starts a 7-day free trial. After it, **Buy pass** opens checkout in a tab (₹99 for 30 days, one payment, renewed by buying again; buying early adds the 30 days after the current trial or pass). Sendoff unlocks by itself once the payment is confirmed. The sign-in lasts across Chrome restarts and ends after 30 days unused or on **Sign out**. Sign in with the same Google account to restore a pass on another computer or after reinstalling. Without a trial or pass you can still export your records and stop runs. See the [billing test and operations guide](../billing/README.md).
+In the billing edition everything needs a pass; there is no free trial. Choose **Sign in with Google** on the dashboard, then **Buy pass** opens checkout in a tab (₹251 for 30 days, one payment, renewed by buying again; buying early adds the 30 days after the current pass). Sendoff unlocks by itself once the payment is confirmed. The sign-in lasts across Chrome restarts and ends after 30 days unused or on **Sign out**. Sign in with the same Google account to restore a pass on another computer or after reinstalling. Without a pass you can still export your records and stop runs. See the [billing test and operations guide](../billing/README.md).
 
 ## Install
 
@@ -43,7 +43,7 @@ Your settings and history stay.
    Check the answers, your experience range, and how many applications per run and per day. Save.
    - **Coming from the Python bots?** Bring your settings and history over instead: in the repo folder run
      `.venv/bin/python tools/export_for_extension.py`, then on the dashboard pick the `extension-import.json`
-     it writes (Settings > Bring over from the Python bots). The history makes the extension skip the jobs the
+     it writes (Settings > Back up and restore). The history makes the extension skip the jobs the
      Python bot already handled. Delete the file afterwards: it has your answers in it.
 2. **Log in** to each site once: pick the site in the sidebar, click **Log in** and sign in in the window that
    opens (any way the site offers works, Google included: it's your normal Chrome). Chrome remembers it. No

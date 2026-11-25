@@ -1,16 +1,27 @@
 # Shared payments and Sendoff release plan
 
-**Status on 22 November 2026.** The local billing implementation and its fixture checks are complete. The paid edition offers a 7-day free trial, starting at the first Google sign-in (one per Google account), then a ₹99 pass for 30 days, renewed manually. Without a trial or pass, only exporting records, stopping runs and the account panel are available. Each later product gets its own account access scope, catalogue entry and release decision.
+**Status on 26 November 2026.** The local billing implementation and its fixture checks are complete, including the operator tools (pause switch, status, support lookup) and bounded recovery. The paid edition sells a ₹251 pass for 30 days, renewed manually, with no free trial (changed on 26 November 2026 from a 7-day trial and ₹99). Without a pass, only exporting records, stopping runs and the account panel are available. Each later product gets its own account access scope, catalogue entry and release decision.
 
 | Verification | Recorded outcome |
 |---|---|
-| Automated tests | 14 billing tests (ledger, trials, Google sign-in claims, web flow) and 42 extension unit tests passed. |
+| Automated tests | 21 billing tests and 42 extension unit tests passed. The billing tests cover the ledger, trials, Google sign-in claims and the web flow, plus out-of-order and duplicate notifications, a Cashfree outage between notification and grant, client price changes, product isolation, the pause switch and order expiry. |
 | Packaged customer journey | `billing.browser_check` passed in Chromium. It used the packaged sandbox build, a stand-in for Google's sign-in running the real sign-in code, and a simulated Cashfree gateway. Covered: sign-in starts the trial, an ended trial locks, buying in a checkout tab closed before the notification unlocks, the sign-in survives a Chrome restart, sign-out, sign-in, and restoring in a fresh profile. |
-| Decided | Sign-in with Google. 7-day trial. ₹99 for 30 days. |
+| Decided | Sign-in with Google. No free trial. ₹251 for 30 days. |
 | External verification pending | Choose hosting and the domain. Create the Google OAuth client. Get Cashfree activation and domain approval, real sandbox credentials and webhooks. Verify a Cashfree sandbox payment and refund, permitted live-site dry runs, and review-account access, then an authorized live pilot and settlement. |
 | Commercial decisions pending | Seller identity, support contact, refund terms and the published policies. No public release or payment has been made. |
 
 Run instructions and configuration are in [the billing guide](../billing/README.md).
+
+## Remaining work
+
+| # | Step | Owner | State |
+|---|---|---|---|
+| A | Code hardening: order expiry and bounded recovery, pause switch, `status` and `lookup`, edge-case tests | Engineering | Done |
+| B | Sandbox deploy on Fly: app, volume, secrets, deploy, register offer, `/healthz` and `/` | Owner (account), engineering (commands) | Not started |
+| C | Google OAuth client (Web application, redirect `/auth/google`). Cashfree test-mode keys. Webhook to `/webhook` | Owner | Not started |
+| D | Sandbox verification: real sandbox payment and refund, plus the billing sandbox cases below. Rehearse the pause | Owner and engineering | Not started |
+| E | Seller identity, support contact, refund terms, policies (BILLING_SELLER). Cashfree activation and domain approval. Own domain | Owner | Not started |
+| F | Store submission with reviewer access. One live purchase and refund. Small first cohort | Owner | Not started |
 
 | Milestone | Implementation | Evidence required to proceed |
 |---|---|---|

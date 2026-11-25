@@ -48,13 +48,13 @@ code from the internet: everything it runs is in the extension you installed.
 
 ## Account and billing
 
-In the paid edition, all product features require an active free trial or pass. You sign in with your Google account; the first sign-in starts the free trial. Google tells the merchant service your account's identifier and email address, nothing else (no contacts, files or other Google data). The merchant service stores an identifier derived from your Google account, your email address, your trial dates, and for each purchase the product, price, payment and refund references, and access dates, so it can confirm purchases, restore them and answer support requests. The extension keeps a sign-in credential in Chrome's local extension storage (never in a backup file); it ends after 30 days without use. Signing out deletes it there and on the merchant service. Uninstalling removes local data. Purchase records are kept by the merchant so you can restore access and request support.
+In the paid edition, all product features require an active pass. You sign in with your Google account to buy or restore one. Google tells the merchant service your account's identifier and email address, nothing else (no contacts, files or other Google data). The merchant service stores an identifier derived from your Google account, your email address, and for each purchase the product, price, payment and refund references, and access dates, so it can confirm purchases, restore them and answer support requests. The extension keeps a sign-in credential in Chrome's local extension storage (never in a backup file); it ends after 30 days without use. Signing out deletes it there and on the merchant service. Uninstalling removes local data. Purchase records are kept by the merchant so you can restore access and request support.
 
 When you buy a pass, the merchant sends Cashfree the billing phone you enter, the customer identifier, order reference, amount and currency. You enter payment details on Cashfree's checkout. The billing service receives payment and refund status. Contact the seller shown at checkout for billing, privacy and deletion requests. Share order references with support privately.
 
 ## Permissions
 
-- **Identity and the merchant HTTPS origin, in the billing edition:** to sign in with Google through your browser and check your trial or pass. Cashfree runs on the merchant checkout website.
+- **Identity and the merchant HTTPS origin, in the billing edition:** to sign in with Google through your browser and check your pass. Cashfree runs on the merchant checkout website.
 
 - **hirist.tech, instahyre.com, wellfound.com, cutshort.io, linkedin.com, naukri.com:** to search for jobs, read job
   pages and fill in applications on those sites, and (on LinkedIn) send the referral and recruiter messages you set up.

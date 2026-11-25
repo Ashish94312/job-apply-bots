@@ -1,4 +1,4 @@
 #!/bin/sh
 # Operator commands on the server, as the app user (see `python -m billing --help`), e.g.:
-#   fly ssh console -C "billing-admin offer sendoff v1 9900 30"
+#   fly ssh console -C "billing-admin offer sendoff v2 25100 30"
 cd /app && exec setpriv --reuid=app --regid=app --init-groups python -m billing "$@"

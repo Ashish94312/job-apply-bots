@@ -2,7 +2,7 @@
 """Bring your settings and history from the Python bots into the Chrome extension.
 
   .venv/bin/python tools/export_for_extension.py             # writes extension-import.json; import it on the
-                                                              # extension's dashboard (Settings > Bring over)
+                                                              # extension's dashboard (Settings > Back up and restore)
   .venv/bin/python tools/export_for_extension.py --defaults  # regenerate extension/lib/defaults.js from the
                                                               # config.example.yaml files
 
@@ -252,7 +252,7 @@ def write_export(out):
     applied = sum(r["status"] == "applied" for r in data["history"])
     print(f"Wrote {out}: settings for {', '.join(SITES)}, {len(data['history'])} past jobs ({applied} applied)"
           f" and {len(people)} people asked for a referral.")
-    print("Import it on the extension's dashboard: Settings > Bring over from the Python bots.")
+    print("Import it on the extension's dashboard: Settings > Back up and restore > Restore.")
     print("It has your answers (phone, salary...) in it: delete it once imported.")
 
 

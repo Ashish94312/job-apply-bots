@@ -1,6 +1,6 @@
 # Deploying the billing service to Fly.io
 
-One small always-on machine in Mumbai (`bom`), with the sqlite ledger on a 1 GB Fly volume mounted at `/app/data`.
+One small always-on machine in Singapore (`sin`, the closest region to India now that Fly has closed Mumbai), with the sqlite ledger on a 1 GB Fly volume mounted at `/app/data`.
 `deploy.sh` uploads only the billing code. The rest of the repo (settings, job history, browser profiles) never leaves your computer.
 
 | File | What it is |
@@ -17,7 +17,7 @@ Replace `sendoff-billing` everywhere if you choose another app name. Keep `app` 
 
 1. Install and log in: `brew install flyctl`, then `fly auth login`.
 2. Create the app: `fly apps create sendoff-billing`. Its address will be `https://sendoff-billing.fly.dev`.
-3. Create the disk: `fly volumes create billing_data --region bom --size 1 -a sendoff-billing`.
+3. Create the disk: `fly volumes create billing_data --region sin --size 1 -a sendoff-billing`.
 4. Get the keys:
    - **Cashfree sandbox:** in the Cashfree merchant dashboard, switch to Test mode, then Developers → API Keys. Copy the App ID and the Secret Key.
    - **Google:** in Google Cloud Console, create a project. Set up the OAuth consent screen: External, with app name, support email and privacy URL `https://sendoff-billing.fly.dev/privacy`. Then go to Clients → Create client → Web application. Add the authorized redirect URI `https://sendoff-billing.fly.dev/auth/google`. Copy the Client ID and the Client secret.
@@ -33,14 +33,16 @@ Replace `sendoff-billing` everywhere if you choose another app name. Keep `app` 
          BILLING_EXTENSION_ID=...
 
 6. Deploy from the repo root: `./billing/deploy/deploy.sh`.
-7. Register the offer (₹99 for 30 days): `fly ssh console -a sendoff-billing -C "billing-admin offer sendoff v1 9900 30"`.
-8. Check it: `https://sendoff-billing.fly.dev/healthz` should say `ok`, and `https://sendoff-billing.fly.dev/` should list the ₹99 pass.
+7. Register the offer (₹251 for 30 days, no free trial): `fly ssh console -a sendoff-billing -C "billing-admin offer sendoff v2 25100 30"`.
+8. Check it: `https://sendoff-billing.fly.dev/healthz` should say `ok`, and `https://sendoff-billing.fly.dev/` should list the ₹251 pass.
 9. Set up Cashfree webhooks. In Cashfree Developers → Webhooks, add `https://sendoff-billing.fly.dev/webhook` for payment and refund events.
 
 ## Later
 
 - **Updates:** run `./billing/deploy/deploy.sh` again. The ledger on the volume stays.
-- **Logs:** `fly logs -a sendoff-billing`. A repeated "billing recovery: some orders still pending" means a payment needs a look.
+- **Logs:** `fly logs -a sendoff-billing`. A repeated "billing recovery: needs a look" means a payment needs a look: run `fly ssh console -a sendoff-billing -C "billing-admin status"`.
+- **Pause new purchases:** `fly ssh console -a sendoff-billing -C "billing-admin pause sendoff"` (and `resume sendoff`). Takes effect at once, with no redeploy.
+- **Support:** `fly ssh console -a sendoff-billing -C "billing-admin lookup ORDER_ID_OR_EMAIL"`.
 - **Backups:** Fly snapshots the volume daily (`fly volumes snapshots list`).
 - **Own domain:**
   1. Run `fly certs add pay.yourdomain.in -a sendoff-billing` and add the DNS records it prints.

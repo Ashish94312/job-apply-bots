@@ -173,6 +173,10 @@ class WebTests(unittest.TestCase):
         self.call(url, "POST", body, HTTP_ORIGIN="https://other.example")
         self.assertEqual(self.status, 403)
         self.assertIn("fixture-session", self.call(url, "POST", body, HTTP_ORIGIN=self.origin))
+        # Cashfree's script submits a form to its own site: the page must allow that, and nothing else off-site
+        policy = self.headers["Content-Security-Policy"]
+        self.assertIn("form-action 'self' https://*.cashfree.com;", policy)
+        self.assertIn("script-src 'self' https://sdk.cashfree.com;", policy)
         order = self.gateway.create.call_args.args[0]
         key = order["id"]
         self.call("/receipt?id=" + key, user="bob")
@@ -205,3 +209,100 @@ class WebTests(unittest.TestCase):
         self.app.offers.clear()
         self.call(url, "POST", body, HTTP_ORIGIN=self.origin)
         self.assertEqual(self.status, 503)
+
+    def checkout(self, user="alice", **form):
+        body = urlencode(dict(dict(retry=str(uuid.uuid4()), phone="9999999999", version="trial"), **form)).encode()
+        self.call("/checkout?product=sendoff", "POST", body, user=user, HTTP_ORIGIN=self.origin)
+        return self.gateway.create.call_args.args[0] if self.status == 200 else None
+
+    def notify(self, order_id, status, payment="p1"):
+        raw = json.dumps(dict(type=f"PAYMENT_{dict(SUCCESS='SUCCESS', FAILED='FAILED')[status]}_WEBHOOK",
+                              data=dict(order=dict(order_id=order_id),
+                                        payment=dict(cf_payment_id=payment, payment_status=status)))).encode()
+        signature = base64.b64encode(hmac.digest(b"fixture", b"123" + raw, "sha256")).decode()
+        self.call("/webhook", "POST", raw, user=None, HTTP_X_WEBHOOK_TIMESTAMP="123", HTTP_X_WEBHOOK_SIGNATURE=signature)
+
+    def test_out_of_order_and_interrupted_notifications(self):
+        from urllib.error import URLError
+        from billing.recovery import sweep
+        alice = digest("alice")[:48]
+        order = self.checkout()
+        paid = dict(order_id=order["id"], order_currency="INR", order_amount=49.99, order_status="PAID")
+        # a failed attempt, then a retry that succeeds, its notification arriving before the failure's
+        self.gateway.get.return_value = paid
+        self.notify(order["id"], "SUCCESS", "p2")
+        self.notify(order["id"], "FAILED", "p1")
+        self.assertEqual(self.status, 200)
+        granted = self.ledger.expiry(alice, "sendoff")
+        self.assertTrue(granted)
+        self.notify(order["id"], "SUCCESS", "p2")  # a duplicate grants nothing more
+        self.assertEqual(self.ledger.expiry(alice, "sendoff"), granted)
+
+        # Cashfree unreachable between receiving the notification and granting: kept, then granted by the sweep
+        second = self.checkout()
+        self.gateway.get.side_effect = URLError("outage")
+        self.notify(second["id"], "SUCCESS")
+        self.assertEqual(self.status, 503)
+        self.assertEqual(self.ledger.expiry(alice, "sendoff"), granted)
+        self.gateway.get.side_effect = None
+        self.gateway.get.return_value = dict(paid, order_id=second["id"])
+        self.assertEqual(sweep(self.app), 0)
+        self.assertEqual(self.ledger.expiry(alice, "sendoff"), granted + 7 * 86400)
+        self.assertEqual(self.ledger.problems(), {"paid without access": 0, "notifications waiting": 0,
+                                                  "refunds waiting": 0, "orders awaiting payment": 0})
+
+    def test_sweep_skips_orders_cashfree_never_created(self):
+        from urllib.error import HTTPError
+        from billing.recovery import sweep
+        self.checkout()
+        self.gateway.get.side_effect = HTTPError("u", 404, "Not found", {}, None)
+        self.assertEqual(sweep(self.app), 0)
+        self.gateway.get.side_effect = HTTPError("u", 500, "Error", {}, None)
+        self.assertEqual(sweep(self.app), 1)
+
+    def test_client_cannot_change_price_or_product(self):
+        self.assertIsNone(self.checkout(version="cheaper"))
+        self.assertEqual(self.status, 400)
+        self.assertIsNone(self.checkout(phone="12345"))
+        self.assertEqual(self.status, 400)
+        order = self.checkout()
+        self.assertEqual((order["paise"], order["product"]), (4999, "sendoff"))
+        # Cashfree reporting a different amount grants nothing
+        self.gateway.get.return_value = dict(order_id=order["id"], order_currency="INR", order_amount=1, order_status="PAID")
+        self.call("/receipt?id=" + order["id"])
+        self.assertEqual(self.status, 400)
+        self.assertIsNone(self.ledger.expiry(digest("alice")[:48], "sendoff"))
+
+    def test_products_are_isolated(self):
+        self.ledger.add_offer("other", "v1", 19900, 30)
+        self.app = Billing(self.ledger, self.gateway, self.origin, {"sendoff": "a" * 32, "other": "b" * 32},
+                           {"sendoff": "trial", "other": "v1"}, "fixture", trials={"sendoff": 7, "other": 7})
+        token = self.sign_in()
+        auth = dict(HTTP_AUTHORIZATION="Bearer " + token)
+        for path in ("/access?product=other", "/checkout/start?product=other"):
+            self.call(path, "POST" if "start" in path else "GET", **auth)
+            self.assertEqual(self.status, 403)
+        order = self.checkout()
+        self.gateway.get.return_value = dict(order_id=order["id"], order_currency="INR", order_amount=49.99,
+                                             order_status="PAID")
+        self.call("/receipt?id=" + order["id"])
+        alice = digest("alice")[:48]
+        self.assertGreater(self.ledger.expiry(alice, "sendoff"), time.time() + 7 * 86400)
+        self.assertIsNone(self.ledger.expiry(alice, "other"))
+
+    def test_pause_switch(self):
+        token = self.sign_in()
+        auth = dict(HTTP_AUTHORIZATION="Bearer " + token)
+        order = self.checkout()
+        self.ledger.pause("sendoff")
+        self.assertIsNone(json.loads(self.call("/access?product=sendoff", **auth))["offer"])
+        self.assertNotIn("49.99", self.call("/", user=None))
+        self.assertIsNone(self.checkout())
+        self.assertEqual(self.status, 503)
+        # an order already placed is still confirmed while paused
+        self.gateway.get.return_value = dict(order_id=order["id"], order_currency="INR", order_amount=49.99,
+                                             order_status="PAID")
+        self.assertIn("Payment confirmed", self.call("/receipt?id=" + order["id"]))
+        self.ledger.pause("sendoff", False)
+        self.assertTrue(self.checkout())
+

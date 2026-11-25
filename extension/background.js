@@ -85,7 +85,8 @@ async function checkPass(origin) {
   if (!response.ok) throw new Error("Sendoff's billing service is unavailable. Try again in a minute.");
   const { expires } = await response.json();
   await chrome.storage.session.set({ billingAccess: { expires, checked: now } });
-  if (!(expires * 1000 > now)) throw new Error("Your Sendoff trial or pass has ended. Buy a pass on the dashboard.");
+  if (!expires) throw new Error("Buy a pass on the dashboard to use Sendoff.");
+  if (!(expires * 1000 > now)) throw new Error("Your Sendoff pass has ended. Buy a pass on the dashboard.");
 }
 
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
