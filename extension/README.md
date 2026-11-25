@@ -2,14 +2,19 @@
 
 Sends your job applications off for you. It's the bots in this repo as a Chrome extension: no Python, no terminal. It runs in your own Chrome, with your own logins, and
 keeps everything (settings, history) in that Chrome. It applies on **Hirist**, **Instahyre**, **Wellfound**,
-**Cutshort**, **LinkedIn** (Easy Apply) and **Naukri**, and on LinkedIn it can also **ask for referrals**. Naukri is in
-the extension only: there's no Python bot for it. So is applying on **company sites** (a company's own application
+**Cutshort**, **LinkedIn** (Easy Apply), **Naukri** and **Indeed**, and on LinkedIn it can also **ask for referrals**
+and **write to recruiters**. Naukri
+and Indeed are in the extension only: there's no Python bot for them. So is applying on **company sites** (a company's own application
 form, on Greenhouse, Lever, Ashby, Workday and more) and at **YC startups** (Y Combinator's Work at a Startup, with a
 note to the founders).
 
 On each site it does what the Python bot does: searches with your keywords and experience range, skips jobs that don't
 fit your filters, answers the screening questions it has answers for, applies, and never applies to the same job
 twice. When it needs you (a login, a check, a question it can't answer) it asks on its dashboard.
+
+## Billing edition
+
+In the billing edition everything needs a free trial or a pass. Choose **Sign in with Google** on the dashboard: the first sign-in starts a 7-day free trial. After it, **Buy pass** opens checkout in a tab (₹99 for 30 days, one payment, renewed by buying again; buying early adds the 30 days after the current trial or pass). Sendoff unlocks by itself once the payment is confirmed. The sign-in lasts across Chrome restarts and ends after 30 days unused or on **Sign out**. Sign in with the same Google account to restore a pass on another computer or after reinstalling. Without a trial or pass you can still export your records and stop runs. See the [billing test and operations guide](../billing/README.md).
 
 ## Install
 
@@ -32,7 +37,7 @@ Your settings and history stay.
    Wellfound search your country instead of the sample India. Until you do, those answers are empty, so the jobs
    asking them are left for you. Changing one there again changes those answers again; an answer you edit yourself
    stays until then. Then, under **Which jobs**, pick the kind of work you want in **Start from a field** and **Use it**:
-   it fills in the roles to apply to and what LinkedIn, Naukri, Wellfound and Hirist search for. Sendoff starts with
+   it fills in the roles to apply to and what LinkedIn, Naukri, Indeed, Wellfound and Hirist search for. Sendoff starts with
    none of anyone's own: no search keywords, title filters, experience range or skills, and no answers made up about
    you (your years of experience, a degree, a work permit), so those questions are asked once rather than guessed.
    Check the answers, your experience range, and how many applications per run and per day. Save.
@@ -49,7 +54,7 @@ Your settings and history stay.
 **Any kind of work.** In **Settings > Which jobs**, pick it under **Start from a field** (software, data, design,
 product, marketing, sales, finance, HR, healthcare, teaching and more) and **Use it**: its roles become the "...and is
 a role like" list, they come out of "Skip titles with" (so "manager" stops skipping product managers), and the sites
-that take any words (LinkedIn, Naukri, Wellfound, Hirist) get what to search for, where you hadn't set it. Instahyre
+that take any words (LinkedIn, Naukri, Indeed, Wellfound, Hirist) get what to search for, where you hadn't set it. Instahyre
 and Cutshort search by skill: add yours there.
 
 Per site, in Settings > Sites: the search keywords (Hirist: any words; Instahyre: skills, searched once per year
@@ -64,8 +69,10 @@ answer typed in (sent again as a plain number if Naukri asks for one, "8 LPA" be
 has to be one of them, or how one starts. For a length of time, like the notice period, it picks the option covering
 your answer: "30 days" picks "1 Month", "15 days" picks "15 Days or less", "120 days" picks "More than 3 Months"; if
 none fits ("45 days" between "1 Month" and "2 Months") or two fit as well, it doesn't guess. A question it has no
-answer for is left for you. "Apply on company site" jobs are recorded as **Other site**, and it stops for the
-day when Naukri says your daily quota is used up. Bringing settings over from the Python bots leaves the Naukri ones as
+answer for is left for you. "Apply on company site" jobs are recorded as **Other site** with where they lead (for
+Company sites to apply there), and it stops for the day when Naukri says your daily quota is used up. (Before version
+1.3.0 it couldn't see where Naukri's went: updating forgets those Other site jobs without a link, once, so Naukri looks
+at them again.) Bringing settings over from the Python bots leaves the Naukri ones as
 they are.
 
 LinkedIn has more in its tab: its own search filters (experience level, on-site/remote/hybrid, how recent),
@@ -82,6 +89,24 @@ get an invite with a short note, and the message on a later run once they accept
 daily cap, and nobody is asked twice. Write the message in Settings > Sites > LinkedIn first: until its `<…>` part
 is in your own words it won't send. These go to real people in your name, so tick *Ask me before each* the first
 times. History lists everyone asked. Which jobs to take, your answers and the cover note are shared by all sites.
+
+To test one referral, paste a real LinkedIn job URL into **Settings > Sites > LinkedIn > Also ask about these jobs**,
+write your message, choose **Show it to me first**, and save. On LinkedIn's overview, use **Preview** to check the
+people and wording, then **Ask for referrals** to approve each message or invitation. For someone outside your
+connections, the first run sends an invitation; run it again after they accept to send the referral message.
+Skipping all recipients or finding no employees leaves the job available for a later run.
+
+**Writing to recruiters (LinkedIn):** its own box on LinkedIn's page, next to Referrals: **Preview** shows who it
+would write to and the messages, **Message recruiters** sends them. For each job it applied to recently it writes
+to whoever posted the job (the job's *Meet the hiring team*), or else searches the company's employees for
+recruiters, 3rd-degree too, and picks by headline (`lib/roles.js`): a recruiter who names the company first, never
+agency recruiters ("Hiring for top MNCs", staffing, freelance), people who left ("Ex-…", or a latest job
+elsewhere on their profile) or interns. One person per company by default; *Engineering and hiring managers too*
+adds those. Connections get the message, others an invite with the note and the message once they accept, as for
+referrals, but the two keep their own records: a recruiter is never sent the referral message, and a job asked
+about for a referral is still there to find its recruiter. Nobody is contacted twice either way, and referrals and
+recruiters share one daily limit (**Settings > Sites > LinkedIn > Messages and invites to people**, 30 a day by
+default). Write the message in Settings first: until its `<…>` part is in your own words it won't send.
 
 While it runs, the bot works in its own Chrome window: leave that window open (you can use other windows
 meanwhile). It closes the window when it's done. **Stop** stops it after the current step.
@@ -133,6 +158,20 @@ the figures show how many replied, had a round and got an offer, by site and wit
 no reply in 21 days are marked gone quiet and close as ghosted in one go. Jobs you applied to elsewhere go in with
 **Add an application**; a job it left for you that you finished yourself, with **I applied myself** in History.
 
+**Indeed.** It searches the Indeed of your country (Settings > Where you are): in.indeed.com in India, uk.indeed.com
+in the UK, www.indeed.com in the US and wherever Indeed has no site of its own; for another country's, put its whole
+search address in Extra search pages. In its Settings tab: what to search for (settings saved before Indeed came
+start with Naukri's words and cities), the cities (empty for the whole country), how recent (a day to two weeks, a week to start with), and whether to take only **Easily apply** jobs (the
+ones that apply on Indeed; on to start with). Indeed has no experience filter, so a job is skipped once opened when
+its description asks for more than your range ("5+ years of experience"). A dry run needs no login; applying does
+(Indeed's own sign-in, in the bot's window). **Apply now** opens Indeed's application, a page at a time: your contact
+details and resume as they are on Indeed (or the resume from Settings > Your profile when it has none), the
+employer's questions from your answers (the ones marked optional are left alone, and the others nothing answers are
+asked once), then the review and **Submit your application**. A captcha is left for you, and if Indeed shows its
+"Request Blocked" page the run says so and stops, recording nothing. "Apply on company site" jobs
+are recorded as **Other site** with where they lead, for Company sites, and an expired job is skipped. Chrome asks to
+let Sendoff onto indeed.com the first time you use it.
+
 **YC startups (Work at a Startup).** Jobs at companies Y Combinator funded. In its Settings tab: YC's roles to search
 (software engineer, designer, product manager, recruiting hr, sales manager, marketing, support, operations, science;
 *Start from a field* fills them in) and places (remote, india, san francisco, ...; anywhere for all; none: remote and
@@ -152,7 +191,10 @@ Other site). First fill in **Settings > Your profile** (name, email, phone, link
 country), and add your resume: they go in
 the standard boxes, and the resume is uploaded. The company's own questions are answered from your answers like on
 any site, and the ones nothing answers are asked once (*When it's stuck, ask me*). Questions a form doesn't require
-are left alone unless you have an answer. By default it shows you each filled-in form with a **Send it** button; a
+are left alone unless you have an answer. The jobs the other sites found go one-page forms (Greenhouse, Lever, Ashby)
+before Workday's, newest first, and one that has closed
+since (Greenhouse sending its form to the company's job board, Lever's "might have closed", Ashby's "Job not found",
+Workday's "page doesn't exist") is skipped as closed instead of left for you. By default it shows you each filled-in form with a **Send it** button; a
 captcha or a code the company emails you is left for you to do in the bot's window. Each job is applied to once.
 On Workday each company has its own account. Save a sign-in in **Settings > Your profile** (an email and a password,
 best one used only for these) and the bot signs in by itself, or makes the account when a company has none yet; without
@@ -193,6 +235,7 @@ Chrome asks for:
   e.g. to notice an apply button that leads to another site.
 - **Screenshots** are off by default. Turning them on (Settings > Screenshots) asks for access to all sites,
   because that's what Chrome requires for taking a screenshot; the bot still only goes to the job sites.
+- **indeed.com**, asked for the first time you use Indeed: to search it, read its jobs and fill in its application.
 - **ycombinator.com and workatastartup.com**, asked for the first time you use YC startups: to read YC's job pages
   and apply there with your note.
 - **Other companies' forms** (Company sites) ask for the same access to all sites, to fill in a form on whatever site
@@ -253,7 +296,9 @@ Plain JavaScript, Manifest V3, no build step.
 |---|---|
 | `background.js` | Service worker: takes the dashboard's requests, runs the engine |
 | `engine.js` | The run loop (from `run.py`): drives a bot window, records results, asks you questions |
-| `referral.js` | Asking for referrals on LinkedIn (from `linkedin/referral.py`) |
+| `referral.js` | Asking for referrals on LinkedIn (from `linkedin/referral.py`); its finding, messaging and inviting are shared with `recruiters.js` |
+| `recruiters.js` | Writing to the recruiters hiring for the jobs applied to, on LinkedIn |
+| `lib/roles.js` | Who someone is at a company, from their headline: recruiter, agency, former employee, manager |
 | `lib/page.js` | Runs inside job pages: finds buttons, reads forms, fills them (from `core.py`) |
 | `lib/filters.js`, `lib/answers.js` | Which jobs to apply to, answers to questions (from `core.py`) |
 | `lib/store.js` | Settings, history, applications and the answers you gave, in `chrome.storage.local` |
@@ -270,7 +315,8 @@ otherwise results are scrolled; optional `page` hooks such as `collectLinks`, `i
 `dismissExtras`; `flow: "feed"` for a site that applies from cards in a feed, like Cutshort; its own `apply`
 for a multi-step dialog, like LinkedIn's Easy Apply), plus its hosts in `manifest.json`, `importScripts` in `background.js`, a `<script>` in
 `dashboard.html`, an entry in the dashboard's `SITES`, and the site in `tools/export_for_extension.py` (`SITES`, or
-`EXTENSION_ONLY` with its defaults for a site with no Python bot, like Naukri).
+`EXTENSION_ONLY` with its defaults for a site with no Python bot, like Naukri). A site whose hosts Chrome should
+grant only on first use (YC startups, Indeed) lists them as `origins` instead of in `manifest.json`.
 
 Tests:
 
@@ -279,7 +325,8 @@ node --test extension/tests/                     # filters and answers, checked 
 .venv/bin/python extension/tests/make_cases.py   # after changing core.py's filters: refresh those cases
 .venv/bin/python extension/tests/e2e.py          # the extension in Chromium, applying on a fake Hirist
 .venv/bin/python extension/tests/e2e_sites.py    # ...and on fake Instahyre, Wellfound and Cutshort
-.venv/bin/python extension/tests/e2e_linkedin.py # ...and LinkedIn: Easy Apply and referrals
+.venv/bin/python extension/tests/e2e_linkedin.py # ...and LinkedIn: Easy Apply, referrals and recruiters
+.venv/bin/python -u extension/tests/e2e_linkedin.py --referrals-only # one simulated job: preview, skip, retry, approve, follow up
 .venv/bin/python extension/tests/e2e_naukri.py   # ...and Naukri: its questions chat and daily quota
 .venv/bin/python extension/tests/e2e_tracker.py  # the Applications page: replies, rounds, templates
 .venv/bin/python extension/tests/e2e_answers.py  # questions it asks you once, and the answers it keeps
@@ -288,6 +335,7 @@ node --test extension/tests/                     # filters and answers, checked 
 .venv/bin/python extension/tests/e2e_replies.py  # replies read from LinkedIn's and Naukri's lists of your applications
 .venv/bin/python extension/tests/e2e_forms.py    # other companies' forms: behind an Apply button, a job abroad, sign-in
 .venv/bin/python extension/tests/e2e_yc.py       # YC startups: searching, skipping, signing in, the note to the founders
+.venv/bin/python extension/tests/e2e_indeed.py   # Indeed: its search, its application page by page, company-site links
 .venv/bin/python tools/export_for_extension.py --defaults   # after changing a config.example.yaml
 ```
 

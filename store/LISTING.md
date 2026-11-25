@@ -3,6 +3,8 @@
 Everything to fill in, in the order the [Developer Dashboard](https://chrome.google.com/webstore/devconsole) asks
 for it. Copy each block into the field it's under.
 
+**Paid edition submission:** Identify the legal seller and support contact, link the merchant privacy and sales policies, state the approved INR price and duration, and prominently disclose that all features require an active pass. Provide reviewers with a funded test account and restore instructions. Declare account identifiers, the Google account email, authentication and purchase information, the identity permission and the exact merchant host. Use the billing-specific text below for a paid submission.
+
 **Once, before the first upload:** sign in to the dashboard with your Google account, pay the one-time
 registration fee, and fill in your publisher name and contact email (and verify the email).
 
@@ -37,6 +39,7 @@ WHAT IT DOES
 • Never applies to the same job twice, with a daily limit and a pause between applications.
 • Dry run: see what it would apply to before it applies to anything.
 • Ask for referrals on LinkedIn: it finds people at the companies you applied to among your connections and writes your message for each one. You see who it goes to and the exact text before anything is sent, unless you choose to send without asking.
+• Write to recruiters on LinkedIn: for the jobs you applied to, it writes your message to whoever posted the job, or a recruiter at the company (never agency recruiters or people who left), with the same review before sending.
 
 THE DASHBOARD
 • Watch each job on the current page of results fill in as it's handled.
@@ -44,7 +47,7 @@ THE DASHBOARD
 • Settings for every site in one place, and a backup to a file.
 
 PRIVATE BY DESIGN
-Your settings, answers and history stay in your Chrome. Sendoff has no server and no account, and sends nothing to its developer. It uses the logins you already have on the job sites.
+Your settings, answers and history stay in your Chrome. In the paid edition, all features require a pass after a 7-day free trial. Sign in with Google to start the trial, buy or restore a pass. The merchant verifies your purchase through Cashfree. It uses the logins you already have on the job sites.
 
 PLEASE USE IT RESPONSIBLY
 Automating applications may go against a site's terms. Keep the limits low and apply only to jobs you'd take.
@@ -81,7 +84,7 @@ Sendoff is an independent tool. It is not affiliated with or endorsed by Hirist,
 **Single purpose description**
 
 ```text
-Sendoff applies to jobs for the user on the job sites they choose (Hirist, Instahyre, Wellfound, Cutshort and LinkedIn), using their own search settings and answers to screening questions, and helps them ask their LinkedIn connections at those companies for a referral.
+Sendoff applies to jobs for the user on the job sites they choose (Hirist, Instahyre, Wellfound, Cutshort and LinkedIn), using their own search settings and answers to screening questions, and helps them ask their LinkedIn connections at those companies for a referral and write to the recruiters hiring for those jobs.
 ```
 
 **Permission justifications**
@@ -108,7 +111,7 @@ Opens the window the extension works in, waits for its pages to load, and reads 
 
 Host permissions
 ```text
-Each listed site is a job board or company application form the extension searches and applies on for the user: hirist.tech, instahyre.com, wellfound.com, cutshort.io, linkedin.com and naukri.com, and companies' application forms on greenhouse.io, jobs.lever.co, jobs.ashbyhq.com, myworkdayjobs.com and myworkdaysite.com. On LinkedIn it also sends the referral messages the user sets up and confirms, and on LinkedIn and Naukri it reads the replies to the user's applications so it can show what happened after applying. No other sites are accessed unless the user allows it: ycombinator.com and workatastartup.com are requested only when the user first uses YC startups, to read YC's public job pages and apply there with the note to the founders the user reviews. Access to all sites is optional and only requested if the user turns on screenshots (chrome.tabs.captureVisibleTab requires it) or other companies' application forms: then it fills in and, after the user reviews it, sends the application form on the site the company uses, only for the job links the user lists or that the job sites led to.
+Each listed site is a job board or company application form the extension searches and applies on for the user: hirist.tech, instahyre.com, wellfound.com, cutshort.io, linkedin.com and naukri.com, and companies' application forms on greenhouse.io, jobs.lever.co, jobs.ashbyhq.com, myworkdayjobs.com and myworkdaysite.com. On LinkedIn it also sends the referral and recruiter messages the user sets up and confirms, and on LinkedIn and Naukri it reads the replies to the user's applications so it can show what happened after applying. No other sites are accessed unless the user allows it: indeed.com is requested only when the user first uses Indeed, to search it and fill in Indeed's own application; ycombinator.com and workatastartup.com are requested only when the user first uses YC startups, to read YC's public job pages and apply there with the note to the founders the user reviews. Access to all sites is optional and only requested if the user turns on screenshots (chrome.tabs.captureVisibleTab requires it) or other companies' application forms: then it fills in and, after the user reviews it, sends the application form on the site the company uses, only for the job links the user lists or that the job sites led to.
 ```
 
 **Are you using remote code?** No.
@@ -116,12 +119,14 @@ Each listed site is a job board or company application form the extension search
 All JavaScript is in the package. Nothing is downloaded or evaluated at runtime.
 ```
 
-**Data usage.** Tick these, and nothing else:
+**Data usage.** Select the applicable categories for the submitted edition:
 
-- Personally identifiable information (the phone number, city, college and similar the user enters as answers; the names of LinkedIn members they ask for a referral)
+- Personally identifiable information (the phone number, city, college and similar the user enters as answers; the names of LinkedIn members they ask for a referral or write to as a recruiter)
+- Financial and payment information in the paid edition (purchase records and access status)
 - Location (the city the user enters as an answer)
 - Authentication information (the Workday email and password, only if the user saves one)
-- Personal communications (the referral messages the user writes and sends; the replies to their applications on LinkedIn and Naukri)
+- Authentication information in the paid edition (the Google account email and a sign-in credential for the merchant service)
+- Personal communications (the referral and recruiter messages the user writes and sends; the replies to their applications on LinkedIn and Naukri)
 - Web history (the job pages the extension has handled)
 - Website content (the job listings and forms it reads)
 
@@ -131,7 +136,7 @@ Then tick all three statements:
 - I do not use or transfer user data for purposes that are unrelated to my item's single purpose
 - I do not use or transfer user data to determine creditworthiness or for lending purposes
 
-(All of this data stays in the user's browser. It's only ever sent to the job sites, by filling in the forms the user asked for.)
+Account and purchase information in the paid edition is processed by the merchant and Cashfree as described in the privacy policy.
 
 **Privacy policy URL**
 
@@ -157,7 +162,7 @@ Google reviews it, often within a few days; the 5 site permissions can make it t
 test it, send this:
 
 ```text
-No account is needed to see it work. After installing, click the Sendoff toolbar icon to open the dashboard. Pick Wellfound in the sidebar and click Dry run: it opens its own window, goes through public Wellfound job pages and lists what it would apply to, without logging in or applying. Applying and referrals use the user's own logins on the job sites, and referral messages are shown to the user for confirmation before they're sent.
+For the paid edition, first sign in with the reviewer account supplied privately and refresh access. For the local edition, open the dashboard directly. After installing, click the Sendoff toolbar icon to open the dashboard. Pick Wellfound in the sidebar and click Dry run: it opens its own window, goes through public Wellfound job pages and lists what it would apply to, without logging in or applying. Applying and referrals use the user's own logins on the job sites, and referral messages are shown to the user for confirmation before they're sent.
 ```
 
 ---

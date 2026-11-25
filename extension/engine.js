@@ -38,14 +38,41 @@
     }
   }
 
-  /** Runs in the page's own world: note the URLs it opens with window.open (Chrome blocks those, see clickApply). */
+  /** Is `to` another page than `from` (not the same one with a new "?…" or "#…")? */
+  function elsewhere(from, to) {
+    try {
+      const [a, b] = [new URL(to), new URL(from)];
+      return a.origin + a.pathname !== b.origin + b.pathname;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Runs in the page's own world: note the URLs it opens with window.open (Chrome blocks those, see clickApply),
+   * also when it opens an empty window and sends it on afterwards, and links it opens in a new tab by clicking them. */
   function watchWindowOpen() {
     if (window.__jobBotsOpened) return;
-    window.__jobBotsOpened = [];
+    const opened = window.__jobBotsOpened = [];
+    const note = url => {
+      try {
+        if (url && String(url) !== "about:blank") opened.push(new URL(String(url), location.href).href); // "/redirect/..." too
+      } catch {
+        // not an address
+      }
+    };
     const open = window.open;
     window.open = function (url, ...rest) {
-      window.__jobBotsOpened.push(String(url || ""));
-      return open.call(this, url, ...rest);
+      note(url);
+      const win = open.call(this, url, ...rest);
+      if (win) return win;
+      // blocked: a stand-in window, so a page that sends it somewhere afterwards ("w.location = url") says where
+      const where = { assign: note, replace: note, set href(u) { note(u); }, get href() { return "about:blank"; } };
+      return { closed: false, opener: null, close() {}, focus() {}, document: { write() {}, close() {} }, get location() { return where; }, set location(u) { note(u); } };
+    };
+    const click = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function () {
+      if (this.target === "_blank") note(this.href);
+      return click.call(this);
     };
   }
 
@@ -81,8 +108,9 @@
       this.site = JB.sites[siteName];
       this.action = action;
       this.opts = opts || {};
-      this.dry = action === "dry-run" || action === "refer-dry-run";
+      this.dry = ["dry-run", "refer-dry-run", "reach-dry-run"].includes(action);
       if (action === "refer-dry-run") this.action = "refer";
+      if (action === "reach-dry-run") this.action = "reach";
       this.stopping = false;
       this.tabId = null;
       this.windowId = null;
@@ -286,7 +314,16 @@
 
     /** Run a script in the bot's tab without waiting for the page to finish loading (some never quite do),
      * and give up on it after a while rather than hang the run. */
-    script(options) {
+    billingTab(tab) {
+      return [tab.pendingUrl, tab.url].some(value => {
+        if (!value) return false;
+        const url = new URL(value);
+        return url.origin === globalThis.SENDOFF_BILLING_ORIGIN || /(^|\.)cashfree\.com$/.test(url.hostname);
+      });
+    }
+
+    async script(options) {
+      if (this.billingTab(await this.tab())) throw new Error("Billing pages are private.");
       const run = chrome.scripting.executeScript({ target: { tabId: this.tabId }, injectImmediately: true, ...options });
       run.catch(() => {});
       let timer;
@@ -343,6 +380,8 @@
       try {
         // Chrome lets an extension take screenshots only with access to all sites: you allow that on the dashboard.
         if ((await JB.store.screenshots()) === false || !(await chrome.permissions.contains({ origins: ["<all_urls>"] }))) return false;
+        const [visible] = await chrome.tabs.query({ active: true, windowId: this.windowId });
+        if (!visible || visible.id !== this.tabId || this.billingTab(visible)) return false;
         const image = await chrome.tabs.captureVisibleTab(this.windowId, { format: "jpeg", quality: 70 });
         await JB.store.saveShot(this.site.name, jobId, image);
         return true;
@@ -439,7 +478,7 @@
       if (this.site.flow === "list") return this.mainList(cfg);
       const fixed = this.site.searches ? null : this.site.searchUrls(cfg); // Cutshort looks its searches up once logged in
       const nothing = fixed ? !fixed.length : !(cfg.keywords || []).length && !(cfg.searchUrls || []).length;
-      if (!["login", "refer", "replies"].includes(this.action) && nothing) {
+      if (!["login", "refer", "reach", "replies"].includes(this.action) && nothing) {
         this.log("Nothing to search for: add keywords in Settings first.");
         return;
       }
@@ -450,6 +489,14 @@
           return;
         }
         await JB.referral.run(this, cfg);
+        return;
+      }
+      if (this.action === "reach") { // LinkedIn: write to the recruiters hiring for the jobs applied to (recruiters.js)
+        if (!(await this.login(true))) {
+          this.log(`Not logged in to ${this.site.label}, stopping.`);
+          return;
+        }
+        await JB.recruiters.run(this, cfg);
         return;
       }
       if (this.action === "replies") { // read what the site says about your applications there
@@ -521,7 +568,7 @@
 
     /** Company sites: no login and no search, a list of job links to apply to (sites/company.js queue). */
     async mainList(cfg) {
-      if (["login", "refer"].includes(this.action)) {
+      if (["login", "refer", "reach"].includes(this.action)) {
         this.log(`${this.site.label} need no login.`);
         return;
       }
@@ -806,6 +853,8 @@
       await this.ensureLoaded(this.site.jobReadyCss);
       await this.sleep(this.site.settleMs || 1500); // let the apply button render
       job = { ...job, ...(await this.exec("site.readJob")) };
+      if (job.closed) return [S.SKIPPED, job, job.closed]; // the job is gone (a company's form says so)
+      if (job.stopRun) throw Object.assign(new Error(job.stopRun), { stopRun: job.stopRun }); // e.g. the site turned us away: nothing to record
       this.step(`Checking ${named(job)}`);
       cfg = JB.places.forJob(cfg, job, this.site); // its answers for the job's country, when you work abroad
 
@@ -842,7 +891,15 @@
       try {
         await this.inMainWorld(watchWindowOpen);
         newTab = await this.exec("clickApply");
-        if (newTab !== false) await this.sleep(2500);
+        if (newTab === null && this.site.page.applyResult) {
+          for (const end = Date.now() + 12000; Date.now() < end; await this.sleep(500)) {
+            if (opened.length || this.outside((await this.tab()).url) ||
+                await this.inMainWorld(() => !!window.__jobBotsOpened?.length)) break;
+            const result = await this.exec("site.applyResult");
+            if (result === "applied") return [S.APPLIED, ""];
+            if (result === "form") break;
+          }
+        } else if (newTab !== false) await this.sleep(2500);
       } finally {
         chrome.tabs.onCreated.removeListener(onCreated);
       }
@@ -880,34 +937,50 @@
       return [S.MANUAL, "couldn't confirm the application went through"];
     }
 
-    /** Click what applies on the company's own site (`path`: the site's function that clicks it, or gives the address
-     * when it's a plain link) and note the address it leads to, without applying there. Where it shows: the link, a
-     * tab it opens (closed again), one it tries to open (Chrome blocks a new tab from a click that isn't yours), or
-     * this tab going there. The site's own redirect counts as where it leads. Null when it shows nowhere. */
-    async followOut(path) {
+    /** Click what `path` clicks (the site's function for it, giving the address instead when it's a plain link) and
+     * see where that goes, without going on from there: { from: the page clicked on, seen: [the link, tabs it opened
+     * (closed again), what it tried to open (Chrome blocks a new tab from a click that isn't yours), where this tab is
+     * now] }. Some pages ask their server where to go first: it gives them a few seconds. */
+    async opens(path) {
       const opened = [];
       const onCreated = tab => {
         if (tab.openerTabId === this.tabId || tab.windowId === this.windowId) opened.push(tab.id);
       };
       chrome.tabs.onCreated.addListener(onCreated);
+      const from = (await this.tab()).url;
       let link;
       try {
         await this.inMainWorld(watchWindowOpen);
         link = await this.exec(path);
-        if (!link) {
-          await this.sleep(1500);
-          if (this.site.page.continueOut && (await this.exec("site.continueOut"))) await this.sleep(2000); // "you're leaving" dialogs
+        const went = async () => opened.length > 0 || elsewhere(from, (await this.tab()).url) || (await this.inMainWorld(() => (window.__jobBotsOpened || []).length)) > 0;
+        for (let i = 0; !link && i < 12 && !(await went()); i++) {
+          await this.sleep(500);
+          if (i === 2 && this.site.page.continueOut && (await this.exec("site.continueOut"))) await this.sleep(2000); // "you're leaving" dialogs
         }
       } finally {
         chrome.tabs.onCreated.removeListener(onCreated);
       }
-      const tabs = (await Promise.all(opened.map(id => chrome.tabs.get(id).catch(() => null)))).filter(Boolean);
+      if (elsewhere(from, (await this.tab()).url)) await this.loaded({ fresh: false, timeout: 10000 });
+      let tabs = [];
+      for (let i = 0; i < 10; i++) { // a tab it opened empty, to send on once its server says where
+        tabs = (await Promise.all(opened.map(id => chrome.tabs.get(id).catch(() => null)))).filter(Boolean);
+        if (!tabs.length || tabs.some(t => /^https?:/.test(t.pendingUrl || t.url || ""))) break;
+        await this.sleep(500);
+      }
       const tried = await this.inMainWorld(() => (window.__jobBotsOpened || []).pop());
       await chrome.tabs.remove(opened).catch(() => {});
-      const here = (await this.tab()).url;
-      const out = [link, ...tabs.map(t => t.url || t.pendingUrl), tried, here].map(u => this.outside(u)).find(Boolean);
-      if (out || !link || !this.outside(link, true)) return out || null;
-      await this.goto(link); // a redirect of the site's own with nothing to read the address from: see where it goes
+      return { from, seen: [link, ...tabs.map(t => t.url || t.pendingUrl), tried, (await this.tab()).url].filter(Boolean) };
+    }
+
+    /** Click what applies on the company's own site (`path`, see opens) and note the address it leads to, without
+     * applying there. The site's own redirect counts as where it leads. Null when it shows nowhere. */
+    async followOut(path) {
+      const { from, seen } = await this.opens(path);
+      const out = seen.map(u => this.outside(u)).find(Boolean);
+      // a redirect of the site's own with nothing to read the address from: see where it goes
+      const own = !out && seen.find(u => elsewhere(from, u) && this.outside(u, true));
+      if (!own) return out || null;
+      await this.goto(own);
       return this.outside((await this.tab()).url);
     }
 
@@ -943,9 +1016,10 @@
   JB.engine = {
     start(site, action, opts) {
       if (!JB.sites[site]) throw new Error(`Unknown site "${site}".`);
-      if (!["apply", "dry-run", "login", "refer", "refer-dry-run", "replies"].includes(action)) throw new Error(`Unknown action "${action}".`);
+      if (!["apply", "dry-run", "login", "refer", "refer-dry-run", "reach", "reach-dry-run", "replies"].includes(action)) throw new Error(`Unknown action "${action}".`);
       if (action === "replies" && !JB.sites[site].replies) throw new Error(`${JB.sites[site].label} doesn't show what happened to your applications.`);
       if (action.startsWith("refer") && !JB.sites[site].refers) throw new Error(`${JB.sites[site].label} has no referrals.`);
+      if (action.startsWith("reach") && !JB.sites[site].reaches) throw new Error(`${JB.sites[site].label} has no recruiter messages.`);
       if (runs[site]) throw new Error(`${JB.sites[site].label} is already running.`);
       new Run(site, action, opts).start();
     },

@@ -198,6 +198,7 @@
         "skillYears": {},
         "otherSkillYears": null,
         "followCompanies": false,
+        "outreachPerDay": 30,
         "referral": {
           "forJobs": [
             "applied",
@@ -214,11 +215,38 @@
           ],
           "perCompany": 2,
           "maxPerRun": 8,
-          "maxPerDay": 15,
           "inviteExpiryDays": 21,
           "inviteWithoutNote": true,
           "connectNote": "Hi {first_name}, I'm applying to {company} and would love to connect. Would you be open to referring me? Happy to share my resume.",
           "message": "Hi {first_name}, hope you're doing well!\n\nI'm applying for the {title} role at {company}: {job_url}\n<one or two lines about you: degree, years of experience, what you've built>\n\nWould you be open to referring me? I can send my resume and anything else you need. Thanks a lot!\n",
+          "sendMode": "review"
+        },
+        "recruiter": {
+          "forJobs": [
+            "applied",
+            "external"
+          ],
+          "withinDays": 14,
+          "jobs": [],
+          "targets": [
+            "poster",
+            "recruiter"
+          ],
+          "searchKeywords": [
+            "recruiter",
+            "talent acquisition"
+          ],
+          "skipHeadline": [
+            "intern",
+            "student",
+            "trainee"
+          ],
+          "perCompany": 1,
+          "maxPerRun": 5,
+          "inviteExpiryDays": 21,
+          "inviteWithoutNote": true,
+          "connectNote": "Hi {first_name}, I just applied for the {title} role at {company} and would love to connect.",
+          "message": "Hi {first_name},\n\nI applied for the {title} role at {company}: {job_url}\n<one or two lines about you: years of experience, what you've built, why you fit>\n\nWould you be the right person to talk to about it? Happy to share my resume or anything else you need. Thanks!\n",
           "sendMode": "review"
         },
         "answers": [
@@ -314,6 +342,22 @@
         },
         "locations": [],
         "postedWithin": "week"
+      },
+      "indeed": {
+        "keywords": [],
+        "searchUrls": [],
+        "limits": {
+          "maxPerRun": 10,
+          "maxPerDay": 25,
+          "delaySeconds": [
+            30,
+            60
+          ],
+          "maxPages": 3
+        },
+        "locations": [],
+        "postedWithin": "7",
+        "easyApplyOnly": true
       },
       "yc": {
         "keywords": [],

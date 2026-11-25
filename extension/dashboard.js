@@ -20,6 +20,10 @@ const SITES = {
     name: "Naukri", keywords: "What you'd type in Naukri's job search, one per line, like machine learning engineer.",
     pages: "20 jobs each", locations: true, places: "Cities, one per line, like bengaluru. Empty: anywhere.", naukri: true,
   },
+  indeed: {
+    name: "Indeed", keywords: "What you'd type in Indeed's job search, one per line, like machine learning engineer.",
+    pages: "10 or so jobs each", locations: true, places: "Cities, one per line, like bengaluru. Empty: your whole country.", indeed: true,
+  },
   company: { name: "Company sites", list: true }, // Greenhouse, Lever and Ashby forms (sites/company.js)
   yc: {
     name: "YC startups", keywords: "YC's roles, one per line: software engineer, designer, product manager, recruiting hr, sales manager, marketing, support, operations or science.",
@@ -30,6 +34,7 @@ const LINKEDIN_LEVELS = [["internship", "Internship"], ["entry level", "Entry le
   ["mid-senior level", "Mid-senior level"], ["director", "Director"], ["executive", "Executive"]];
 const LINKEDIN_WORK = [["on-site", "On-site"], ["remote", "Remote"], ["hybrid", "Hybrid"]];
 const POSTED_WITHIN = [["", "Any time"], ["day", "Past day"], ["week", "Past week"], ["month", "Past month"]];
+const INDEED_POSTED = [["", "Any time"], ["1", "Past day"], ["3", "Past 3 days"], ["7", "Past week"], ["14", "Past 2 weeks"]]; // days, as Indeed has them
 const STATUS = {
   applied: "Applied",
   needs_manual: "Needs you",
@@ -50,7 +55,8 @@ const ui = { stopping: {}, error: {}, logKey: "", stripKey: "", eventsKey: "", p
 const filter = { status: "applied", text: "", site: "" };
 let settings = null; // as last saved
 let jobs = {};
-let people = {}; // everyone asked for a referral (LinkedIn), by profile
+let people = {}; // everyone contacted on LinkedIn (asked for a referral, or written to as a recruiter), by profile
+const kindOf = c => c.kind || "referral";
 let track = {}; // what you've noted about each application (lib/tracker.js), by key
 let kept = {}; // answers you gave when the bot asked, by question key (lib/store.js learn)
 let waiting = {}; // questions jobs were left for you over, not answered yet
@@ -293,10 +299,10 @@ function renderRun() {
   p.dataset.state = !running ? "idle" : run.prompt ? "waiting" : "running";
 
   const apply = p.querySelector('[data-act="apply"]');
-  const busy = { apply: "Applying…", "dry-run": "Checking…", login: "Logging in…", refer: "Asking…", "refer-dry-run": "Previewing…", replies: "Reading…" };
+  const busy = { apply: "Applying…", "dry-run": "Checking…", login: "Logging in…", refer: "Asking…", "refer-dry-run": "Previewing…", reach: "Writing…", "reach-dry-run": "Previewing…", replies: "Reading…" };
   apply.textContent = !running ? "Apply" : busy[run.action] || "Working…";
   apply.classList.toggle("busy", running);
-  for (const b of p.querySelectorAll('[data-act="apply"], [data-act="dry-run"], [data-act="login"], [data-act^="refer"], [data-act="replies"]')) b.disabled = running;
+  for (const b of p.querySelectorAll('[data-act="apply"], [data-act="dry-run"], [data-act="login"], [data-act^="refer"], [data-act^="reach"], [data-act="replies"]')) b.disabled = running;
   p.querySelector('[data-act="stop"]').hidden = !running;
 
   let [text, isError] = ["", false];
@@ -307,6 +313,8 @@ function renderRun() {
   else if (running && run.action === "login") text = "Waiting for you to log in, in its own window.";
   else if (running && run.action === "refer") text = "Asking for referrals in its own Chrome window. Leave that window open.";
   else if (running && run.action === "refer-dry-run") text = "Finding who it would ask, without sending anything, in its own window.";
+  else if (running && run.action === "reach") text = "Writing to recruiters in its own Chrome window. Leave that window open.";
+  else if (running && run.action === "reach-dry-run") text = "Finding which recruiters it would write to, without sending anything, in its own window.";
   else if (running && run.action === "replies") text = "Reading what it says about the jobs you applied to, in its own window.";
   else if (running) text = "Applying in its own Chrome window. Leave that window open.";
   else if (run) [text, isError] = finished(run);
@@ -322,6 +330,7 @@ function renderRun() {
   renderSites();
   renderTitle();
   renderReferBox();
+  renderReachBox();
 }
 
 /** LinkedIn's referral box on the overview: what it would do, and how it's gone so far. */
@@ -330,7 +339,7 @@ function renderReferBox() {
   box.hidden = !JB.sites[site].refers;
   if (box.hidden || !settings) return;
   const rc = settings.sites[site].referral || {};
-  const all = Object.values(people);
+  const all = Object.values(people).filter(c => kindOf(c) === "referral");
   const asked = all.filter(c => c.status === "messaged").length;
   const waiting = all.filter(c => c.status === "invited").length;
   const plan = `It asks up to ${rc.perCompany ?? 2} people per company you applied to in the last ${rc.withinDays ?? 14} days`
@@ -339,6 +348,24 @@ function renderReferBox() {
   const ready = !(rc.message || "").trim() ? " Write your referral message in Settings first."
     : /<[^<>\n]+>/.test(rc.message) ? " Your message still has a <…> part to write in Settings; Preview works meanwhile." : "";
   $("refer-summary").textContent = plan + sofar + ready;
+}
+
+/** LinkedIn's recruiter box on the overview: what it would do, and how it's gone so far. */
+function renderReachBox() {
+  const box = $("reach-box");
+  box.hidden = !JB.sites[site].reaches;
+  if (box.hidden || !settings) return;
+  const rc = settings.sites[site].recruiter || {};
+  const all = Object.values(people).filter(c => kindOf(c) === "recruiter");
+  const written = all.filter(c => c.status === "messaged").length;
+  const waiting = all.filter(c => c.status === "invited").length;
+  const n = rc.perCompany ?? 1;
+  const plan = `For each job you applied to in the last ${rc.withinDays ?? 14} days, it writes to whoever posted it, or else ${n === 1 ? "a recruiter" : `up to ${n} recruiters`} at the company`
+    + (rc.sendMode === "direct" ? ", sending without asking you." : ", showing you each message first.");
+  const sofar = all.length ? ` So far: ${written} written to, ${waiting} invite${waiting === 1 ? "" : "s"} waiting to be accepted.` : "";
+  const ready = !(rc.message || "").trim() ? " Write your recruiter message in Settings first."
+    : /<[^<>\n]+>/.test(rc.message) ? " Your message still has a <…> part to write in Settings; Preview works meanwhile." : "";
+  $("reach-summary").textContent = plan + sofar + ready;
 }
 
 function renderPrompt() {
@@ -411,7 +438,7 @@ function renderEvents() {
     const t = el("span", { className: "t", textContent: clock(new Date(e.ts)) });
     if (e.kind === "contact") {
       const what = {
-        messaged: `Asked for a referral${e.title ? ` for ${e.title}` : ""}`, invited: `Invited to connect, ${e.note || ""}`.replace(/, $/, ""),
+        messaged: e.for === "recruiter" ? `Wrote to them${e.title ? ` about ${e.title}` : ""}` : `Asked for a referral${e.title ? ` for ${e.title}` : ""}`, invited: `Invited to connect, ${e.note || ""}`.replace(/, $/, ""),
         would_message: "Would message them (preview)", would_invite: "Would invite them to connect (preview)", failed: `Couldn't reach them: ${e.note || "?"}`,
       }[e.status] || e.status;
       const link = /^https?:\/\//.test(e.url || "") ? el("a", { className: "open", href: e.url, target: "_blank", rel: "noopener", textContent: "Profile" }) : el("span");
@@ -692,6 +719,7 @@ function renderReferrals() {
   $("referral-rows").replaceChildren(...all.slice(0, HISTORY_LIMIT).map(c => el("tr", {},
     el("td", { className: "when", textContent: when(c.updated) }),
     el("td", { className: "job" }, link(c.profile, c.name || "?"), el("span", { textContent: c.headline || "" })),
+    el("td", { textContent: kindOf(c) === "recruiter" ? "Recruiter" : "Referral" }),
     el("td", { className: "job" }, link(c.jobUrl, c.title || "Job"), el("span", { textContent: c.company || "" })),
     el("td", { className: "result" }, el("span", { className: "result-tag" }, glyph(c.status), CONTACT[c.status] || c.status)),
     el("td", { className: "note", textContent: c.status === "invited" ? "Gets your message once they accept" : c.note || "" }),
@@ -730,7 +758,7 @@ function day(d) {
 }
 
 /** Jobs Sendoff asked someone about for a referral, as application keys. */
-const askedKeys = () => new Set(Object.values(people).filter(c => ["messaged", "invited"].includes(c.status)).map(c => `linkedin:${c.jobId}`));
+const askedKeys = () => new Set(Object.values(people).filter(c => kindOf(c) === "referral" && ["messaged", "invited"].includes(c.status)).map(c => `linkedin:${c.jobId}`));
 
 /** Change applications: [application, change, timeline note] each (see JB.tracker.change). */
 async function changeApps(list) {
@@ -1379,6 +1407,7 @@ const LIST_FIELDS = new Set([
     `sites.${name}.keywords`, `sites.${name}.searchUrls`, ...(info.locations ? [`sites.${name}.locations`] : []),
   ]),
   "sites.linkedin.referral.peopleKeywords", "sites.linkedin.referral.skipHeadline", "sites.linkedin.referral.jobs",
+  "sites.linkedin.recruiter.searchKeywords", "sites.linkedin.recruiter.skipHeadline", "sites.linkedin.recruiter.jobs",
 ]);
 
 /** One site's search and limits fields. */
@@ -1406,6 +1435,7 @@ function sitePanel(name, info) {
     el("p", { className: "hint", textContent: "After each application the bot waits a random time in this range, like a person would." }),
     info.linkedin ? linkedinSettings(base, field) : null,
     info.naukri ? naukriSettings(base, field) : null,
+    info.indeed ? indeedSettings(base, field) : null,
     info.yc ? ycSettings(base, field) : null);
   box.setAttribute("aria-labelledby", `site-tab-${name}`);
   return box;
@@ -1437,12 +1467,9 @@ function companySettings(base, field, area) {
       el("label", {}, el("input", { type: "radio", name: `${base}.sendMode`, value: "direct" }), "Send it straight away"))));
 }
 
-/** Asking people at the companies applied to for a referral. */
-function referralSettings(base, field, checks, tick) {
-  const r = `${base}.referral`;
-  const area = (path, rows, extra = {}) => el("textarea", { name: path, rows, spellcheck: false, ...extra });
-  const num = (path, min) => el("input", { type: "number", name: path, min, step: 1 });
-  const note = area(`${r}.connectNote`, 3);
+/** An invite note box with its "N of 300 characters" counter: [box, counter]. */
+function inviteNote(path) {
+  const note = el("textarea", { name: path, rows: 3, spellcheck: false });
   note.style.fontFamily = "var(--sans)";
   const counter = el("span", { className: "counter" });
   const count = () => {
@@ -1452,6 +1479,55 @@ function referralSettings(base, field, checks, tick) {
   note.addEventListener("input", count);
   note.dataset.counted = "1";
   note.count = count;
+  return [note, counter];
+}
+
+/** How many messages + invites a day, referrals and recruiters together. */
+function outreachSettings(base, field) {
+  return el("div", { className: "site-extra" },
+    el("h3", { textContent: "Messages and invites to people" }),
+    el("p", { className: "hint", textContent: "Referrals and recruiters share this limit, as LinkedIn's own limits are on all your messages and invites. LinkedIn allows about 100 invites a week." }),
+    el("div", { className: "row-fields" },
+      field("field narrow", "Per day", "messages + invites", el("input", { type: "number", name: `${base}.outreachPerDay`, min: 1, step: 1 }))));
+}
+
+/** Writing to the recruiters hiring for the jobs applied to. */
+function recruiterSettings(base, field, checks, tick) {
+  const r = `${base}.recruiter`;
+  const area = (path, rows) => el("textarea", { name: path, rows, spellcheck: false });
+  const num = (path, min) => el("input", { type: "number", name: path, min, step: 1 });
+  const [note, counter] = inviteNote(`${r}.connectNote`);
+  const message = area(`${r}.message`, 8);
+  message.style.fontFamily = "var(--sans)";
+  return el("div", { className: "site-extra" },
+    el("h3", { textContent: "Writing to recruiters" }),
+    el("p", { className: "hint", textContent: "For jobs it applied to, it writes to whoever posted the job (the job's \"Meet the hiring team\"), or else to a recruiter at the company, picked by their headline: never agency recruiters or people who left. People you're connected with get the message; the others get an invite with the note, and the message once they accept. Nobody is contacted twice, for a referral or as a recruiter." }),
+    field("field", "Message", "{first_name}, {name}, {company}, {title} and {job_url} are filled in. Write the <…> part in your own words: until then it won't write to recruiters.", message),
+    field("field", "Invite note", "To people you're not connected with yet. Free accounts get a few notes a month.", note),
+    counter,
+    tick(`${r}.inviteWithoutNote`, "Invite without a note once the free notes run out"),
+    field("field", "Before each message or invite", null, el("div", { className: "checks" },
+      el("label", {}, el("input", { type: "radio", name: `${r}.sendMode`, value: "review" }), "Show it to me first, with who it goes to (recommended)"),
+      el("label", {}, el("input", { type: "radio", name: `${r}.sendMode`, value: "direct" }), "Send it straight away"))),
+    field("field", "Who to write to", null, checks(`${r}.targets`, [["poster", "Whoever posted the job"], ["recruiter", "Recruiters at the company"], ["manager", "Engineering and hiring managers too"]])),
+    field("field", "Which jobs", null, checks(`${r}.forJobs`, [["applied", "Jobs it applied to"], ["external", "Jobs that apply on the company's site"]])),
+    el("div", { className: "row-fields" },
+      field("field narrow", "From the last", "days", num(`${r}.withinDays`, 1)),
+      field("field narrow", "People per company", null, num(`${r}.perCompany`, 1)),
+      field("field narrow", "Per run", "messages + invites", num(`${r}.maxPerRun`, 1)),
+      field("field narrow", "Stop waiting after", "days without an accept", num(`${r}.inviteExpiryDays`, 1))),
+    el("div", { className: "two" },
+      field("field", "Search recruiters with", "One per line, like talent acquisition.", area(`${r}.searchKeywords`, 3)),
+      field("field", "Skip people whose headline has", "One per line, like intern.", area(`${r}.skipHeadline`, 3))),
+    field("field", "Also these jobs", "LinkedIn job links, one per line, e.g. ones you applied to elsewhere.", area(`${r}.jobs`, 3)));
+}
+
+/** Asking people at the companies applied to for a referral. */
+function referralSettings(base, field, checks, tick) {
+  const r = `${base}.referral`;
+  const area = (path, rows, extra = {}) => el("textarea", { name: path, rows, spellcheck: false, ...extra });
+  const num = (path, min) => el("input", { type: "number", name: path, min, step: 1 });
+  const [note, counter] = inviteNote(`${r}.connectNote`);
   const message = area(`${r}.message`, 8);
   message.style.fontFamily = "var(--sans)";
   return el("div", { className: "site-extra" },
@@ -1469,7 +1545,6 @@ function referralSettings(base, field, checks, tick) {
       field("field narrow", "From the last", "days", num(`${r}.withinDays`, 1)),
       field("field narrow", "People per company", null, num(`${r}.perCompany`, 1)),
       field("field narrow", "Per run", "messages + invites", num(`${r}.maxPerRun`, 1)),
-      field("field narrow", "Per day", "LinkedIn allows ~100 invites a week", num(`${r}.maxPerDay`, 1)),
       field("field narrow", "Stop waiting after", "days without an accept", num(`${r}.inviteExpiryDays`, 1))),
     el("div", { className: "two" },
       field("field", "Your college", "Its alumni are asked first. Optional.", el("input", { name: `${r}.school` })),
@@ -1504,7 +1579,9 @@ function linkedinSettings(base, field) {
       field("field wide-hint", "Any other skill", "0 is honest for ones you haven't used. Empty: ask you.", el("input", { type: "number", name: `${base}.otherSkillYears`, min: 0, step: 0.5 }))),
     tick(`${base}.followCompanies`, "Follow the company when applying", "LinkedIn ticks this on every application; off unticks it."),
     tick(`${base}.readReplies`, "After each run, read what LinkedIn says about the jobs you applied to", "Viewed, got in touch, not selected: it goes into Applications."),
+    outreachSettings(base, field),
     referralSettings(base, field, checks, tick),
+    recruiterSettings(base, field, checks, tick),
     el("h3", { textContent: "Answers for LinkedIn" }),
     el("p", { className: "hint", textContent: "LinkedIn uses these instead of the shared answers: some of its questions are number boxes, so salaries are plain amounts (800000, not 8 LPA), and the phone number goes without its country code, which is its own dropdown. Where you are fills these in too." }),
     table("answer-rows-linkedin", ["When the question matches", "Answer", ""]),
@@ -1521,6 +1598,18 @@ function naukriSettings(base, field) {
       el("span", {}, "After each run, read what Naukri says about the jobs you applied to",
         el("small", { textContent: "Viewed, recruiter action, not shortlisted: it goes into Applications." }))),
     el("p", { className: "hint", textContent: "Naukri asks a job's questions in a chat, one at a time, and the shared answers answer them. When a question has options, the answer has to be one of them (or how one starts); for a length of time, like the notice period, the option covering it is picked: \"30 days\" picks \"1 Month\", \"15 days\" picks \"15 Days or less\". If none fits, or two fit as well, the job is left for you." }));
+}
+
+/** Indeed's own search filters, and how its application goes. */
+function indeedSettings(base, field) {
+  const posted = el("select", { name: `${base}.postedWithin` }, ...INDEED_POSTED.map(([v, t]) => new Option(t, v)));
+  return el("div", { className: "site-extra" },
+    el("h3", { textContent: "Indeed's search filters" }),
+    field("field narrow", "Posted within", null, posted),
+    el("label", { className: "tick" }, el("input", { type: "checkbox", name: `${base}.easyApplyOnly` }),
+      el("span", {}, "\"Easily apply\" jobs only",
+        el("small", { textContent: "The ones that apply on Indeed. With this off, the others are listed as Other site, with where they lead, for Company sites." }))),
+    el("p", { className: "hint", textContent: "It searches the Indeed of your country (Settings > Where you are): in.indeed.com in India, uk.indeed.com in the UK, www.indeed.com in the US and where Indeed has no site of its own. Indeed has no experience filter: a job is skipped once opened when its description asks for more than your range. Its application goes a page at a time: your contact details and resume as they are on Indeed (or your resume from Settings > Your profile), the employer's questions from your answers." }));
 }
 
 /** YC startups: the note to the founders, and whether to show you each one before it's sent. */
@@ -1756,15 +1845,22 @@ function check(s) {
       }
     } else if (s.sites[name].searchUrls.some(u => !JB.sites[name].searchHost.test(u))) {
       bad(`sites.${name}.searchUrls`);
-      errors.push(`${info.name}: extra search pages must be ${info.name} pages, starting ${JB.sites[name].loginUrl}`);
+      errors.push(`${info.name}: extra search pages must be ${info.name} pages, starting ${JB.sites[name].searchExample || JB.sites[name].loginUrl}`);
     }
   }
   const rc = s.sites.linkedin.referral || {};
   const base = "sites.linkedin.referral";
-  const counts = ["withinDays", "perCompany", "maxPerRun", "maxPerDay", "inviteExpiryDays"].map(k => whole(`${base}.${k}`, 1));
+  const counts = ["withinDays", "perCompany", "maxPerRun", "inviteExpiryDays"].map(k => whole(`${base}.${k}`, 1));
   if (!counts.every(Boolean)) errors.push("LinkedIn referrals: the days and how many are whole numbers, at least 1.");
   if ((rc.connectNote || "").length > 300) { bad(`${base}.connectNote`); errors.push("LinkedIn referrals: the invite note can be 300 characters at most."); }
   if ((rc.jobs || []).some(u => !JB.sites.linkedin.jobUrlRe.test(u))) { bad(`${base}.jobs`); errors.push("LinkedIn referrals: the extra jobs must be LinkedIn job links (linkedin.com/jobs/view/…)."); }
+  if (!whole("sites.linkedin.outreachPerDay", 1)) errors.push("LinkedIn: messages and invites per day is a whole number, at least 1.");
+  const tc = s.sites.linkedin.recruiter || {};
+  const tbase = "sites.linkedin.recruiter";
+  if (!["withinDays", "perCompany", "maxPerRun", "inviteExpiryDays"].map(k => whole(`${tbase}.${k}`, 1)).every(Boolean)) errors.push("LinkedIn recruiters: the days and how many are whole numbers, at least 1.");
+  if ((tc.connectNote || "").length > 300) { bad(`${tbase}.connectNote`); errors.push("LinkedIn recruiters: the invite note can be 300 characters at most."); }
+  if ((tc.jobs || []).some(u => !JB.sites.linkedin.jobUrlRe.test(u))) { bad(`${tbase}.jobs`); errors.push("LinkedIn recruiters: the extra jobs must be LinkedIn job links (linkedin.com/jobs/view/…)."); }
+  if (!(tc.targets || []).length) errors.push("LinkedIn recruiters: tick at least one of who to write to.");
   const other = s.sites.linkedin.otherSkillYears;
   if (other != null && !(other >= 0)) { bad("sites.linkedin.otherSkillYears"); errors.push("LinkedIn: years for other skills can't be negative."); }
   if (Object.values(s.sites.linkedin.skillYears).some(v => v != null && !(v >= 0))) errors.push("LinkedIn: years with a skill can't be negative.");
@@ -1823,7 +1919,7 @@ function useField() {
   const got = JB.filters.forField({ includeTitle: lines("includeTitle"), excludeTitle: lines("excludeTitle") }, name);
   for (const n of ["includeTitle", "requireRole", "excludeTitle"]) list(n).value = got[n].join("\n");
   // ...and what to search for, on the sites that take any words and have none yet
-  const searches = { linkedin: JB.filters.fieldSearches(name), naukri: JB.filters.fieldSearches(name), wellfound: JB.filters.fieldSearches(name),
+  const searches = { linkedin: JB.filters.fieldSearches(name), naukri: JB.filters.fieldSearches(name), indeed: JB.filters.fieldSearches(name), wellfound: JB.filters.fieldSearches(name),
     hirist: JB.filters.fieldSearches(name), yc: JB.sites.yc.rolesFor(name) };
   const filled = Object.entries(searches).filter(([site, words]) => {
     const box = form.querySelector(`[name="sites.${site}.keywords"]`);

@@ -21,6 +21,17 @@
       <h2 id="sites-title">Sites</h2>
       <ul id="site-list"></ul>
     </section>
+    <section id="billing" hidden aria-label="Billing">
+      <h2>Sandbox billing</h2>
+      <p id="billing-account" hidden></p>
+      <output aria-live="polite"></output>
+      <button class="btn" data-billing="signin">Sign in with Google</button>
+      <button hidden class="btn" data-billing="upgrade">Buy pass</button>
+      <button hidden class="btn" data-billing="refresh">Refresh</button>
+      <button hidden class="btn" data-billing="logout">Sign out</button>
+      <button class="btn" id="billing-export" hidden>Export existing data</button>
+      <button class="btn" id="billing-stop" hidden>Stop active runs</button>
+    </section>
     <p class="side-foot">Your settings and history stay in this Chrome.</p>
   </aside>
 
@@ -94,6 +105,17 @@
         <div class="actions">
           <button class="btn" data-act="refer-dry-run" title="See who it would ask and the messages, without sending anything">Preview</button>
           <button class="btn" data-act="refer" title="Message people at the companies you applied to, asking for a referral">Ask for referrals</button>
+        </div>
+      </section>
+
+      <section class="refer" id="reach-box" aria-labelledby="reach-title" hidden>
+        <div>
+          <h2 id="reach-title">Recruiters</h2>
+          <p class="hint" id="reach-summary"></p>
+        </div>
+        <div class="actions">
+          <button class="btn" data-act="reach-dry-run" title="See which recruiters it would write to and the messages, without sending anything">Preview</button>
+          <button class="btn" data-act="reach" title="Write to whoever posted the jobs you applied to, or a recruiter at the company">Message recruiters</button>
         </div>
       </section>
 
@@ -221,10 +243,10 @@
       <p class="more" id="history-more" hidden></p>
 
       <section class="referrals" id="referrals" aria-labelledby="referrals-title" hidden>
-        <h2 id="referrals-title">People asked for a referral</h2>
+        <h2 id="referrals-title">People contacted on LinkedIn</h2>
         <div class="table-wrap">
           <table class="history">
-            <thead><tr><th>When</th><th>Person</th><th>Asked about</th><th>Status</th><th>Note</th></tr></thead>
+            <thead><tr><th>When</th><th>Person</th><th>For</th><th>About</th><th>Status</th><th>Note</th></tr></thead>
             <tbody id="referral-rows"></tbody>
           </table>
         </div>
@@ -484,6 +506,7 @@
           <option>Cutshort</option>
           <option>LinkedIn</option>
           <option>Naukri</option>
+          <option>Indeed</option>
           <option>Somewhere else</option>
         </select></label>
       <label class="field">Applied on <input name="on" type="date" required></label>
@@ -514,8 +537,11 @@
 <script src="sites/cutshort.js"></script>
 <script src="sites/linkedin.js"></script>
 <script src="sites/naukri.js"></script>
+<script src="sites/indeed.js"></script>
 <script src="sites/company.js"></script>
 <script src="sites/yc.js"></script>
+<script src="billing-config.js"></script>
 <script src="dashboard.js"></script>
+<script src="billing.js"></script>
 </body>
 </html>

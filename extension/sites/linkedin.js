@@ -69,6 +69,7 @@
     loginHint: "and do any security check it asks for",
     loginRequired: true,
     refers: true, // can ask people at the companies for referrals (referral.js)
+    reaches: true, // can write to the recruiters hiring for the jobs (recruiters.js)
     // the jobs you applied to, with what LinkedIn says of each ("Application viewed", "No longer being considered")
     replies: { pages: [0, 10, 20, 30].map(n => `${BASE}/my-items/saved-jobs/?cardType=APPLIED${n ? `&start=${n}` : ""}`) },
     jobLinkCss: "[data-occludable-job-id], a[href*='/jobs/view/']",
@@ -149,6 +150,7 @@
       const fill = {
         answers: cfg.answers, skillYears: cfg.skillYears, otherSkillYears: cfg.otherSkillYears,
         followCompanies: !!cfg.followCompanies, note: JB.answers.coverNote(cfg.coverNote, job),
+        resume: await JB.store.resume(),
       };
       let lastStep = null;
       for (let i = 0; i < MAX_STEPS; i++) {
@@ -161,6 +163,7 @@
         run.step(`Filling in step ${i + 1} of the application for ${job.title || "the job"}`);
         let { missing, leftBlank } = await run.exec("site.fillStep", fill);
         while (missing.length) { // fill.answers is cfg.answers: what you answer goes in it
+          if (missing.some(m => m.kind === "file")) return status("needs_manual", "it wants a file: add your resume in Settings > Your profile, or attach the requested document by hand");
           const learned = await run.learn(missing, cfg, job);
           if (learned !== true) return run.unanswered(missing, learned);
           ({ missing, leftBlank } = await run.exec("site.fillStep", fill));
@@ -317,7 +320,7 @@
             required: e.required || e.getAttribute("aria-required") === "true" || marked(raw)
               || (!!group && (group.getAttribute("aria-required") === "true" || /\*/.test((group.innerText || "").split("\n")[0]))),
             numeric: type === "number" || /numeric/i.test(e.id || ""),
-            visible: JB.page.isVisible(e),
+            visible: JB.page.isVisible(e) || (choice && [labelFor(e), wrapper(e)].some(x => x && JB.page.isVisible(x))),
           };
         });
       }
@@ -342,6 +345,99 @@
         const label = !on() && e.labels && e.labels[0];
         if (label) label.click();
         return on();
+      }
+
+      // LinkedIn's visible button text can differ from its longer accessibility label.
+      // Keep the fallback inside the dialog so a chat's Send button cannot be used.
+      function inviteButton(root, re) {
+        return root && [...root.querySelectorAll('button, [role=button]')].find(e =>
+          JB.page.isVisible(e) && !e.disabled && e.getAttribute('aria-disabled') !== 'true'
+          && [e.getAttribute('aria-label'), e.innerText].some(name => re.test(norm(name))));
+      }
+
+      async function waitInvite(test, timeout = 5000) {
+        for (const end = Date.now() + timeout; Date.now() < end; await sleep(100)) {
+          const value = test();
+          if (value) return value;
+        }
+        return test();
+      }
+
+      function invitationPanel(doc, embedded) {
+        const marked = [...doc.querySelectorAll('[data-test-modal-id="send-invite-modal"]:not([aria-hidden=true]) [role=dialog]')].find(JB.page.isVisible);
+        if (marked) return marked;
+        // Some LinkedIn panels have neither role=dialog nor aria-modal. Locate the
+        // invitation's own heading and the nearest block containing its controls.
+        const title = /^(add a (?:free )?note(?: to your invitation)?|personalize your invitation|send (?:an? )?invitation)\??$/i;
+        for (const heading of doc.querySelectorAll('h1, h2, h3, [role=heading]')) {
+          if (!JB.page.isVisible(heading) || !title.test(norm(heading.innerText))) continue;
+          for (let root = heading.parentElement, depth = 0; root && root !== doc.body && root.tagName !== 'MAIN' && depth < 7; root = root.parentElement, depth++) {
+            if (root.querySelector('textarea') || [...root.querySelectorAll('button, [role=button]')].some(button =>
+              JB.page.isVisible(button) && /^(add a (free )?note|send\b)/i.test(norm(button.innerText || button.getAttribute('aria-label'))))) return root;
+          }
+        }
+        const panels = [...doc.querySelectorAll('.artdeco-modal, dialog[open], [role=dialog], [aria-modal=true], .modal, .ReactModal__Content')].filter(JB.page.isVisible);
+        if (!embedded) return panels.at(-1);
+        return panels.find(panel => recognizedInvitePanels.has(panel) || /add a note to your invitation|send without a note|personalize your invitation/i.test(panel.innerText));
+      }
+
+      const recognizedInvitePanels = new WeakSet();
+      let lastConnectControl = '';
+      let clickedInviteUrl = null;
+
+      function profileInviteLink() {
+        const slug = /^\/in\/([^/]+)\/?$/.exec(location.pathname)?.[1];
+        if (!slug) return null;
+        return [...document.querySelectorAll('a[href*="/preload/custom-invite/"]')].find(a => {
+          const url = new URL(a.href);
+          return JB.page.isVisible(a) && a.getAttribute('aria-disabled') !== 'true'
+            && url.origin === location.origin && url.pathname === '/preload/custom-invite/'
+            && url.searchParams.get('vanityName')?.toLowerCase() === decodeURIComponent(slug).toLowerCase();
+        });
+      }
+
+      /** LinkedIn's newer pages show their dialogs and chat windows inside the shadow root of #interop-outlet,
+       * where document.querySelectorAll doesn't reach. */
+      function overlayRoots() {
+        const hosts = new Set(document.querySelectorAll('#interop-outlet, [data-testid="interop-shadowdom"]'));
+        for (const e of document.body ? document.body.children : []) hosts.add(e);
+        return [...hosts].map(host => host.shadowRoot).filter(Boolean);
+      }
+
+      // LinkedIn's short notices ("Invitation sent"), in the page or in its overlay.
+      const TOAST_CSS = '.artdeco-toast-item, [data-test-artdeco-toast-item-type], [role=alert], [role=status]';
+      const toastText = () => [document, ...overlayRoots()].flatMap(root => [...root.querySelectorAll(TOAST_CSS)])
+        .map(e => norm(e.innerText)).join('\n');
+
+      function invitationRoot() {
+        for (const root of overlayRoots()) {
+          const panel = invitationPanel(root, true);
+          if (panel) {
+            recognizedInvitePanels.add(panel);
+            return panel;
+          }
+        }
+        for (const frame of document.querySelectorAll('iframe')) {
+          if (!JB.page.isVisible(frame) || !frame.contentDocument) continue;
+          const panel = invitationPanel(frame.contentDocument, true);
+          if (panel) {
+            recognizedInvitePanels.add(panel);
+            return panel;
+          }
+        }
+        return invitationPanel(document, false);
+      }
+
+      const noteEditor = root => root && [...root.querySelectorAll('textarea')].find(JB.page.isVisible);
+
+      let chatWith = ''; // whose chat openMessage opened: only their chat window is typed in
+
+      /** Chat windows' close buttons (all of them, or the one around `box`). */
+      function chatClosers(box) {
+        const scope = box && box.closest('.msg-overlay-conversation-bubble, .msg-convo-wrapper');
+        const roots = scope ? [scope] : [document, ...overlayRoots()];
+        return roots.flatMap(root => [...root.querySelectorAll('button')])
+          .filter(b => JB.page.isVisible(b) && /^close your (conversation|draft)/i.test(norm(b.innerText || b.getAttribute('aria-label'))));
       }
 
       return {
@@ -458,11 +554,29 @@
         async fillStep(fill) {
           const root = modal();
           if (!root) return { missing: [], leftBlank: [] };
+          const stepFields = await readFields(root);
+          // Resolve controls after waiting: LinkedIn can replace its initial inputs during loading.
           const inputs = [...root.querySelectorAll("input, textarea, select")];
           const missing = [];
           const groups = new Map();
-          for (const f of await readFields(root)) {
+          for (const f of stepFields) {
+            const input = inputs[f.i];
+            if (f.type === "file" && !f.disabled) {
+              // Upload widgets often hide the native input behind a styled button.
+              let hidden = false;
+              for (let p = input.parentElement; p && p !== root; p = p.parentElement) {
+                if (p.hidden || p.getAttribute("aria-hidden") === "true" || getComputedStyle(p).display === "none") hidden = true;
+              }
+              if (hidden || input.files.length) continue;
+              const resumeField = !/cover|additional|other document/i.test(`${f.label} ${input.name} ${input.id}`);
+              if (fill.resume && resumeField) {
+                JB.page.attach(input, fill.resume);
+                await sleep(1500);
+              } else if (f.required) missing.push({ q: f.label || "Resume", kind: "file" });
+              continue;
+            }
             if (f.disabled || SKIP_TYPES.has(f.type)) continue;
+            if (!f.visible) continue;
             if (f.kind === "radio" || f.kind === "checkbox") {
               if (FOLLOW_RE.test(f.option) || FOLLOW_RE.test(f.label)) { // "Follow <company>": off unless you want it
                 if (f.checked !== fill.followCompanies) (inputs[f.i].closest("[role=checkbox]") || inputs[f.i]).click();
@@ -475,7 +589,6 @@
               g.options.push([f.i, f.option]);
               continue;
             }
-            if (!f.visible) continue;
             if (f.kind === "select") { // a prefilled one too: "Phone country code" starts at Andorra
               const k = pick(f.options, answer(f.label, fill));
               if (k != null && plain(f.options[k]) !== plain(f.value)) JB.page.setValue(inputs[f.i], inputs[f.i].options[k].value);
@@ -637,6 +750,60 @@
           return [];
         },
 
+        // ------------------------------------------------------ recruiters (recruiters.js drives these)
+
+        /** The job page's "Meet the hiring team" card, once it has loaded. */
+        hiringTeamBox() {
+          const HEAD = /^(meet the hiring team|people you can reach out to)$/i;
+          const head = [...document.querySelectorAll("h2, h3, [role=heading]")].find(h => HEAD.test(norm(h.innerText)));
+          let box = head && head.parentElement;
+          for (let i = 0; box && i < 5 && !box.querySelector("a[href*='/in/']"); i++) box = box.parentElement;
+          return box && box.querySelector("a[href*='/in/']") ? box : null;
+        },
+
+        hasHiringTeam() {
+          return !!this.hiringTeamBox();
+        },
+
+        /** The people on that card: {slug, name, headline, degree, isPoster}; the one who posted the job has
+         * LinkedIn's "Job poster" on theirs. Read by text, not LinkedIn's class names, which change. */
+        hiringTeam() {
+          const box = this.hiringTeamBox();
+          if (!box) return [];
+          const slugOf = a => {
+            const m = (a.getAttribute("href") || "").match(/\/in\/([^/?#]+)/);
+            return m ? decodeURIComponent(m[1]) : "";
+          };
+          const bySlug = new Map();
+          for (const a of box.querySelectorAll("a[href*='/in/']")) {
+            const slug = slugOf(a);
+            if (!slug || bySlug.has(slug)) continue;
+            // their card: the largest block around the link with no one else's profile in it
+            let card = a;
+            while (card.parentElement && card.parentElement !== box
+              && [...card.parentElement.querySelectorAll("a[href*='/in/']")].every(x => slugOf(x) === slug)) card = card.parentElement;
+            bySlug.set(slug, card);
+          }
+          const junk = /^(job poster|message|connect|follow|following|pending|show (more|all)|[•·])$/i;
+          // what shares a line with the headline: their name, a hidden "View X's profile", "• 2nd", "Job poster"
+          const noise = /view [^\n]*?profile|[•·]?\s*\b(1st|2nd|3rd\+?)\b( degree connection)?|\bjob poster\b/gi;
+          return [...bySlug.entries()].map(([slug, card]) => {
+            const text = card.innerText || "";
+            const lines = text.split("\n").map(norm).filter(Boolean);
+            const hidden = card.querySelector("a[href*='/in/'] span[aria-hidden=true]");
+            const clean = l => norm(l.replace(noise, " ")).replace(/^[•·|,\s]+|[•·|,\s]+$/g, "");
+            const name = norm(hidden && hidden.innerText) || lines.map(clean).find(l => l && !junk.test(l)) || "";
+            const rest = lines.map(l => clean(name ? l.split(name).join(" ") : l))
+              .filter(l => l && !junk.test(l) && !/^(\d+ )?(mutual|school|company) /i.test(l));
+            return {
+              slug, name,
+              headline: rest[0] || "",
+              degree: (text.match(/\b(1st|2nd|3rd\+?)\b/) || [])[1] || "",
+              isPoster: /\bjob poster\b/i.test(text),
+            };
+          }).filter(p => p.name && p.name !== "LinkedIn Member");
+        },
+
         peopleReady() {
           return !!document.querySelector("[data-view-name=people-search-result], [data-chameleon-result-urn], main li a[href*='/in/']") || /no results found/i.test(bodyText());
         },
@@ -678,30 +845,47 @@
 
         profileReady: () => !!document.querySelector("main section"),
 
-        /** The profile's address, name (from the tab title), text, and the degree and buttons in its header. */
+        /** The profile's address, name (from the tab title), text, the degree and buttons in its header, and its
+         * latest job (the first entry under Experience; "" when the page doesn't show one). */
         profileInfo() {
           const m = /\/in\/([^/?#]+)/.exec(location.pathname);
           const name = /^(?:\(\d+\)\s*)?(.+?) \| LinkedIn$/.exec(document.title);
           const top = document.querySelector("main section");
+          const experience = [...document.querySelectorAll("main section")]
+            .find(sec => sec.querySelector("#experience") || /^experience$/i.test(norm((sec.querySelector("h2, [role=heading]") || {}).innerText)));
+          const latest = experience && experience.querySelector("li");
           return {
             slug: m ? decodeURIComponent(m[1]).toLowerCase() : "",
             name: name ? name[1].trim() : "",
             main: norm((document.querySelector("main") || {}).innerText),
             degree: ((top ? top.innerText : "").match(/\b(1st|2nd|3rd)\b/) || [])[1] || "",
+            current: latest ? norm(latest.innerText) : "",
           };
         },
 
-        openMessage() {
+        /** Open a chat with `name` from their profile, closing other chat windows first so it's the only one. */
+        async openMessage(name = "") {
           const top = document.querySelector("main section");
-          const button = top && JB.page.firstVisible(top, /^\s*message\b/i);
+          const button = top && (JB.page.firstVisible(top, /^\s*message\s*$/i) || JB.page.firstVisible(top, /^\s*message\b/i));
           if (!button) return false;
+          const open = chatClosers();
+          for (const close of open) JB.page.click(close);
+          if (open.length) await sleep(800);
+          chatWith = norm(name);
           JB.page.click(button);
           return true;
         },
 
+        /** The message box of the chat with the person openMessage was given (their name shows in its window). */
         messageBox() {
-          const boxes = [...document.querySelectorAll(".msg-form__contenteditable[contenteditable=true], [role=textbox][contenteditable=true]")].filter(JB.page.isVisible);
-          return boxes[boxes.length - 1] || null;
+          const css = ".msg-form__contenteditable[contenteditable=true], [role=textbox][contenteditable=true]";
+          const boxes = [document, ...overlayRoots()].flatMap(root => [...root.querySelectorAll(css)]).filter(JB.page.isVisible);
+          const first = chatWith.split(" ")[0];
+          const theirs = box => {
+            const chat = box.closest(".msg-overlay-conversation-bubble, .msg-convo-wrapper");
+            return !chatWith || !chat || norm(chat.innerText).includes(chatWith) || (first.length > 1 && norm(chat.innerText).includes(first));
+          };
+          return boxes.filter(theirs).at(-1) || null;
         },
 
         messageBoxReady() {
@@ -719,11 +903,18 @@
           }
         },
 
+        /** Press the Send of the chat being written in (never another Send, like an invitation's). */
         sendMessageNow() {
-          const send = JB.page.firstVisible(document, /^\s*send\s*$/i, ["button"]);
-          if (!send) return false;
-          JB.page.click(send);
-          return true;
+          const box = this.messageBox();
+          for (let scope = box && box.parentElement; scope; scope = scope.parentElement) {
+            const send = [...scope.querySelectorAll("button")].find(b => JB.page.isVisible(b) && !b.disabled && /^\s*send\s*$/i.test(b.innerText || b.getAttribute("aria-label") || ""));
+            if (send) {
+              JB.page.click(send);
+              return true;
+            }
+            if (scope.matches("form, .msg-overlay-conversation-bubble, .msg-convo-wrapper")) break;
+          }
+          return false;
         },
 
         messageBoxEmpty() {
@@ -732,31 +923,48 @@
         },
 
         closeChat() {
-          const close = JB.page.firstVisible(document, /^\s*close your (conversation|draft)/i, ["button"]);
+          const box = this.messageBox();
+          const [close] = chatClosers(box);
           if (close) JB.page.click(close);
+          chatWith = "";
         },
 
         /** Click Connect (straight on the profile, or under More). Returns false if there's no Connect. */
         async openInvite(name) {
+          lastConnectControl = '';
+          clickedInviteUrl = null;
           const top = document.querySelector("main section");
           const esc = name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
           const own = new RegExp(`^\\s*invite ${esc} to connect\\s*$`, "i");
-          const connect = new RegExp(`${own.source}|^\\s*connect\\s*$`, "i");
-          let button = top && JB.page.firstVisible(top, connect);
+          const connect = new RegExp(`${own.source}|^\\s*\\+?\\s*connect\\s*$`, "i");
+          let button = profileInviteLink() || (top && JB.page.firstVisible(top, connect));
           if (!button && top) {
             const more = JB.page.firstVisible(top, /^\s*more( actions)?\s*$/i, ["button"]);
             if (more) {
               JB.page.click(more);
               await sleep(800);
-              button = JB.page.firstVisible(top, connect, ["button", "menuitem"]) || JB.page.firstVisible(document, own, ["button", "menuitem"]);
+              button = profileInviteLink() || JB.page.firstVisible(top, connect, ["button", "menuitem"]) || JB.page.firstVisible(document, own, ["button", "menuitem"]);
             }
           }
           if (!button) {
             this.escape();
             return false;
           }
+          const link = button.closest('a[href]');
+          const destination = link ? new URL(link.href, location.href) : null;
+          if (destination?.pathname === '/preload/custom-invite/') {
+            if (link !== profileInviteLink()) return false;
+            clickedInviteUrl = link.href;
+          }
+          lastConnectControl = [button.tagName, norm(button.getAttribute('aria-label') || button.innerText),
+            destination?.pathname, link?.target].filter(Boolean).join(' ');
           JB.page.click(button);
           return true;
+        },
+
+        // Follow the profile's own link only if its click left the profile in place.
+        invitePageUrl() {
+          return clickedInviteUrl && profileInviteLink()?.href === clickedInviteUrl ? clickedInviteUrl : null;
         },
 
         pending() {
@@ -767,43 +975,70 @@
         inviteLimit: () => /weekly invitation limit|limit for (connection requests|invitations)|too many pending invitations/i.test(bodyText()),
 
         inviteWantsEmail() {
-          const d = JB.page.visibleDialog();
+          const d = invitationRoot();
           return !!d && /enter (their|his|her) email|how do you know/i.test(d.innerText);
         },
 
         /** "Add a note" and write it; or say LinkedIn showed a Premium offer instead (free notes used up). */
         async addNote(note) {
-          const add = JB.page.firstVisible(document, /^\s*add a (free )?note\s*$/i, ["button"]);
-          if (!add) return { added: false, premium: false };
-          JB.page.click(add);
-          await sleep(1000);
-          const box = [...document.querySelectorAll("[role=dialog] textarea, dialog[open] textarea")].find(JB.page.isVisible);
-          if (!box) return { added: false, premium: true };
+          const controls = await waitInvite(() => {
+            const root = invitationRoot();
+            const box = noteEditor(root);
+            const add = inviteButton(root, /^add a (free )?note(?: to your invitation)?$/i);
+            return box || add ? { box, add } : null;
+          });
+          if (!controls) return { added: false, premium: false };
+          if (!controls.box) JB.page.click(controls.add);
+          const box = controls.box || await waitInvite(() => noteEditor(invitationRoot()));
+          if (!box) {
+            const d = invitationRoot();
+            const premium = !!d && /notes? (remaining|left)|out of .*notes|reached .*note.*limit|(?:try|get|join|upgrade to) premium/i.test(d.innerText);
+            return { added: false, premium };
+          }
           JB.page.setValue(box, note.slice(0, parseInt(box.getAttribute("maxlength"), 10) || 300));
           return { added: true };
         },
 
-        hasDialog: () => !!JB.page.visibleDialog(),
+        hasDialog: () => !!invitationRoot(),
 
         /** Close a dialog or menu, like pressing Escape. */
         escape() {
-          const d = JB.page.visibleDialog();
+          const d = invitationRoot();
           const close = d && JB.page.firstVisible(d, /^\s*(dismiss|close|×|✕)\s*$/i, ["button"]);
           if (close) JB.page.click(close);
           else for (const target of [document.activeElement || document.body, document]) target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true }));
         },
 
-        sendInvite(withNote) {
-          const d = JB.page.visibleDialog() || document;
-          const send = withNote ? JB.page.firstVisible(d, /^\s*send( invitation| now)?\s*$/i, ["button"])
-            : JB.page.firstVisible(d, /^\s*send without a note\s*$/i, ["button"]) || JB.page.firstVisible(d, /^\s*send( invitation| now)?\s*$/i, ["button"]);
+        async sendInvite(withNote) {
+          const send = await waitInvite(() => {
+            const d = invitationRoot();
+            const plain = !withNote && inviteButton(d, /^send without a note$/i);
+            return plain || inviteButton(d, /^send(?:(?: an?)? invitation(?: to .+)?| now)?$/i);
+          });
           if (!send) return false;
           JB.page.click(send);
           return true;
         },
 
+        inviteDiagnostics() {
+          const d = invitationRoot();
+          if (!d) {
+            const names = selector => [...document.querySelectorAll(selector)].filter(JB.page.isVisible)
+              .slice(0, 15).map(e => norm(e.innerText || e.getAttribute('aria-label')).slice(0, 80)).filter(Boolean).join(', ') || '(none)';
+            const frames = [...document.querySelectorAll('iframe')].map(frame =>
+              !JB.page.isVisible(frame) ? 'hidden' : frame.contentDocument ? 'readable' : 'inaccessible');
+            const overlays = overlayRoots().map(root => [...root.querySelectorAll('[data-test-modal-id], [role=dialog]')]
+              .map(e => e.getAttribute('data-test-modal-id') || 'dialog').join('+') || 'empty');
+            return `no invitation dialog is visible; page: ${location.pathname}; clicked: ${lastConnectControl}; headings: ${names('h1, h2, [role=heading]')}; buttons: ${names('button, [role=button]')}; frames: ${frames.join(', ') || '(none)'}; overlays: ${overlays.join(', ') || '(none)'}`;
+          }
+          const buttons = [...d.querySelectorAll('button, [role=button]')].filter(JB.page.isVisible)
+            .map(e => norm(e.innerText || e.getAttribute('aria-label')).slice(0, 80));
+          return `visible dialog buttons: ${buttons.join(', ') || '(none)'}`;
+        },
+
         inviteSent() {
-          return /invitation (to .+ )?(was )?sent/i.test(bodyText()) || this.pending();
+          const sent = /invitation (to .+ )?(was )?sent/i;
+          return sent.test(bodyText()) || sent.test(toastText()) || this.pending();
         },
 
         connectionsReady: () => !!document.querySelector("main a[href*='/in/']"),

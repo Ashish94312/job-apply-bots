@@ -26,6 +26,13 @@
       sites[name] = { ...d.sites[name], ...site, limits: { ...d.sites[name].limits, ...(site.limits || {}) } };
       if (JB.sites?.[name]?.replies && sites[name].readReplies === undefined) sites[name].readReplies = true; // on unless you turn it off
     }
+    // Indeed came after your settings: until you change them, it searches what Naukri does (the same kind of words,
+    // and cities), or with none there, LinkedIn's words
+    const old = s.sites || {};
+    if (old.naukri && !old.indeed) {
+      const from = (old.naukri.keywords || []).length ? old.naukri : { keywords: (old.linkedin || {}).keywords };
+      Object.assign(sites.indeed, { keywords: [...(from.keywords || [])], locations: [...(from.locations || [])] });
+    }
     return { version: 1, savedAt: s.savedAt || null, profile, sites, tracker: JB.tracker.settings(s.tracker) };
   }
 
@@ -62,8 +69,10 @@
     + "identify as (transgender|a (protected )?veteran|having a disability)|voluntary self.identification";
   // Consent to the company handling your application's data (GDPR), not to its talent pool or marketing
   const CONSENT = "^(?!.*(future|talent (pool|community)|other (roles|positions|opportunities|vacancies)|marketing|newsletter|sms|text message|whatsapp|promotion))"
-    + "(?=.*(consent|agree|acknowledge|accept|confirm|have read))(?=.*(privacy|data protection|gdpr|personal (data|information)|processing|applicant data))";
-  const START = "start date|when (can|could) you (start|join)|earliest (start|joining)|available (to start|from)|availability (date|to start)|date (you are |you're )?available";
+    + "(?=.*(consent|agree|acknowledge|accept|confirm|have read))(?=.*(privacy|data protection|gdpr|personal (data|information)|processing|applicant data))"
+    // ...or a question that's only the notice's name ("Data Privacy Policy *")
+    + "|^\\W*((data|applicant|candidate|recruitment) )?(privacy (policy|notice|statement)|data protection( notice| policy)?|gdpr( consent| notice)?)\\W*$";
+  const START = "start date|when (can|could) you (start|join)|how soon\\b.{0,30}\\b(start|join)|earliest (start|joining)|available (to start|from)|availability (date|to start)|date (you are |you're )?available";
 
   /** Answers most forms want the same way, after all of yours: US forms' self-identification declined (unless you
    * said to leave it for you, Settings > Your profile), consent to the company handling your application's data,
@@ -139,6 +148,19 @@
     });
   }
 
+  /** Forget the jobs recorded as Other site without where they lead (before Sendoff could see where some sites'
+   * "Apply on company site" goes), so their site looks at them again and Company sites gets the link. Once. */
+  function forgetLinkless() {
+    return serial(async () => {
+      if ((await local.get("cleaned:linkless"))["cleaned:linkless"]) return 0;
+      const all = await jobs();
+      const gone = Object.keys(all).filter(k => all[k].status === "external" && !/https?:\/\//.test(all[k].note || ""));
+      for (const k of gone) delete all[k];
+      await local.set({ jobs: all, "cleaned:linkless": now() });
+      return gone.length;
+    });
+  }
+
   /** Add past jobs (from the Python bots' export) that aren't in the history yet. */
   function importHistory(rows) {
     return serial(async () => {
@@ -157,49 +179,73 @@
     });
   }
 
-  // ------------------------------------------------------------ referrals (LinkedIn)
+  // ------------------------------------------------------------ people contacted on LinkedIn: referrals and recruiters
 
   const CONTACT_STATUSES = ["messaged", "invited", "not_accepted", "failed"];
-  const contacts = async () => (await local.get("contacts")).contacts || {}; // profile URL -> who, about which job, status
-  const referralJobs = async () => (await local.get("referralJobs")).referralJobs || {}; // job id -> asked about it
+  const CONTACT_KINDS = ["referral", "recruiter"];
+  // profile URL -> who, about which job, status, and kind: asked for a "referral", or a "recruiter" written to.
+  // Contacts saved before recruiters came have no kind: they were all referrals.
+  const contacts = async () => (await local.get("contacts")).contacts || {};
+  const kindOf = c => c.kind || "referral";
+  // job id -> asked about it, one store per kind, so each run goes through the jobs on its own
+  const JOB_STORES = { referral: "referralJobs", recruiter: "recruiterJobs" };
+  const jobStore = kind => {
+    if (!JOB_STORES[kind]) throw new Error(`Unknown contact kind "${kind}".`);
+    return JOB_STORES[kind];
+  };
+  const askedJobs = async (kind = "referral") => (await local.get(jobStore(kind)))[jobStore(kind)] || {};
+  const referralJobs = () => askedJobs("referral");
 
   const daysAgo = ts => (Date.now() - new Date(String(ts).replace(" ", "T")).getTime()) / 86400000;
+  // A failed discovery or a run where every recipient was skipped did not ask anyone.
+  // Keep these retryable, including records written by older extension versions.
+  const RETRY_REFERRALS = new Set(["no_employee_list", "nobody_found", "nobody_reached"]);
+  const referralFinished = record => !!record && !RETRY_REFERRALS.has(record.status);
 
-  /** Jobs with one of these statuses from the last `days` days, newest first, not asked about yet. */
-  async function jobsToAsk(site, statuses, days) {
-    const asked = await referralJobs();
+  /** Jobs with one of these statuses from the last `days` days, newest first, not asked about yet (for this kind). */
+  async function jobsToAsk(site, statuses, days, kind = "referral") {
+    const asked = await askedJobs(kind);
     return Object.values(await jobs())
-      .filter(r => r.site === site && statuses.includes(r.status) && daysAgo(r.ts) <= days && !asked[r.jobId])
+      .filter(r => r.site === site && statuses.includes(r.status) && daysAgo(r.ts) <= days && !referralFinished(asked[r.jobId]))
       .sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
   }
 
-  function jobDone(job, status, note = "") {
+  function jobDone(job, status, note = "", kind = "referral") {
     return serial(async () => {
-      const all = await referralJobs();
+      const all = await askedJobs(kind);
       all[job.jobId] = { jobId: job.jobId, url: job.url, title: job.title || "", company: job.company || "", status, note, ts: now() };
-      await local.set({ referralJobs: all });
+      await local.set({ [jobStore(kind)]: all });
     });
   }
 
-  const askedAbout = async jobId => !!(await referralJobs())[jobId];
-  const knownContact = async profile => !!(await contacts())[profile];
-  const askedAt = async companyUrl => Object.values(await contacts()).filter(c => c.companyUrl === companyUrl && ["messaged", "invited"].includes(c.status)).length;
+  const askedAbout = async (jobId, kind = "referral") => referralFinished((await askedJobs(kind))[jobId]);
+  const knownContact = async profile => {
+    const contact = (await contacts())[profile];
+    // These attempts never reached Send. Retry them, while preserving sent invites and
+    // ambiguous failures ("couldn't confirm") to avoid contacting someone twice.
+    return !!contact && !(contact.status === "failed" && /^no Send button in the invite dialog(?:;|$)/.test(contact.note || ""));
+  };
+  /** How many people of this kind at the company were messaged or invited. */
+  const askedAt = async (companyUrl, kind = "referral") => Object.values(await contacts())
+    .filter(c => c.companyUrl === companyUrl && kindOf(c) === kind && ["messaged", "invited"].includes(c.status)).length;
+  // Every kind together: LinkedIn's limits are on all your messages and invites.
   const sentToday = async () => Object.values(await contacts()).filter(c => ["messaged", "invited"].includes(c.status) && String(c.updated).startsWith(now().slice(0, 10))).length;
 
-  /** Invites not accepted yet, oldest first, with how many days ago they went. */
-  async function pendingInvites() {
-    return Object.values(await contacts()).filter(c => c.status === "invited")
+  /** Invites of this kind not accepted yet, oldest first, with how many days ago they went. */
+  async function pendingInvites(kind = "referral") {
+    return Object.values(await contacts()).filter(c => c.status === "invited" && kindOf(c) === kind)
       .sort((a, b) => String(a.ts).localeCompare(String(b.ts))).map(c => ({ ...c, age: daysAgo(c.ts) }));
   }
 
   /** Add someone, or update their status (keeping when they were first contacted). */
-  function saveContact(person, job, companyUrl, status, note = "") {
+  function saveContact(person, job, companyUrl, status, note = "", kind = "referral") {
+    jobStore(kind);
     return serial(async () => {
       const all = await contacts();
       const was = all[person.profile];
       all[person.profile] = {
         profile: person.profile, name: person.name, headline: person.headline || "", company: job.company || "", companyUrl,
-        jobId: job.jobId, jobUrl: job.url, title: job.title || "", status, note, ts: was ? was.ts : now(), updated: now(),
+        jobId: job.jobId, jobUrl: job.url, title: job.title || "", status, note, kind, ts: was ? was.ts : now(), updated: now(),
       };
       await local.set({ contacts: all });
     });
@@ -413,9 +459,9 @@
   const shot = async (site, jobId) => (await local.get(shotKey(site, jobId)))[shotKey(site, jobId)] || null;
 
   JB.store = {
-    STATUSES, now, normalize, getSettings, saveSettings, effective, profileAnswers, resume, saveResume, workdaySignIn, saveWorkdaySignIn, jobs, seen, record, appliedToday, forget, importHistory,
+    STATUSES, now, normalize, getSettings, saveSettings, effective, profileAnswers, resume, saveResume, workdaySignIn, saveWorkdaySignIn, jobs, seen, record, appliedToday, forget, forgetLinkless, importHistory,
     saveShot, shot, screenshots, setScreenshots,
-    CONTACT_STATUSES, contacts, referralJobs, jobsToAsk, jobDone, askedAbout, knownContact, askedAt, sentToday, pendingInvites,
+    CONTACT_STATUSES, CONTACT_KINDS, contacts, kindOf, referralJobs, askedJobs, jobsToAsk, jobDone, askedAbout, knownContact, askedAt, sentToday, pendingInvites,
     saveContact, importReferrals, tracks, saveTracks, importTracks, markApplied, noteReplies,
     kept, waiting, learn, unlearn, noteQuestions, dropQuestions, importKept,
   };

@@ -6,13 +6,16 @@
 //   - people you're already connected with get the referral message right away;
 //   - the others get a connection invite (with a short note while LinkedIn still allows you notes), and get the
 //     referral message on a later run, once they've accepted.
-// A few people per company, a daily cap, and nobody is contacted twice.
+// A few people per company, a daily cap (shared with recruiters.js), and nobody is contacted twice.
+// recruiters.js uses the same finding, messaging and inviting, with its own kind of contact.
 (function (JB) {
   const BASE = "https://www.linkedin.com";
   const MESSAGED = "messaged";
   const INVITED = "invited";
   const EXPIRED = "not_accepted";
   const FAILED = "failed";
+  const REFERRAL = "referral";
+  const PER_DAY = 30; // messages + invites a day, referrals and recruiters together
   const TITLES = new Set(["dr", "mr", "mrs", "ms", "er", "ca", "prof"]);
 
   /** Stop asking for now (a LinkedIn limit), keeping what's been done. */
@@ -44,9 +47,10 @@
   // Python's quote(safe=""): everything but letters, digits and _.-~ is escaped.
   const quote = s => encodeURIComponent(s).replace(/[!'()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
 
-  /** A people search among your 1st and 2nd-degree connections at the company. */
-  function peopleUrl(ids, keywords) {
-    const params = [["currentCompany", JSON.stringify(ids)], ["network", JSON.stringify(["F", "S"])], ["keywords", keywords], ["origin", "FACETED_SEARCH"]];
+  /** A people search at the company, among your 1st and 2nd-degree connections unless `network` says otherwise
+   * (F, S, O: 1st, 2nd, 3rd and beyond). */
+  function peopleUrl(ids, keywords, network = ["F", "S"]) {
+    const params = [["currentCompany", JSON.stringify(ids)], ["network", JSON.stringify(network)], ["keywords", keywords], ["origin", "FACETED_SEARCH"]];
     return `${BASE}/search/results/people/?${params.map(([k, v]) => `${k}=${quote(v)}`).join("&")}`;
   }
 
@@ -60,16 +64,9 @@
       r.log("The referral message still has a <...> placeholder. Write that part in Settings, then run again.");
       return;
     }
-    let budget = r.opts.max || rc.maxPerRun || 8;
-    const perDay = rc.maxPerDay ?? 15;
-    if (!r.dry) {
-      budget = Math.min(budget, perDay - (await JB.store.sentToday()));
-      if (budget <= 0) {
-        r.log(`Daily limit reached (${perDay} messages + invites).`);
-        return;
-      }
-    }
-    const state = { notesUsedUp: false, dryAsked: {} }; // dryAsked: company -> people a dry run would have asked
+    const budget = await todaysBudget(r, cfg, r.opts.max || rc.maxPerRun || 8);
+    if (budget <= 0) return;
+    const state = { kind: REFERRAL, notesUsedUp: false, dryAsked: {} }; // dryAsked: company -> people a dry run would have asked
     let sent = 0;
     try {
       sent += await followUp(r, rc, budget, state);
@@ -93,6 +90,15 @@
     }
     r.log();
     r.log(`Done: ${r.dry ? "would contact" : "contacted"} ${sent}.`);
+  }
+
+  /** How many messages + invites this run may send: `want`, within what's left of today's (shared) limit. */
+  async function todaysBudget(r, cfg, want) {
+    if (r.dry) return want;
+    const perDay = cfg.outreachPerDay ?? PER_DAY;
+    const left = perDay - (await JB.store.sentToday());
+    if (left <= 0) r.log(`Daily limit reached (${perDay} messages + invites, referrals and recruiters together).`);
+    return Math.min(want, left);
   }
 
   async function extraJobs(r, rc) {
@@ -165,8 +171,8 @@
     return r.exec("site.companyIds");
   }
 
-  async function searchPeople(r, ids, keywords) {
-    await r.goto(peopleUrl(ids, keywords));
+  async function searchPeople(r, ids, keywords, network) {
+    await r.goto(peopleUrl(ids, keywords, network));
     await r.waitForTrue("site.peopleReady", 15000);
     await r.sleep(1500);
     if (await r.exec("site.searchLimit")) throw halt("LinkedIn's monthly limit on people searches is reached. Referrals can go on when it resets.");
@@ -189,8 +195,11 @@
     return [...found.values()].sort((a, b) => (a.degree !== "1st") - (b.degree !== "1st") || a.rank - b.rank);
   }
 
-  /** Message them if you're connected, else send an invite. Returns true if sent (or, in a dry run, would be). */
+  /** Message them if you're connected, else send an invite. Returns true if sent (or, in a dry run, would be).
+   * `rc` has the message, invite note and how to send; `state.kind` is what they're contacted for (a referral unless
+   * it says otherwise). A recruiter must work at the company now: their latest job, when the profile shows it. */
   async function contact(r, rc, person, job, companyUrl, state, onlyMessage = false) {
+    const kind = state.kind || REFERRAL;
     r.step(`Opening ${person.name}'s profile`);
     await r.goto(person.profile);
     if (!(await r.waitForTrue("site.profileReady", 15000))) {
@@ -202,6 +211,10 @@
     const profile = info.slug ? `${BASE}/in/${info.slug}/` : person.profile;
     if (!onlyMessage && profile !== person.profile && (await JB.store.knownContact(profile))) return false;
     const name = info.name || person.name;
+    if (job.company && kind !== REFERRAL && info.current && !JB.roles.mentions(info.current, job.company)) {
+      r.log(`  - ${name}: their latest job isn't at ${job.company}, skipped`);
+      return false;
+    }
     if (job.company && !info.main.toLowerCase().includes(job.company.toLowerCase())) {
       r.log(`  - ${name}: their profile doesn't mention ${job.company}, skipped`);
       return false;
@@ -218,7 +231,7 @@
     if (r.dry) {
       r.log(`  ~ would ${verb.toLowerCase()} ${name}${text ? `:\n${indent(text)}` : " (no note)"}`);
       if (note && note.length > 300) r.log(`    (this note is ${note.length} characters; LinkedIn allows 300, so the end would be cut)`);
-      r.event({ kind: "contact", status: connected ? "would_message" : "would_invite", name, company: job.company, title: job.title, url: who.profile });
+      r.event({ kind: "contact", for: kind, status: connected ? "would_message" : "would_invite", name, company: job.company, title: job.title, url: who.profile });
       return true;
     }
     if (r.opts.confirm || rc.sendMode !== "direct") { // you see who it goes to and the exact text, unless you chose otherwise
@@ -231,7 +244,7 @@
     let status;
     if (connected) {
       r.step(`Messaging ${name}`);
-      [ok, result] = await sendMessage(r, text);
+      [ok, result] = await sendMessage(r, name, text);
       status = MESSAGED;
     } else {
       r.step(`Inviting ${name} to connect`);
@@ -239,15 +252,17 @@
       status = INVITED;
       if (ok === null) return false; // notes used up and invites without one are off
     }
-    await JB.store.saveContact(who, job, companyUrl, ok ? status : FAILED, result);
+    await JB.store.saveContact(who, job, companyUrl, ok ? status : FAILED, result, kind);
     r.log(`  ${ok ? "+" : "x"} ${(ok ? status : FAILED).padEnd(13)} ${name}  ${result}`);
-    r.event({ kind: "contact", status: ok ? status : FAILED, name, company: job.company, title: job.title, url: who.profile, note: result });
+    r.event({ kind: "contact", for: kind, status: ok ? status : FAILED, name, company: job.company, title: job.title, url: who.profile, note: result });
     return ok;
   }
 
-  /** Send the referral message to people who accepted the invite since the last run. Returns how many. */
+  /** Send the message to people who accepted the invite since the last run (only invites of `state.kind`).
+   * Returns how many. */
   async function followUp(r, rc, budget, state) {
-    const pending = await JB.store.pendingInvites();
+    const kind = state.kind || REFERRAL;
+    const pending = await JB.store.pendingInvites(kind);
     if (!pending.length) return 0;
     r.log();
     r.log(`Checking which of ${pending.length} invite(s) were accepted...`);
@@ -264,7 +279,7 @@
       const job = { url: c.jobUrl, jobId: c.jobId, title: c.title, company: c.company };
       if (!accepted.has(slugOf(c.profile))) {
         const days = rc.inviteExpiryDays ?? 21;
-        if (c.age >= days && !r.dry) await JB.store.saveContact(person, job, c.companyUrl, EXPIRED, `not accepted in ${days} days`);
+        if (c.age >= days && !r.dry) await JB.store.saveContact(person, job, c.companyUrl, EXPIRED, `not accepted in ${days} days`, kind);
         continue;
       }
       if (sent >= budget) break;
@@ -273,8 +288,8 @@
     return sent;
   }
 
-  async function sendMessage(r, text) {
-    if (!(await r.exec("site.openMessage"))) return [false, "no Message button"];
+  async function sendMessage(r, name, text) {
+    if (!(await r.exec("site.openMessage", name))) return [false, "no Message button"];
     if (!(await r.waitForTrue("site.messageBoxReady", 10000))) return [false, "the message box didn't open"];
     await r.exec("site.typeMessage", text);
     await r.sleep(800);
@@ -299,6 +314,21 @@
     }
     await r.sleep(1500);
     await checkInviteLimit(r);
+    // Some Connect controls send directly, without showing the note dialog.
+    if (await r.exec("site.inviteSent")) return [true, "an invite is already pending"];
+    if (!(await r.exec("site.hasDialog"))) {
+      const link = await r.exec("site.invitePageUrl");
+      if (link && !(await r.waitForTrue("site.hasDialog", 4000))) {
+        if (await r.exec("site.inviteSent")) return [true, "an invite is already pending"];
+        if (await r.exec("site.invitePageUrl") === link) {
+          await r.goto(link);
+          if (!(await r.waitForTrue("site.hasDialog", 10000))) {
+            if (await r.exec("site.inviteSent")) return [true, "an invite is already pending"];
+            return [false, `no Send button in the invite dialog; ${await r.exec("site.inviteDiagnostics")}`];
+          }
+        }
+      }
+    }
     if (await r.exec("site.inviteWantsEmail")) {
       await r.exec("site.escape");
       return [false, "LinkedIn wants their email address to connect"];
@@ -321,8 +351,9 @@
       }
     }
     if (!(await r.exec("site.sendInvite", withNote))) {
+      const detail = await r.exec("site.inviteDiagnostics");
       await r.exec("site.escape");
-      return [false, "no Send button in the invite dialog"];
+      return [false, `no Send button in the invite dialog; ${detail}`];
     }
     await r.sleep(2500);
     await checkInviteLimit(r);
@@ -330,5 +361,9 @@
     return [false, "couldn't confirm the invite was sent"];
   }
 
-  JB.referral = { run, render, firstName, peopleUrl, slugOf };
+  JB.referral = {
+    run, render, firstName, peopleUrl, slugOf,
+    // shared with recruiters.js
+    PER_DAY, halt, firstLine, todaysBudget, companyIds, searchPeople, contact, followUp,
+  };
 })(globalThis.JB = globalThis.JB || {});

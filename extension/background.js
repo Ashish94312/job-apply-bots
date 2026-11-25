@@ -1,9 +1,10 @@
 // The extension's background worker: runs the bots (engine.js) and takes requests from the dashboard.
 importScripts(
-  "lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/tracker.js", "lib/store.js", "lib/places.js",
+  "billing-config.js",
+  "lib/defaults.js", "lib/filters.js", "lib/answers.js", "lib/tracker.js", "lib/store.js", "lib/places.js", "lib/roles.js",
   "sites/hirist.js", "sites/instahyre.js", "sites/wellfound.js", "sites/cutshort.js", "sites/linkedin.js",
-  "sites/naukri.js", "sites/company.js", "sites/yc.js",
-  "engine.js", "referral.js",
+  "sites/naukri.js", "sites/indeed.js", "sites/company.js", "sites/yc.js",
+  "engine.js", "referral.js", "recruiters.js",
 );
 
 const DASHBOARD = chrome.runtime.getURL("dashboard.html");
@@ -58,15 +59,49 @@ const handlers = {
   },
 };
 
+// In the billing edition, everything but these needs an active trial or pass.
+const FREE_MESSAGES = ["hello", "stop", "forget", "unlearn", "dropQuestions"];
+const PASS_CHECK_MS = 6 * 3600 * 1000; // a good check holds this long, so a short billing outage doesn't stop you
+
+async function checkPass(origin) {
+  const { billingToken } = await chrome.storage.local.get("billingToken");
+  if (!billingToken) throw new Error("Sign in on the dashboard to use Sendoff.");
+  const { billingAccess: seen } = await chrome.storage.session.get("billingAccess");
+  const now = Date.now();
+  if (seen && seen.expires * 1000 > now && now - seen.checked < PASS_CHECK_MS) return;
+  let response;
+  try {
+    response = await fetch(origin + "/access?product=sendoff", {
+      headers: { Authorization: "Bearer " + billingToken }, credentials: "omit", redirect: "error"
+    });
+  } catch {
+    throw new Error("Couldn't reach Sendoff's billing service to check your pass. Try again in a minute.");
+  }
+  if (response.status === 403) {
+    await chrome.storage.local.remove("billingToken");
+    await chrome.storage.session.remove("billingAccess");
+    throw new Error("Your sign-in ended. Sign in again on the dashboard.");
+  }
+  if (!response.ok) throw new Error("Sendoff's billing service is unavailable. Try again in a minute.");
+  const { expires } = await response.json();
+  await chrome.storage.session.set({ billingAccess: { expires, checked: now } });
+  if (!(expires * 1000 > now)) throw new Error("Your Sendoff trial or pass has ended. Buy a pass on the dashboard.");
+}
+
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
   // Only the extension's own pages; never a content script running inside a job site.
   if (sender.id !== chrome.runtime.id || !(sender.url || "").startsWith(chrome.runtime.getURL(""))) return false;
   const handler = handlers[message && message.type];
   if (!handler) return false;
   Promise.resolve()
-    .then(() => handler(message))
+    .then(async () => {
+      const origin = globalThis.SENDOFF_BILLING_ORIGIN;
+      if (origin && !FREE_MESSAGES.includes(message.type)) await checkPass(origin);
+      return handler(message);
+    })
     .then(result => reply({ ok: true, ...(result || {}) }), e => reply({ error: String((e && e.message) || e) }));
   return true; // reply comes later
 });
 
 JB.engine.markInterrupted();
+JB.store.forgetLinkless(); // once: Other site jobs kept without where they lead are looked at again
